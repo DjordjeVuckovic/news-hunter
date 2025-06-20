@@ -23,29 +23,34 @@ func NewPipeline(c collector.Collector[domain.Article], storer storage.Storer) *
 func (p *PgPipeline) Run(ctx context.Context) error {
 	results, err := p.collector.Collect(ctx)
 	if err != nil {
-		return err
+		slog.Error("Error collecting articles", "error", err)
 	}
-
+	done := make(chan struct{})
 	go func() {
-		select {
-		case <-ctx.Done():
-			slog.Info("Pipeline context cancelled, stopping collection")
-			return
-		case res, ok := <-results:
-			if !ok {
-				slog.Info("No more results to process, exiting collection")
-			}
-			if res.Err != nil {
-				slog.Error("Error collecting article", "error", res.Err)
-			}
+		defer close(done)
+		for {
+			select {
+			case <-ctx.Done():
+				slog.Info("Pipeline context cancelled, stopping collection")
+				return
+			case res, ok := <-results:
+				if !ok {
+					slog.Info("Collection channel closed, stopping collection")
+					return
+				}
+				if res.Err != nil {
+					slog.Error("Error collecting article", "error", res.Err)
+				}
 
-			save, err := p.storer.Save(ctx, res.Result)
-			if err != nil {
-				slog.Error("Error saving article", "error", err, "article", res.Result)
+				save, err := p.storer.Save(ctx, res.Result)
+				if err != nil {
+					slog.Error("Error saving article", "error", err, "article", res.Result)
+				}
+				slog.Info("Article saved successfully", "id", save, "title", res.Result.Title)
 			}
-			slog.Info("Article saved successfully", "id", save, "title", res.Result.Title)
 		}
 	}()
+	<-done
 
 	return nil
 }

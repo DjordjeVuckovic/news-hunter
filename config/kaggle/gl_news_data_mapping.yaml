@@ -30,16 +30,16 @@ fieldMappings:
    target: "Content"
    targetType: "string"
    required: true
- - source: "url"
-   sourceType: "string"
-   target: "URL"
-   targetType: "string"
-   required: true
- - source: "published_at"
-   sourceType: "date"
-   target: "Metadata.PublishedAt"
-   targetType: "date"
-   required: true
+# - source: "url"
+#   sourceType: "string"
+#   target: "URL"
+#   targetType: "url"
+#   required: true
+# - source: "published_at"
+#   sourceType: "date"
+#   target: "Metadata.PublishedAt"
+#   targetType: "date"
+#   required: true
  - source: "source_id"
    sourceType: "string"
    target: "Metadata.SourceId"

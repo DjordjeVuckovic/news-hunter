@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
 	"github.com/DjordjeVuckovic/news-hunter/internal/reader"
+	"log/slog"
 )
 
 type ArticleCollector struct {
@@ -30,26 +31,29 @@ func (ac *ArticleCollector) Collect(ctx context.Context) (<-chan CollectionResul
 	go func() {
 		defer close(collectionResult)
 
-		select {
-		case <-ctx.Done():
-			return
-		case res, ok := <-result:
-			if !ok {
+		for {
+			select {
+			case <-ctx.Done():
 				return
-			}
-			if res.Err != nil {
-				collectionResult <- CollectionResult[domain.Article]{Err: res.Err}
-			}
+			case res, ok := <-result:
+				if !ok {
+					slog.Info("Reader channel closed, stopping collection")
+					return
+				}
+				if res.Err != nil {
+					collectionResult <- CollectionResult[domain.Article]{Err: res.Err}
+				}
 
-			// Map the record to an Article
-			article, err := ac.Mapper.Map(res.Record, nil)
-			if err != nil {
-				collectionResult <- CollectionResult[domain.Article]{Err: err}
+				// Map the record to an Article
+				article, err := ac.Mapper.Map(res.Record, nil)
+				if err != nil {
+					collectionResult <- CollectionResult[domain.Article]{Err: err}
+				}
+
+				// Send the mapped article to the channel
+				collectionResult <- CollectionResult[domain.Article]{Result: article}
+
 			}
-
-			// Send the mapped article to the channel
-			collectionResult <- CollectionResult[domain.Article]{Result: article}
-
 		}
 	}()
 
