@@ -1,0 +1,12 @@
+kind: DataMapping
+version: v1
+metadata:
+  name: "Invalid Mapping"
+dataset: kaggle
+fieldMappings:
+  - source: "title"
+    sourceType: "string"
+    target: "Title"
+    targetType: "string"
+    required: true
+dateFormat: "2006-01-02T15:04:05Z"

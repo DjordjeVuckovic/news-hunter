@@ -1,0 +1,53 @@
+kind: DataMapping
+version: v1
+metadata:
+  name: "Kaggle Dataset"
+  description: "Mapping for Kaggle dataset fields"
+dataset: kaggle
+fieldMappings:
+ - source: "title"
+   sourceType: "string"
+   target: "Title"
+   targetType: "string"
+   required: true
+ - source: "author"
+   sourceType: "string"
+   target: "Author"
+   targetType: "string"
+   required: true
+ - source: "description"
+   sourceType: "string"
+   target: "Description"
+   targetType: "string"
+   required: true
+ - source: "description"
+   sourceType: "string"
+   target: "Description"
+   targetType: "string"
+   required: true
+ - source: "content"
+   sourceType: "string"
+   target: "Content"
+   targetType: "string"
+   required: true
+ - source: "url"
+   sourceType: "string"
+   target: "URL"
+   targetType: "string"
+   required: true
+ - source: "published_at"
+   sourceType: "date"
+   target: "Metadata.PublishedAt"
+   targetType: "date"
+   required: true
+ - source: "source_id"
+   sourceType: "string"
+   target: "Metadata.SourceId"
+   targetType: "string"
+   required: true
+ - source: "source_name"
+   sourceType: "string"
+   target: "Metadata.SourceName"
+   targetType: "string"
+   required: true
+dateFormat: "2006-01-02T15:04:05Z"

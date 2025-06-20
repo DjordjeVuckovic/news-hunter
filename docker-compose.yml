@@ -1,0 +1,15 @@
+services:
+  pg-news:
+    image: postgres:17.5
+    container_name: pg-news
+    environment:
+      POSTGRES_USER: news_user
+      POSTGRES_PASSWORD: news_password
+      POSTGRES_DB: news_db
+    ports:
+      - "54320:5432"
+    volumes:
+      - pg_news_data:/var/lib/postgresql/data
+volumes:
+  pg_news_data:
+    driver: local
