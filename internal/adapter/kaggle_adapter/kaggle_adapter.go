@@ -1,1 +1,0 @@
-package kaggle_adapter

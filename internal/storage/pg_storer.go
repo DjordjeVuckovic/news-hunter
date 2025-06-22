@@ -13,7 +13,7 @@ type PgStorer struct {
 	db *pgxpool.Pool
 }
 
-func NewPgStorage(ctx context.Context, connStr string) (*PgStorer, error) {
+func NewPgStorer(ctx context.Context, connStr string) (*PgStorer, error) {
 	dbpool, err := pgxpool.New(ctx, connStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create connection pool: %w", err)
@@ -28,18 +28,23 @@ func NewPgStorage(ctx context.Context, connStr string) (*PgStorer, error) {
 
 func (s *PgStorer) Save(ctx context.Context, article domain.Article) (uuid.UUID, error) {
 	cmd := `
-        INSERT INTO articles (title)
-        VALUES ($1)
+        INSERT INTO articles (title, content, search_vector)
+        VALUES ($1, $2, to_tsvector('english', $1 || ' ' || $2))
         ON CONFLICT (id) DO NOTHING
         RETURNING id;
     `
 	var id uuid.UUID
-	err := s.db.QueryRow(ctx, cmd, article.Title).Scan(&id)
+	err := s.db.QueryRow(
+		ctx,
+		cmd,
+		article.Title,
+		article.Content,
+	).Scan(&id)
 	if err != nil {
 		return uuid.UUID{}, fmt.Errorf("failed to insert article: %w", err)
 	}
 
-	return article.ID, nil
+	return id, nil
 }
 
 func (s *PgStorer) SaveBulk(ctx context.Context, articles []domain.Article) error {

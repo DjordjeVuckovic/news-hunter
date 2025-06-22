@@ -19,7 +19,7 @@ func NewArticleCollector(r reader.RawParallelReader, mapper reader.Mapper) *Arti
 	}
 }
 
-func (ac *ArticleCollector) Collect(ctx context.Context) (<-chan CollectionResult[domain.Article], error) {
+func (ac *ArticleCollector) Collect(ctx context.Context) (<-chan Result[domain.Article], error) {
 
 	result, err := ac.Reader.ReadParallel(ctx, 10)
 	if err != nil {
@@ -27,7 +27,7 @@ func (ac *ArticleCollector) Collect(ctx context.Context) (<-chan CollectionResul
 	}
 
 	// Create a channel to send the results
-	collectionResult := make(chan CollectionResult[domain.Article])
+	collectionResult := make(chan Result[domain.Article])
 	go func() {
 		defer close(collectionResult)
 
@@ -41,17 +41,17 @@ func (ac *ArticleCollector) Collect(ctx context.Context) (<-chan CollectionResul
 					return
 				}
 				if res.Err != nil {
-					collectionResult <- CollectionResult[domain.Article]{Err: res.Err}
+					collectionResult <- Result[domain.Article]{Err: res.Err}
 				}
 
 				// Map the record to an Article
 				article, err := ac.Mapper.Map(res.Record, nil)
 				if err != nil {
-					collectionResult <- CollectionResult[domain.Article]{Err: err}
+					collectionResult <- Result[domain.Article]{Err: err}
 				}
 
 				// Send the mapped article to the channel
-				collectionResult <- CollectionResult[domain.Article]{Result: article}
+				collectionResult <- Result[domain.Article]{Result: article}
 
 			}
 		}

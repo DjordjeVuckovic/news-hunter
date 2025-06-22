@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	err := godotenv.Load("cmd/kaggle_import/.env")
+	err := godotenv.Load("cmd/data_import/.env")
 	if err != nil {
 		slog.Error("Failed to load environment variables", "error", err)
 		return
@@ -53,10 +53,10 @@ func main() {
 	c := collector.NewArticleCollector(articleReader, mapper)
 
 	connStr := os.Getenv("DB_CONNECTION_STRING")
-	db, err := storage.NewPgStorage(ctx, connStr)
+	db, err := storage.NewPgStorer(ctx, connStr)
 	// db := storage.NewJsonFileStorer("")
 
-	pipeline := ingest.NewPipeline(c, db)
+	pipeline := ingest.NewPgPipeline(c, db, ingest.WithPgBulk(1_000))
 
 	e := pipeline.Run(ctx)
 
