@@ -13,6 +13,7 @@ type Article struct {
 	Content     string          `json:"content"`
 	Author      string          `json:"author,omitempty"`
 	Description string          `json:"description,omitempty"`
+	Language    string          `json:"language,omitempty"`
 	CreatedAt   time.Time       `json:"createdAt"`
 	URL         url.URL         `json:"sourceUrl,omitempty"`
 	Metadata    ArticleMetadata `json:"metadata"`

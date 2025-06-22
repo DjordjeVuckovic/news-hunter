@@ -51,6 +51,7 @@ func NewPgPipeline(c collector.Collector[domain.Article], storer storage.Storer,
 
 func (p *PgPipeline) Run(ctx context.Context) error {
 	start := time.Now() // Start timer
+	slog.Info("Starting PgPipeline run", "bulk_enabled", p.bulk.enabled, "batch_size", p.bulk.Size, "time", start)
 
 	results, err := p.collector.Collect(ctx)
 	if err != nil {

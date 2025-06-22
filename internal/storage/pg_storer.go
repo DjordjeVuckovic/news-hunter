@@ -27,9 +27,16 @@ func NewPgStorer(ctx context.Context, connStr string) (*PgStorer, error) {
 }
 
 func (s *PgStorer) Save(ctx context.Context, article domain.Article) (uuid.UUID, error) {
+	if article.ID == uuid.Nil {
+		article.ID = uuid.New()
+	}
+	if article.Language == "" {
+		article.Language = "english"
+	}
+
 	cmd := `
-        INSERT INTO articles (title, content, search_vector)
-        VALUES ($1, $2, to_tsvector('english', $1 || ' ' || $2))
+        INSERT INTO articles (id, title, subtitle, content, author, language)
+        VALUES ($1, $2, $3, $4, $5, $6)
         ON CONFLICT (id) DO NOTHING
         RETURNING id;
     `
@@ -37,8 +44,12 @@ func (s *PgStorer) Save(ctx context.Context, article domain.Article) (uuid.UUID,
 	err := s.db.QueryRow(
 		ctx,
 		cmd,
+		article.ID,
 		article.Title,
+		article.Subtitle,
 		article.Content,
+		article.Author,
+		article.Language,
 	).Scan(&id)
 	if err != nil {
 		return uuid.UUID{}, fmt.Errorf("failed to insert article: %w", err)
@@ -53,13 +64,23 @@ func (s *PgStorer) SaveBulk(ctx context.Context, articles []domain.Article) erro
 		if a.ID == uuid.Nil {
 			a.ID = uuid.New()
 		}
-		rows[i] = []interface{}{a.ID, a.Title}
+		if a.Language == "" {
+			a.Language = "english"
+		}
+		rows[i] = []interface{}{
+			a.ID,
+			a.Title,
+			a.Subtitle,
+			a.Content,
+			a.Author,
+			a.Language,
+		}
 	}
 
 	_, err := s.db.CopyFrom(
 		ctx,
 		pgx.Identifier{"articles"},
-		[]string{"id", "title"},
+		[]string{"id", "title", "subtitle", "content", "author", "language"},
 		pgx.CopyFromRows(rows),
 	)
 
