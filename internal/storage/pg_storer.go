@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -26,20 +27,39 @@ func NewPgStorage(ctx context.Context, connStr string) (*PgStorer, error) {
 }
 
 func (s *PgStorer) Save(ctx context.Context, article domain.Article) (uuid.UUID, error) {
-	query := `
-        INSERT INTO articles (title, url, published_at)
-        VALUES ($1, $2, $3, $4)
-        ON CONFLICT (id) DO NOTHING;
+	cmd := `
+        INSERT INTO articles (title)
+        VALUES ($1)
+        ON CONFLICT (id) DO NOTHING
+        RETURNING id;
     `
-	_, err := s.db.Exec(ctx, query,
-		article.Title,
-		article.URL,
-		article.Metadata.PublishedAt,
-	)
-
+	var id uuid.UUID
+	err := s.db.QueryRow(ctx, cmd, article.Title).Scan(&id)
 	if err != nil {
 		return uuid.UUID{}, fmt.Errorf("failed to insert article: %w", err)
 	}
 
 	return article.ID, nil
+}
+
+func (s *PgStorer) SaveBulk(ctx context.Context, articles []domain.Article) error {
+	rows := make([][]interface{}, len(articles))
+	for i, a := range articles {
+		if a.ID == uuid.Nil {
+			a.ID = uuid.New()
+		}
+		rows[i] = []interface{}{a.ID, a.Title}
+	}
+
+	_, err := s.db.CopyFrom(
+		ctx,
+		pgx.Identifier{"articles"},
+		[]string{"id", "title"},
+		pgx.CopyFromRows(rows),
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to bulk insert articles: %w", err)
+	}
+	return nil
 }

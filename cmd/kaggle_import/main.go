@@ -17,7 +17,6 @@ func main() {
 		slog.Error("Failed to load environment variables", "error", err)
 		return
 	}
-	//connStr := os.Getenv("DB_CONNECTION_STRING")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -53,8 +52,9 @@ func main() {
 
 	c := collector.NewArticleCollector(articleReader, mapper)
 
-	// db, err := storage.NewPgStorage(ctx, connStr)
-	db := storage.NewJsonFileStorer("")
+	connStr := os.Getenv("DB_CONNECTION_STRING")
+	db, err := storage.NewPgStorage(ctx, connStr)
+	// db := storage.NewJsonFileStorer("")
 
 	pipeline := ingest.NewPipeline(c, db)
 

@@ -8,4 +8,5 @@ import (
 
 type Storer interface {
 	Save(ctx context.Context, article domain.Article) (uuid.UUID, error)
+	SaveBulk(ctx context.Context, articles []domain.Article) error
 }
