@@ -2,7 +2,7 @@ package reader
 
 import (
 	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
-	"github.com/DjordjeVuckovic/news-hunter/pkg/apis"
+	"github.com/DjordjeVuckovic/news-hunter/pkg/apis/datamapping"
 )
 
 type MappingOptions struct {
@@ -14,5 +14,5 @@ type Mapper interface {
 }
 
 type MappingLoader interface {
-	Load(validate bool) (*apis.DataMapping, error)
+	Load(validate bool) (*datamapping.DataMapper, error)
 }

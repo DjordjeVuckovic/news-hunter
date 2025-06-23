@@ -1,7 +1,7 @@
 package reader
 
 import (
-	"github.com/DjordjeVuckovic/news-hunter/pkg/apis"
+	"github.com/DjordjeVuckovic/news-hunter/pkg/apis/datamapping"
 	"gopkg.in/yaml.v3"
 	"io"
 )
@@ -16,9 +16,9 @@ func NewYAMLConfigLoader(reader io.Reader) *YAMLConfigLoader {
 	}
 }
 
-func (cl *YAMLConfigLoader) Load(validate bool) (*apis.DataMapping, error) {
+func (cl *YAMLConfigLoader) Load(validate bool) (*datamapping.DataMapper, error) {
 	decoder := yaml.NewDecoder(cl.reader)
-	var mapping apis.DataMapping
+	var mapping datamapping.DataMapper
 	if err := decoder.Decode(&mapping); err != nil {
 		return nil, err
 	}

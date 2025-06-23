@@ -2,16 +2,16 @@ package reader
 
 import (
 	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
-	"github.com/DjordjeVuckovic/news-hunter/pkg/apis"
+	"github.com/DjordjeVuckovic/news-hunter/pkg/apis/datamapping"
 	"reflect"
 	"strings"
 )
 
 type ArticleMapper struct {
-	cfg *apis.DataMapping
+	cfg *datamapping.DataMapper
 }
 
-func NewArticleMapper(cfg *apis.DataMapping) *ArticleMapper {
+func NewArticleMapper(cfg *datamapping.DataMapper) *ArticleMapper {
 	return &ArticleMapper{
 		cfg: cfg,
 	}

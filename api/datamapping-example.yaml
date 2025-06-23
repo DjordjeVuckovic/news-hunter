@@ -1,0 +1,36 @@
+# DataMapping Example Configuration
+# This file demonstrates the structure for defining field mappings
+
+kind: DataMapping
+version: v1
+metadata:
+  name: "Kaggle News Dataset"
+  description: "Field mapping configuration for Kaggle news dataset import"
+dataset: "kaggle"
+dateFormat: "2006-01-02T15:04:05Z"
+fieldMappings:
+  - source: "title"
+    sourceType: "string"
+    target: "Title"
+    targetType: "string"
+    required: true
+  - source: "content" 
+    sourceType: "string"
+    target: "Content"
+    targetType: "string"
+    required: true
+  - source: "author"
+    sourceType: "string" 
+    target: "Author"
+    targetType: "string"
+    required: false
+  - source: "published_date"
+    sourceType: "datetime"
+    target: "CreatedAt"
+    targetType: "datetime"
+    required: false
+  - source: "language"
+    sourceType: "string"
+    target: "Language" 
+    targetType: "string"
+    required: false

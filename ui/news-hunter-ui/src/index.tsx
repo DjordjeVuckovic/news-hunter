@@ -16,6 +16,7 @@ if (import.meta.env.DEV && !(root instanceof HTMLElement)) {
 }
 
 render(
+    // @ts-expect-error
   () => <Router root={(props) => <App>{props.children}</App>}>{routes}</Router>,
   root,
 );

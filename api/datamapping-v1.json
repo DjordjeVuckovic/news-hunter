@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.newshunter.io/datamapper",
+  "title": "DataMapper",
+  "type": "object",
+  "required": [
+    "kind",
+    "version",
+    "metadata",
+    "dataset",
+    "fieldMappings"
+  ],
+  "properties": {
+    "dataset": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "description": "Dataset source identifier",
+      "type": "string",
+      "pattern": "^[a-z0-9-_]+$",
+      "minLength": 1,
+      "maxLength": 50
+    },
+    "dateFormat": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "description": "Go time format for parsing date/datetime fields",
+      "type": "string",
+      "default": "2006-01-02T15:04:05Z"
+    },
+    "fieldMappings": {
+      "$schema": "",
+      "description": "Array of field mapping definitions",
+      "type": "array",
+      "items": {
+        "$schema": "",
+        "type": "object",
+        "required": [
+          "source",
+          "target"
+        ],
+        "properties": {
+          "required": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "description": "Whether this field mapping is required",
+            "type": "boolean",
+            "default": "false"
+          },
+          "source": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "description": "Source field name in the dataset",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "sourceType": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "description": "Source field data type",
+            "type": "string",
+            "enum": [
+              "string",
+              "int",
+              "float",
+              "bool",
+              "date",
+              "datetime"
+            ],
+            "default": "string"
+          },
+          "target": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "description": "Target field name in Article struct",
+            "type": "string",
+            "enum": [
+              "ID",
+              "Title",
+              "Subtitle",
+              "Content",
+              "Author",
+              "Description",
+              "Language",
+              "CreatedAt",
+              "URL",
+              "Metadata"
+            ]
+          },
+          "targetType": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "description": "Target field data type",
+            "type": "string",
+            "enum": [
+              "string",
+              "int",
+              "float",
+              "bool",
+              "date",
+              "datetime",
+              "uuid",
+              "url",
+              "json"
+            ],
+            "default": "string"
+          }
+        }
+      },
+      "minItems": 1
+    },
+    "kind": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "description": "Resource type identifier",
+      "type": "string",
+      "enum": [
+        "DataMapper"
+      ]
+    },
+    "metadata": {
+      "$schema": "",
+      "description": "Mapping metadata",
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "description": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "description": "Description of the mapping configuration",
+          "type": "string",
+          "maxLength": 500
+        },
+        "name": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "description": "Human-readable name for the mapping configuration",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        }
+      }
+    },
+    "version": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "description": "API version",
+      "type": "string",
+      "enum": [
+        "v1"
+      ]
+    }
+  }
+}
