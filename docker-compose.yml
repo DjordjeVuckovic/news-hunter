@@ -7,9 +7,34 @@ services:
       POSTGRES_PASSWORD: news_password
       POSTGRES_DB: news_db
     ports:
-      - "54320:5432"
+      - "5432:5432"
     volumes:
       - pg_news_data:/var/lib/postgresql/data
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+    container_name: es-news
+    environment:
+      - node.name=es-news
+      - cluster.name=news-cluster
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.enabled=false
+      - xpack.security.enrollment.enabled=false
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - es_news_data:/usr/share/elasticsearch/data
+      - ./configs/elasticsearch:/usr/share/elasticsearch/config/policies
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+
 volumes:
   pg_news_data:
+    driver: local
+  es_news_data:
     driver: local

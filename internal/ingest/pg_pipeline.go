@@ -11,25 +11,21 @@ import (
 
 const defaultBatchSize = 1000
 
-type PipelineBulkOptions struct {
-	enabled bool
-	Size    int
-}
-
 type PgPipeline struct {
 	collector collector.Collector[domain.Article]
 	storer    storage.Storer
-	bulk      *PipelineBulkOptions
+	config    *PipelineConfig
 }
 
 type PgPipelineOption func(pipeline *PgPipeline)
 
 func WithPgBulk(size int) PgPipelineOption {
 	return func(pipeline *PgPipeline) {
-		pipeline.bulk = &PipelineBulkOptions{
-			enabled: true,
-			Size:    size,
+		if pipeline.config.Bulk == nil {
+			pipeline.config.Bulk = &BulkOptions{}
 		}
+		pipeline.config.Bulk.Enabled = true
+		pipeline.config.Bulk.Size = size
 	}
 }
 
@@ -37,9 +33,12 @@ func NewPgPipeline(c collector.Collector[domain.Article], storer storage.Storer,
 	p := &PgPipeline{
 		collector: c,
 		storer:    storer,
-		bulk: &PipelineBulkOptions{
-			enabled: false,
-			Size:    defaultBatchSize,
+		config: &PipelineConfig{
+			Name: "postgresql-pipeline",
+			Bulk: &BulkOptions{
+				Enabled: false,
+				Size:    defaultBatchSize,
+			},
 		},
 	}
 	for _, opt := range opts {
@@ -50,23 +49,33 @@ func NewPgPipeline(c collector.Collector[domain.Article], storer storage.Storer,
 }
 
 func (p *PgPipeline) Run(ctx context.Context) error {
-	start := time.Now() // Start timer
-	slog.Info("Starting PgPipeline run", "bulk_enabled", p.bulk.enabled, "batch_size", p.bulk.Size, "time", start)
+	start := time.Now()
+	slog.Info("Starting PgPipeline run",
+		"pipeline", p.config.Name,
+		"bulk_enabled", p.config.Bulk.Enabled,
+		"batch_size", p.config.Bulk.Size,
+		"time", start,
+	)
 
 	results, err := p.collector.Collect(ctx)
 	if err != nil {
-		slog.Error("Error collecting articles", "error", err)
+		slog.Error("Error collecting articles", "error", err, "pipeline", p.config.Name)
+		return err
 	}
 
 	var runErr error
-	if p.bulk.enabled {
+	if p.config.Bulk.Enabled {
 		runErr = p.importBatch(ctx, results)
 	} else {
 		runErr = p.importBasic(ctx, results)
 	}
 
 	duration := time.Since(start)
-	slog.Info("PgPipeline run completed", "duration", duration)
+	slog.Info("PgPipeline run completed",
+		"pipeline", p.config.Name,
+		"duration", duration,
+		"error", runErr,
+	)
 
 	return runErr
 }
@@ -125,7 +134,7 @@ func (p *PgPipeline) importBatch(ctx context.Context, results <-chan collector.R
 
 			articles = append(articles, res.Result)
 
-			if len(articles) >= p.bulk.Size {
+			if len(articles) >= p.config.Bulk.Size {
 				if err := p.storer.SaveBulk(ctx, articles); err != nil {
 					slog.Error("Error saving bulk articles", "error", err, "count", len(articles))
 				} else {
@@ -138,12 +147,12 @@ func (p *PgPipeline) importBatch(ctx context.Context, results <-chan collector.R
 }
 
 func (p *PgPipeline) Stop() {
-	slog.Info("Stopping pipeline...")
+	slog.Info("Stopping pipeline...", "pipeline", p.config.Name)
 	if p.collector != nil {
 		// p.collector.Stop()
 	}
 	if p.storer != nil {
-		p.storer = nil // Assuming storer has a Stop method, otherwise this is just a placeholder
+		p.storer = nil
 	}
-	slog.Info("Pipeline stopped")
+	slog.Info("Pipeline stopped", "pipeline", p.config.Name)
 }

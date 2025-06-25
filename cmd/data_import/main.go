@@ -6,17 +6,11 @@ import (
 	"github.com/DjordjeVuckovic/news-hunter/internal/ingest"
 	"github.com/DjordjeVuckovic/news-hunter/internal/reader"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
-	"github.com/joho/godotenv"
 	"log/slog"
 	"os"
 )
 
 func main() {
-	err := godotenv.Load("cmd/data_import/.env")
-	if err != nil {
-		slog.Error("Failed to load environment variables", "error", err)
-		return
-	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
