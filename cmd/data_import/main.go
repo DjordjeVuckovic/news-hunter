@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"github.com/DjordjeVuckovic/news-hunter/cmd/data_import/config"
 	"github.com/DjordjeVuckovic/news-hunter/internal/collector"
+	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
 	"github.com/DjordjeVuckovic/news-hunter/internal/ingest"
 	"github.com/DjordjeVuckovic/news-hunter/internal/reader"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
@@ -12,7 +12,10 @@ import (
 )
 
 func main() {
-	_, err := config.LoadConfig()
+	appSettings := AppSettings{
+		ENV: os.Getenv("ENV"),
+	}
+	cfg, err := appSettings.LoadConfig()
 	if err != nil {
 		slog.Error("failed to load configuration", "error", err)
 		os.Exit(1)
@@ -21,8 +24,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	configPath := os.Getenv("MAPPING_CONFIG_PATH")
-	file, err := os.Open(configPath)
+	file, err := os.Open(cfg.DataMappingPath)
 	if err != nil {
 		slog.Error("failed to read configuration file", "error", err)
 		os.Exit(1)
@@ -30,32 +32,27 @@ func main() {
 
 	loader := reader.NewYAMLConfigLoader(file)
 
-	dsPath := os.Getenv("DATASET_PATH")
-	dataFile, err := os.Open(dsPath)
+	dataFile, err := os.Open(cfg.DatasetPath)
 	if err != nil {
 		slog.Error("failed to read configuration file", "error", err)
-		return
+		os.Exit(1)
 	}
 	articleReader := reader.NewCSVReader(dataFile)
 
-	cfg, err := loader.Load(true)
+	mappingCfg, err := loader.Load(true)
 	if err != nil {
 		slog.Error("failed to load configuration", "error", err)
-		return
+		os.Exit(1)
 	}
-	mapper := reader.NewArticleMapper(cfg)
+	mapper := reader.NewArticleMapper(mappingCfg)
 
 	c := collector.NewArticleCollector(articleReader, mapper)
 
-	connStr := os.Getenv("PG_CONNECTION_STRING")
-	db, err := storage.NewPgStorer(ctx, connStr)
+	pipeline, err := newPipeline(ctx, cfg, c)
 	if err != nil {
-		slog.Error("failed to create PostgreSQL storer", "error", err)
+		slog.Error("failed to create pipeline", "error", err)
 		os.Exit(1)
 	}
-	// db := storage.NewJsonFileStorer("")
-
-	pipeline := ingest.NewPgPipeline(c, db, ingest.WithPgBulk(5_000))
 
 	e := pipeline.Run(ctx)
 
@@ -64,4 +61,26 @@ func main() {
 		os.Exit(1)
 	}
 
+}
+
+func newPipeline(ctx context.Context, cfg *DataImportConfig, coll collector.Collector[domain.Article]) (ingest.Pipeline, error) {
+	switch cfg.StorageType {
+	case storage.PG:
+		pg, err := storage.NewPgStorer(ctx, *cfg.Postgres)
+		if err != nil {
+			return nil, err
+		}
+		return ingest.NewPgPipeline(coll, pg, ingest.WithPgBulk(cfg.BulkOptions.Size)), nil
+
+	case storage.ES:
+		es, err := storage.NewEsStorer(*cfg.Elasticsearch)
+		if err != nil {
+			return nil, err
+		}
+		return ingest.NewEsPipeline(coll, es, ingest.WithESBulk(cfg.BulkOptions.Size)), nil
+	case storage.InMem:
+		return nil, storage.ErrUnsupportedStorer
+	default:
+		return nil, storage.ErrUnsupportedStorer
+	}
 }

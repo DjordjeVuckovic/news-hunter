@@ -15,8 +15,12 @@ type PgStorer struct {
 	db *pgxpool.Pool
 }
 
-func NewPgStorer(ctx context.Context, connStr string) (*PgStorer, error) {
-	dbpool, err := pgxpool.New(ctx, connStr)
+type PgStorerConfig struct {
+	ConnStr string
+}
+
+func NewPgStorer(ctx context.Context, cfg PgStorerConfig) (*PgStorer, error) {
+	dbpool, err := pgxpool.New(ctx, cfg.ConnStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create connection pool: %w", err)
 	}
@@ -51,17 +55,8 @@ func (s *PgStorer) Save(ctx context.Context, article domain.Article) (uuid.UUID,
 	}
 
 	cmd := `
-        INSERT INTO articles (id, title, subtitle, content, author, description, language, created_at, metadata)
+        INSERT INTO articles (id, title, subtitle, content, author, description, url, language, created_at, metadata)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-        ON CONFLICT (id) DO UPDATE SET
-            title = EXCLUDED.title,
-            subtitle = EXCLUDED.subtitle,
-            content = EXCLUDED.content,
-            author = EXCLUDED.author,
-            description = EXCLUDED.description,
-            language = EXCLUDED.language,
-            created_at = EXCLUDED.created_at,
-            metadata = EXCLUDED.metadata
         RETURNING id;
     `
 	var id uuid.UUID
@@ -118,6 +113,7 @@ func (s *PgStorer) SaveBulk(ctx context.Context, articles []domain.Article) erro
 			a.Content,
 			a.Author,
 			a.Description,
+			a.URL.String(),
 			a.Language,
 			a.CreatedAt,
 			metadataJSON,
@@ -127,7 +123,7 @@ func (s *PgStorer) SaveBulk(ctx context.Context, articles []domain.Article) erro
 	_, err := s.db.CopyFrom(
 		ctx,
 		pgx.Identifier{"articles"},
-		[]string{"id", "title", "subtitle", "content", "author", "description", "language", "created_at", "metadata"},
+		[]string{"id", "title", "subtitle", "content", "author", "description", "url", "language", "created_at", "metadata"},
 		pgx.CopyFromRows(rows),
 	)
 

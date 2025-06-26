@@ -9,6 +9,7 @@ $$
             content       text        NOT NULL,
             author        text                             default ''::text,
             search_vector tsvector,
+            url           text        NOT NULL,
             metadata      jsonb                            DEFAULT '{}'::jsonb,
             created_at    timestamptz NOT NULL             DEFAULT now(),
             language      VARCHAR(10)                      DEFAULT 'english',

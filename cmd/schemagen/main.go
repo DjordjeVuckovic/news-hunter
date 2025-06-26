@@ -87,7 +87,7 @@ func generateYAMLExample() string {
 	return `# DataMapping Example Configuration
 # This file demonstrates the structure for defining field mappings
 
-kind: DataMapping
+kind: DataMapper
 version: v1
 metadata:
   name: "Kaggle News Dataset"
