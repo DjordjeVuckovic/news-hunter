@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/DjordjeVuckovic/news-hunter/cmd/data_import/config"
 	"github.com/DjordjeVuckovic/news-hunter/internal/collector"
 	"github.com/DjordjeVuckovic/news-hunter/internal/ingest"
 	"github.com/DjordjeVuckovic/news-hunter/internal/reader"
@@ -11,6 +12,11 @@ import (
 )
 
 func main() {
+	_, err := config.LoadConfig()
+	if err != nil {
+		slog.Error("failed to load configuration", "error", err)
+		os.Exit(1)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

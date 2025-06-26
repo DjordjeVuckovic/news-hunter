@@ -19,7 +19,7 @@ func TestYAMLMapper_Map(t *testing.T) {
 
 	record := map[string]string{
 		"id":        articleID.String(),
-		"title":     "Test Article",
+		"title":     "Test ArticleReflectTest",
 		"published": published.Format("2006-01-02T15:04:05Z"),
 		"url":       urlStr,
 	}
@@ -27,7 +27,7 @@ func TestYAMLMapper_Map(t *testing.T) {
 	article, err := mapper.Map(record, nil)
 	require.NoError(t, err)
 
-	assert.Equal(t, "Test Article", article.Title)
+	assert.Equal(t, "Test ArticleReflectTest", article.Title)
 	assert.Equal(t, published, article.Metadata.PublishedAt)
 
 	expectedURL, _ := url.Parse(urlStr)

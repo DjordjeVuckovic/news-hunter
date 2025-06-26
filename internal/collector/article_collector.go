@@ -48,6 +48,8 @@ func (ac *ArticleCollector) Collect(ctx context.Context) (<-chan Result[domain.A
 				article, err := ac.Mapper.Map(res.Record, nil)
 				if err != nil {
 					collectionResult <- Result[domain.Article]{Err: err}
+					slog.Error("failed to map record to article", "error", err)
+					continue
 				}
 
 				// Send the mapped article to the channel

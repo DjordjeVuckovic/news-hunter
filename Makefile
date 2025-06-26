@@ -30,6 +30,9 @@ schema-gen: build-schemagen
 	@./$(BIN_DIR)/schemagen -output=api
 	@echo "Schemas generated in api/ directory"
 
+# Run the application
+run-data-import: build-data-import
+	@go run $(CMD_DIR)/data_import/main.go
 # Development commands
 test:
 	@echo "Running tests..."
@@ -44,11 +47,11 @@ vet:
 	@go vet ./...
 
 # Database commands
-db-up:
+dc-up:
 	@echo "Starting database..."
 	@docker-compose up -d
 
-db-down:
+dc-down:
 	@echo "Stopping database..."
 	@docker-compose down
 

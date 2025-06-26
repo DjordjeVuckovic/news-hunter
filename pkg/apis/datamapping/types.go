@@ -80,5 +80,5 @@ type MappingError struct {
 }
 
 func (e *MappingError) Error() string {
-	return fmt.Sprintf("mapping error: %s", e.Message)
+	return fmt.Sprintf("datamapping error: %s", e.Message)
 }

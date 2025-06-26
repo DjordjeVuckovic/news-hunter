@@ -29,6 +29,8 @@ type JSONSchema struct {
 	Examples    []interface{}          `json:"examples,omitempty"`
 }
 
+const schemaRef = "https://json-schema.org/draft/2020-12/schema"
+
 // Generator generates JSON schemas from Go structs
 type Generator struct {
 	schemas map[string]*JSONSchema
@@ -53,7 +55,7 @@ func (g *Generator) generateSchemaForType(t reflect.Type, isRoot bool) (*JSONSch
 	}
 
 	schema := &JSONSchema{
-		Schema: "https://json-schema.org/draft/2020-12/schema",
+		Schema: schemaRef,
 	}
 
 	switch t.Kind() {
@@ -70,7 +72,7 @@ func (g *Generator) generateSchemaForType(t reflect.Type, isRoot bool) (*JSONSch
 	case reflect.Bool:
 		schema.Type = "boolean"
 	default:
-		return nil, fmt.Errorf("unsupported type: %s", t.Kind())
+		return nil, fmt.Errorf("unsupported type: %schemaRef", t.Kind())
 	}
 
 	return schema, nil
@@ -83,7 +85,7 @@ func (g *Generator) generateStructSchema(t reflect.Type, isRoot bool) (*JSONSche
 	}
 
 	if isRoot {
-		schema.Schema = "https://json-schema.org/draft/2020-12/schema"
+		schema.Schema = schemaRef
 
 		// Extract schema metadata from type comments
 		if comment := g.getTypeComment(t); comment != "" {
@@ -116,7 +118,7 @@ func (g *Generator) generateStructSchema(t reflect.Type, isRoot bool) (*JSONSche
 
 		fieldSchema, err := g.generateFieldSchema(field)
 		if err != nil {
-			return nil, fmt.Errorf("failed to generate schema for field %s: %w", field.Name, err)
+			return nil, fmt.Errorf("failed to generate schema for field %schemaRef: %w", field.Name, err)
 		}
 
 		schema.Properties[fieldName] = fieldSchema

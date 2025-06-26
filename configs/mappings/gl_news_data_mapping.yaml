@@ -4,6 +4,7 @@ metadata:
   name: "Kaggle Dataset"
   description: "Mapping for Kaggle dataset fields"
 dataset: kaggle
+dateFormat: "2006-01-02 15:04:05.000000"
 fieldMappings:
  - source: "title"
    sourceType: "string"
@@ -13,11 +14,6 @@ fieldMappings:
  - source: "author"
    sourceType: "string"
    target: "Author"
-   targetType: "string"
-   required: true
- - source: "description"
-   sourceType: "string"
-   target: "Description"
    targetType: "string"
    required: true
  - source: "description"
@@ -36,18 +32,17 @@ fieldMappings:
 #   targetType: "url"
 #   required: true
 # - source: "published_at"
-#   sourceType: "date"
+#   sourceType: "datetime"
 #   target: "Metadata.PublishedAt"
-#   targetType: "date"
+#   targetType: "datetime"
 #   required: true
- - source: "source_id"
-   sourceType: "string"
-   target: "Metadata.SourceId"
-   targetType: "string"
-   required: true
+# - source: "source_id"
+#   sourceType: "string"
+#   target: "Metadata.SourceId"
+#   targetType: "string"
+#   required: true
  - source: "source_name"
    sourceType: "string"
    target: "Metadata.SourceName"
    targetType: "string"
    required: true
-dateFormat: "2006-01-02T15:04:05Z"

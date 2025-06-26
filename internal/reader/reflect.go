@@ -5,6 +5,7 @@ import (
 	"github.com/google/uuid"
 	"net/url"
 	"reflect"
+	"strconv"
 	"time"
 )
 
@@ -22,6 +23,9 @@ func SetNestedField(obj reflect.Value, path []string, value string, fieldType st
 		}
 	}
 	field := obj.FieldByName(path[len(path)-1])
+	if !field.IsValid() {
+		return fmt.Errorf("invalid field path: %s", path[len(path)-1])
+	}
 	if !field.CanSet() {
 		return fmt.Errorf("cannot set field %s", path)
 	}
@@ -29,25 +33,48 @@ func SetNestedField(obj reflect.Value, path []string, value string, fieldType st
 	switch fieldType {
 	case "string":
 		field.SetString(value)
-	case "uuid":
-		id, err := uuid.Parse(value)
+	case "int":
+		intVal, err := strconv.ParseInt(value, 10, 64)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to parse int value '%s': %w", value, err)
 		}
-		field.Set(reflect.ValueOf(id))
+		field.SetInt(intVal)
+	case "float":
+		floatVal, err := strconv.ParseFloat(value, 64)
+		if err != nil {
+			return fmt.Errorf("failed to parse float value '%s': %w", value, err)
+		}
+		field.SetFloat(floatVal)
+	case "bool":
+		boolVal, err := strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("failed to parse bool value '%s': %w", value, err)
+		}
+		field.SetBool(boolVal)
+	case "date":
+		t, err := time.Parse("2006-01-02", value)
+		if err != nil {
+			return fmt.Errorf("failed to parse date value '%s': %w", value, err)
+		}
+		field.Set(reflect.ValueOf(t))
 	case "datetime":
 		t, err := time.Parse(dateFormat, value)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to parse datetime value '%s': %w", value, err)
 		}
 		field.Set(reflect.ValueOf(t))
+	case "uuid":
+		id, err := uuid.Parse(value)
+		if err != nil {
+			return fmt.Errorf("failed to parse uuid value '%s': %w", value, err)
+		}
+		field.Set(reflect.ValueOf(id))
 	case "url":
 		u, err := url.Parse(value)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to parse url value '%s': %w", value, err)
 		}
 		field.Set(reflect.ValueOf(*u))
-	// Add more types here...
 	default:
 		return fmt.Errorf("unsupported type: %s", fieldType)
 	}
@@ -77,15 +104,45 @@ func SetFlatField(obj reflect.Value, path string, value string, fieldType string
 		}
 		field.SetString(value)
 
-	case "uuid":
-		if field.Type() != reflect.TypeOf(uuid.UUID{}) {
-			return fmt.Errorf("field %s is not uuid.UUID", path)
+	case "int":
+		if field.Kind() != reflect.Int && field.Kind() != reflect.Int64 && field.Kind() != reflect.Int32 {
+			return fmt.Errorf("field %s is not an integer type", path)
 		}
-		id, err := uuid.Parse(value)
+		intVal, err := strconv.ParseInt(value, 10, 64)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to parse int value '%s': %w", value, err)
 		}
-		field.Set(reflect.ValueOf(id))
+		field.SetInt(intVal)
+
+	case "float":
+		if field.Kind() != reflect.Float64 && field.Kind() != reflect.Float32 {
+			return fmt.Errorf("field %s is not a float type", path)
+		}
+		floatVal, err := strconv.ParseFloat(value, 64)
+		if err != nil {
+			return fmt.Errorf("failed to parse float value '%s': %w", value, err)
+		}
+		field.SetFloat(floatVal)
+
+	case "bool":
+		if field.Kind() != reflect.Bool {
+			return fmt.Errorf("field %s is not a bool", path)
+		}
+		boolVal, err := strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("failed to parse bool value '%s': %w", value, err)
+		}
+		field.SetBool(boolVal)
+
+	case "date":
+		if field.Type() != reflect.TypeOf(time.Time{}) {
+			return fmt.Errorf("field %s is not time.Time", path)
+		}
+		t, err := time.Parse("2006-01-02", value)
+		if err != nil {
+			return fmt.Errorf("failed to parse date value '%s': %w", value, err)
+		}
+		field.Set(reflect.ValueOf(t))
 
 	case "datetime":
 		if field.Type() != reflect.TypeOf(time.Time{}) {
@@ -93,9 +150,19 @@ func SetFlatField(obj reflect.Value, path string, value string, fieldType string
 		}
 		t, err := time.Parse(dateFormat, value)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to parse datetime value '%s': %w", value, err)
 		}
 		field.Set(reflect.ValueOf(t))
+
+	case "uuid":
+		if field.Type() != reflect.TypeOf(uuid.UUID{}) {
+			return fmt.Errorf("field %s is not uuid.UUID", path)
+		}
+		id, err := uuid.Parse(value)
+		if err != nil {
+			return fmt.Errorf("failed to parse uuid value '%s': %w", value, err)
+		}
+		field.Set(reflect.ValueOf(id))
 
 	case "url":
 		if field.Type() != reflect.TypeOf(url.URL{}) {
@@ -103,7 +170,7 @@ func SetFlatField(obj reflect.Value, path string, value string, fieldType string
 		}
 		u, err := url.Parse(value)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to parse url value '%s': %w", value, err)
 		}
 		field.Set(reflect.ValueOf(*u))
 
