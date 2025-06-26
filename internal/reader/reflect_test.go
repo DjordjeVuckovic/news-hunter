@@ -95,3 +95,23 @@ func TestSetNestedField(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, false, article.Meta.Active)
 }
+
+func TestFlexibleDateTimeParsing(t *testing.T) {
+	var article ArticleReflectTest
+	val := reflect.ValueOf(&article).Elem()
+
+	// Test with microseconds format
+	err := SetFlatField(val, "Published", "2023-10-30 10:12:35.000000", "datetime", "2006-01-02 15:04:05.000000")
+	require.NoError(t, err)
+	assert.Equal(t, time.Date(2023, 10, 30, 10, 12, 35, 0, time.UTC), article.Published)
+
+	// Test without microseconds format (should fallback automatically)
+	err = SetFlatField(val, "CreatedDate", "2023-11-27 16:52:44", "datetime", "2006-01-02 15:04:05.000000")
+	require.NoError(t, err)
+	assert.Equal(t, time.Date(2023, 11, 27, 16, 52, 44, 0, time.UTC), article.CreatedDate)
+
+	// Test nested field with different format
+	err = SetNestedField(val, []string{"Meta", "PublishedAt"}, "2023-11-27 22:20:41", "datetime", "2006-01-02 15:04:05.000000")
+	require.NoError(t, err)
+	assert.Equal(t, time.Date(2023, 11, 27, 22, 20, 41, 0, time.UTC), article.Meta.PublishedAt)
+}

@@ -38,18 +38,28 @@ func (m *ArticleMapper) Map(record map[string]string, _ *MappingOptions) (domain
 
 		if len(path) > 1 {
 			err := SetNestedField(val, path, sourceVal, fm.SourceType, m.cfg.DateFormat)
-			if err != nil && fm.Required {
-				slog.Error("failed to set nested field", "field", fm.Target, "error", err)
-				return domain.Article{}, err
+			if err != nil {
+				if fm.Required {
+					slog.Error("failed to set nested field", "field", fm.Target, "error", err)
+					return domain.Article{}, err
+				} else {
+					slog.Warn("skipping optional nested field", "field", fm.Target, "error", err)
+					continue
+				}
 			}
 
 			continue
 		}
 
 		err := SetFlatField(val, path[0], sourceVal, fm.SourceType, m.cfg.DateFormat)
-		if err != nil && fm.Required {
-			slog.Error("failed to set flat field", "field", fm.Target, "error", err)
-			return domain.Article{}, err
+		if err != nil {
+			if fm.Required {
+				slog.Error("failed to set flat field", "field", fm.Target, "error", err)
+				return domain.Article{}, err
+			} else {
+				slog.Warn("skipping optional field", "field", fm.Target, "error", err)
+				continue
+			}
 		}
 	}
 	return article, nil

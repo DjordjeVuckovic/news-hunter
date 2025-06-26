@@ -6,6 +6,8 @@ import (
 	"time"
 )
 
+const ArticleDefaultLanguage = "english"
+
 type Article struct {
 	ID          uuid.UUID       `json:"id"`
 	Title       string          `json:"title"`
@@ -20,7 +22,13 @@ type Article struct {
 }
 
 type ArticleMetadata struct {
-	SourceId    string    `json:"sourceId"`
-	SourceName  string    `json:"sourceName"`
-	PublishedAt time.Time `json:"publishedAt"`
+	// Essential source tracking
+	SourceId    string    `json:"sourceId,omitempty"`
+	SourceName  string    `json:"sourceName,omitempty"`
+	PublishedAt time.Time `json:"publishedAt,omitempty"`
+	// Content metadata
+	Category string `json:"category,omitempty"`
+
+	// System metadata
+	ImportedAt time.Time `json:"importedAt,omitempty"`
 }

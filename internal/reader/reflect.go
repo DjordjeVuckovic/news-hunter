@@ -9,6 +9,36 @@ import (
 	"time"
 )
 
+// parseDateTime tries multiple datetime formats to handle inconsistent data
+func parseDateTime(value string, primaryFormat string) (time.Time, error) {
+	// Try primary format first
+	if t, err := time.Parse(primaryFormat, value); err == nil {
+		return t, nil
+	}
+
+	// Common datetime formats to try as fallbacks
+	fallbackFormats := []string{
+		"2006-01-02 15:04:05.000000",  // with microseconds
+		"2006-01-02 15:04:05",         // without microseconds
+		"2006-01-02T15:04:05.000000Z", // ISO with microseconds
+		"2006-01-02T15:04:05Z",        // ISO without microseconds
+		"2006-01-02T15:04:05",         // ISO local
+		time.RFC3339,                  // RFC3339
+		time.RFC3339Nano,              // RFC3339 with nanoseconds
+	}
+
+	for _, format := range fallbackFormats {
+		if format == primaryFormat {
+			continue // Skip if already tried
+		}
+		if t, err := time.Parse(format, value); err == nil {
+			return t, nil
+		}
+	}
+
+	return time.Time{}, fmt.Errorf("unable to parse datetime value '%s' with any known format", value)
+}
+
 func SetNestedField(obj reflect.Value, path []string, value string, fieldType string, dateFormat string) error {
 	for i := 0; i < len(path)-1; i++ {
 		obj = obj.FieldByName(path[i])
@@ -58,7 +88,7 @@ func SetNestedField(obj reflect.Value, path []string, value string, fieldType st
 		}
 		field.Set(reflect.ValueOf(t))
 	case "datetime":
-		t, err := time.Parse(dateFormat, value)
+		t, err := parseDateTime(value, dateFormat)
 		if err != nil {
 			return fmt.Errorf("failed to parse datetime value '%s': %w", value, err)
 		}
@@ -148,7 +178,7 @@ func SetFlatField(obj reflect.Value, path string, value string, fieldType string
 		if field.Type() != reflect.TypeOf(time.Time{}) {
 			return fmt.Errorf("field %s is not time.Time", path)
 		}
-		t, err := time.Parse(dateFormat, value)
+		t, err := parseDateTime(value, dateFormat)
 		if err != nil {
 			return fmt.Errorf("failed to parse datetime value '%s': %w", value, err)
 		}

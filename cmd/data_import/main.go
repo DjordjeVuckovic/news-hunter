@@ -20,17 +20,12 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	defer func() {
-		if r := recover(); r != nil {
-			slog.Error("recovered from panic", "error", r)
-		}
-	}()
 
 	configPath := os.Getenv("MAPPING_CONFIG_PATH")
 	file, err := os.Open(configPath)
 	if err != nil {
 		slog.Error("failed to read configuration file", "error", err)
-		return
+		os.Exit(1)
 	}
 
 	loader := reader.NewYAMLConfigLoader(file)
@@ -52,17 +47,21 @@ func main() {
 
 	c := collector.NewArticleCollector(articleReader, mapper)
 
-	connStr := os.Getenv("DB_CONNECTION_STRING")
+	connStr := os.Getenv("PG_CONNECTION_STRING")
 	db, err := storage.NewPgStorer(ctx, connStr)
+	if err != nil {
+		slog.Error("failed to create PostgreSQL storer", "error", err)
+		os.Exit(1)
+	}
 	// db := storage.NewJsonFileStorer("")
 
-	pipeline := ingest.NewPgPipeline(c, db, ingest.WithPgBulk(1_000))
+	pipeline := ingest.NewPgPipeline(c, db, ingest.WithPgBulk(5_000))
 
 	e := pipeline.Run(ctx)
 
 	if e != nil {
 		slog.Error("failed to run pipeline", "error", e)
-		return
+		os.Exit(1)
 	}
 
 }

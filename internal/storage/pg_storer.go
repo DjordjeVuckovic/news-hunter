@@ -2,11 +2,13 @@ package storage
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"time"
 )
 
 type PgStorer struct {
@@ -31,17 +33,39 @@ func (s *PgStorer) Save(ctx context.Context, article domain.Article) (uuid.UUID,
 		article.ID = uuid.New()
 	}
 	if article.Language == "" {
-		article.Language = "english"
+		article.Language = domain.ArticleDefaultLanguage
+	}
+	if article.CreatedAt.IsZero() {
+		article.CreatedAt = time.Now()
+	}
+
+	// Set ImportedAt if not already set
+	if article.Metadata.ImportedAt.IsZero() {
+		article.Metadata.ImportedAt = time.Now()
+	}
+
+	// Marshal metadata to JSON
+	metadataJSON, err := json.Marshal(article.Metadata)
+	if err != nil {
+		return uuid.UUID{}, fmt.Errorf("failed to marshal metadata: %w", err)
 	}
 
 	cmd := `
-        INSERT INTO articles (id, title, subtitle, content, author, language)
-        VALUES ($1, $2, $3, $4, $5, $6)
-        ON CONFLICT (id) DO NOTHING
+        INSERT INTO articles (id, title, subtitle, content, author, description, language, created_at, metadata)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        ON CONFLICT (id) DO UPDATE SET
+            title = EXCLUDED.title,
+            subtitle = EXCLUDED.subtitle,
+            content = EXCLUDED.content,
+            author = EXCLUDED.author,
+            description = EXCLUDED.description,
+            language = EXCLUDED.language,
+            created_at = EXCLUDED.created_at,
+            metadata = EXCLUDED.metadata
         RETURNING id;
     `
 	var id uuid.UUID
-	err := s.db.QueryRow(
+	err = s.db.QueryRow(
 		ctx,
 		cmd,
 		article.ID,
@@ -49,7 +73,10 @@ func (s *PgStorer) Save(ctx context.Context, article domain.Article) (uuid.UUID,
 		article.Subtitle,
 		article.Content,
 		article.Author,
+		article.Description,
 		article.Language,
+		article.CreatedAt,
+		metadataJSON,
 	).Scan(&id)
 	if err != nil {
 		return uuid.UUID{}, fmt.Errorf("failed to insert article: %w", err)
@@ -60,27 +87,47 @@ func (s *PgStorer) Save(ctx context.Context, article domain.Article) (uuid.UUID,
 
 func (s *PgStorer) SaveBulk(ctx context.Context, articles []domain.Article) error {
 	rows := make([][]interface{}, len(articles))
+	now := time.Now()
+
 	for i, a := range articles {
 		if a.ID == uuid.Nil {
 			a.ID = uuid.New()
 		}
 		if a.Language == "" {
-			a.Language = "english"
+			a.Language = domain.ArticleDefaultLanguage
 		}
+		if a.CreatedAt.IsZero() {
+			a.CreatedAt = now
+		}
+
+		// Set ImportedAt if not already set
+		if a.Metadata.ImportedAt.IsZero() {
+			a.Metadata.ImportedAt = now
+		}
+
+		// Marshal metadata to JSON
+		metadataJSON, err := json.Marshal(a.Metadata)
+		if err != nil {
+			return fmt.Errorf("failed to marshal metadata for article %d: %w", i, err)
+		}
+
 		rows[i] = []interface{}{
 			a.ID,
 			a.Title,
 			a.Subtitle,
 			a.Content,
 			a.Author,
+			a.Description,
 			a.Language,
+			a.CreatedAt,
+			metadataJSON,
 		}
 	}
 
 	_, err := s.db.CopyFrom(
 		ctx,
 		pgx.Identifier{"articles"},
-		[]string{"id", "title", "subtitle", "content", "author", "language"},
+		[]string{"id", "title", "subtitle", "content", "author", "description", "language", "created_at", "metadata"},
 		pgx.CopyFromRows(rows),
 	)
 
