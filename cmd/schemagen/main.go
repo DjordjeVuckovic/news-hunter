@@ -12,39 +12,75 @@ import (
 
 func main() {
 	var (
-		outputDir = flag.String("output", "api", "Output directory for generated schemas")
-		// format    = flag.String("format", "json", "Output format: json, yaml")
+		outputDir       = flag.String("output", "api", "Output directory for generated schemas")
+		strictMode      = flag.Bool("strict", true, "Enable strict validation mode")
+		includeExamples = flag.Bool("examples", true, "Include example configurations")
+		baseURI         = flag.String("base-uri", "https://schemas.newshunter.io", "Base URI for schema IDs")
+		verbose         = flag.Bool("verbose", false, "Enable verbose logging")
 	)
 	flag.Parse()
 
-	if err := os.MkdirAll(*outputDir, 0755); err != nil {
-		log.Fatalf("Failed to create output directory: %v", err)
+	if *verbose {
+		log.SetFlags(log.LstdFlags | log.Lshortfile)
 	}
 
-	generator := schema.NewGenerator()
+	if err := os.MkdirAll(*outputDir, 0755); err != nil {
+		log.Fatalf("Failed to create output directory %s: %v", *outputDir, err)
+	}
 
-	// Generate schema for DataMapping
+	config := schema.GeneratorConfig{
+		IncludeExamples:     *includeExamples,
+		StrictValidation:    *strictMode,
+		UseDefinitions:      true,
+		BaseURI:             *baseURI,
+		SkipSchemaReference: false,
+	}
+
+	generator := schema.NewGeneratorWithConfig(config)
+
+	if *verbose {
+		log.Printf("Generating schemas with config: strict=%v, examples=%v, baseURI=%s",
+			*strictMode, *includeExamples, *baseURI)
+	}
+
+	if *verbose {
+		log.Printf("Generating JSON schema for DataMapping...")
+	}
+
 	schemaJSON, err := generator.GenerateJSONSchema(datamapping.DataMapper{})
 	if err != nil {
 		log.Fatalf("Failed to generate schema for DataMapping: %v", err)
 	}
 
-	// Write JSON schema
 	jsonFile := filepath.Join(*outputDir, "datamapping-v1.json")
 	if err := os.WriteFile(jsonFile, []byte(schemaJSON), 0644); err != nil {
-		log.Fatalf("Failed to write JSON schema: %v", err)
+		log.Fatalf("Failed to write JSON schema to %s: %v", jsonFile, err)
 	}
 
-	fmt.Printf("Generated JSON schema: %s\n", jsonFile)
+	fmt.Printf("✅ Generated JSON schema: %s\n", jsonFile)
 
-	// Generate YAML example
-	yamlExample := generateYAMLExample()
-	yamlFile := filepath.Join(*outputDir, "datamapping-example.yaml")
-	if err := os.WriteFile(yamlFile, []byte(yamlExample), 0644); err != nil {
-		log.Fatalf("Failed to write YAML example: %v", err)
+	if *includeExamples {
+		if *verbose {
+			log.Printf("Generating YAML example...")
+		}
+
+		yamlExample := generateYAMLExample()
+		exampleDir := filepath.Join(*outputDir, "example")
+		if err := os.MkdirAll(exampleDir, 0755); err != nil {
+			log.Fatalf("Failed to create example directory %s: %v", exampleDir, err)
+		}
+
+		yamlFile := filepath.Join(exampleDir, "datamapping-example.yaml")
+		if err := os.WriteFile(yamlFile, []byte(yamlExample), 0644); err != nil {
+			log.Fatalf("Failed to write YAML example to %s: %v", yamlFile, err)
+		}
+
+		fmt.Printf("✅ Generated YAML example: %s\n", yamlFile)
 	}
 
-	fmt.Printf("Generated YAML example: %s\n", yamlFile)
+	if *verbose {
+		log.Printf("Schema generation completed successfully")
+	}
 }
 
 func generateYAMLExample() string {

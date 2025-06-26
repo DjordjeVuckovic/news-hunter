@@ -19,11 +19,11 @@ type DataMapper struct {
 	// Dataset is the source dataset identifier
 	Dataset string `json:"dataset" yaml:"dataset" schema:"required,pattern=^[a-z0-9-_]+$,minLength=1,maxLength=50" description:"Dataset source identifier"`
 
-	// FieldMappings defines the field mapping rules
-	FieldMappings []FieldMapping `json:"fieldMappings" yaml:"fieldMappings" schema:"required,minItems=1" description:"Array of field mapping definitions"`
-
 	// DateFormat specifies the Go time format for parsing dates
 	DateFormat string `json:"dateFormat,omitempty" yaml:"dateFormat,omitempty" schema:"default=2006-01-02T15:04:05Z" description:"Go time format for parsing date/datetime fields"`
+
+	// FieldMappings defines the field mapping rules
+	FieldMappings []FieldMapping `json:"fieldMappings" yaml:"fieldMappings" schema:"required,minItems=1" description:"Array of field mapping definitions"`
 }
 
 type Metadata struct {
@@ -42,7 +42,7 @@ type FieldMapping struct {
 	SourceType string `json:"sourceType,omitempty" yaml:"sourceType,omitempty" schema:"enum=string|int|float|bool|date|datetime,default=string" description:"Source field data type"`
 
 	// Target is the field name in the target struct
-	Target string `json:"target" yaml:"target" schema:"required,enum=ID|Title|Subtitle|Content|Author|Description|Language|CreatedAt|URL|Metadata" description:"Target field name in Article struct"`
+	Target string `json:"target" yaml:"target" schema:"required,enum=ID|Title|Subtitle|Content|Author|Description|Language|CreatedAt|URL|Metadata.SourceId|Metadata.SourceName|Metadata.PublishedAt|Metadata.Category|Metadata.ImportedAt" description:"Target field name in Article struct"`
 
 	// TargetType is the data type of the target field
 	TargetType string `json:"targetType,omitempty" yaml:"targetType,omitempty" schema:"enum=string|int|float|bool|date|datetime|uuid|url|json,default=string" description:"Target field data type"`

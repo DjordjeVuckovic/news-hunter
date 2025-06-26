@@ -30,9 +30,6 @@ schema-gen: build-schemagen
 	@./$(BIN_DIR)/schemagen -output=api
 	@echo "Schemas generated in api/ directory"
 
-# Run the application
-run-data-import: build-data-import
-	@go run $(CMD_DIR)/data_import/main.go
 # Development commands
 test:
 	@echo "Running tests..."
@@ -71,6 +68,10 @@ deps:
 run-import: build-data-import
 	@echo "Running data import..."
 	@./$(BIN_DIR)/data-import
+
+run-schemagen: build-schemagen
+	@echo "Running schema generator..."
+	@./$(BIN_DIR)/schemagen -output=api
 
 # Development workflow
 dev: fmt vet test schema-gen build-all

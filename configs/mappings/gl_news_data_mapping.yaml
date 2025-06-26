@@ -1,8 +1,8 @@
-kind: DataMapping
+kind: DataMapper
 version: v1
 metadata:
-  name: "Kaggle Dataset"
-  description: "Mapping for Kaggle dataset fields"
+  name: "Kaggle Global News Dataset"
+  description: "Mapping for Kaggle Global News Dataset fields"
 dataset: kaggle
 dateFormat: "2006-01-02 15:04:05.000000"
 fieldMappings:
