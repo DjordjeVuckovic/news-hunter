@@ -4,7 +4,7 @@ import (
 	"context"
 	"github.com/DjordjeVuckovic/news-hunter/internal/collector"
 	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
-	"github.com/DjordjeVuckovic/news-hunter/internal/ingest"
+	"github.com/DjordjeVuckovic/news-hunter/internal/processor"
 	"github.com/DjordjeVuckovic/news-hunter/internal/reader"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
 	"log/slog"
@@ -63,24 +63,26 @@ func main() {
 
 }
 
-func newPipeline(ctx context.Context, cfg *DataImportConfig, coll collector.Collector[domain.Article]) (ingest.Pipeline, error) {
+func newPipeline(ctx context.Context, cfg *DataImportConfig, coll collector.Collector[domain.Article]) (processor.Pipeline, error) {
+	var storer storage.Storer
+	var err error
+
 	switch cfg.StorageType {
 	case storage.PG:
-		pg, err := storage.NewPgStorer(ctx, *cfg.Postgres)
+		storer, err = storage.NewPgStorer(ctx, *cfg.Postgres)
 		if err != nil {
 			return nil, err
 		}
-		return ingest.NewPgPipeline(coll, pg, ingest.WithPgBulk(cfg.BulkOptions.Size)), nil
-
 	case storage.ES:
-		es, err := storage.NewEsStorer(*cfg.Elasticsearch)
+		storer, err = storage.NewEsStorer(*cfg.Elasticsearch)
 		if err != nil {
 			return nil, err
 		}
-		return ingest.NewEsPipeline(coll, es, ingest.WithESBulk(cfg.BulkOptions.Size)), nil
 	case storage.InMem:
 		return nil, storage.ErrUnsupportedStorer
 	default:
 		return nil, storage.ErrUnsupportedStorer
 	}
+
+	return processor.NewPipeline(coll, storer, processor.WithBulk(cfg.BulkOptions.Size)), nil
 }

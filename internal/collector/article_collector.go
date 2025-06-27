@@ -19,9 +19,11 @@ func NewArticleCollector(r reader.RawParallelReader, mapper reader.Mapper) *Arti
 	}
 }
 
+const defaultWorkers = 10
+
 func (ac *ArticleCollector) Collect(ctx context.Context) (<-chan Result[domain.Article], error) {
 
-	result, err := ac.Reader.ReadParallel(ctx, 10)
+	result, err := ac.Reader.ReadParallel(ctx, defaultWorkers)
 	if err != nil {
 		return nil, err
 	}
