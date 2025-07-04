@@ -46,7 +46,7 @@ type ESDocument struct {
 	IndexedAt   time.Time              `json:"indexed_at"`
 }
 
-func NewEsStorer(config EsStorerConfig) (*EsStorer, error) {
+func NewEsStorer(ctx context.Context, config EsStorerConfig) (*EsStorer, error) {
 	cfg := elasticsearch.Config{
 		Addresses: config.Addresses,
 	}
@@ -66,7 +66,7 @@ func NewEsStorer(config EsStorerConfig) (*EsStorer, error) {
 		indexName: config.IndexName,
 	}
 	// Create index if it doesn't exist
-	if err := storer.ensureIndex(context.Background()); err != nil {
+	if err := storer.ensureIndex(ctx); err != nil {
 		return nil, fmt.Errorf("failed to ensure index exists: %w", err)
 	}
 
@@ -196,12 +196,11 @@ func (e *EsStorer) articleToESDocument(article domain.Article) ESDocument {
 }
 
 func (e *EsStorer) ensureIndex(ctx context.Context) error {
-	// Check if index exists
 	req := esapi.IndicesExistsRequest{
 		Index: []string{e.indexName},
 	}
 
-	res, err := req.Do(context.Background(), e.client)
+	res, err := req.Do(ctx, e.client)
 	if err != nil {
 		return fmt.Errorf("failed to check if index exists: %w", err)
 	}
@@ -212,13 +211,11 @@ func (e *EsStorer) ensureIndex(ctx context.Context) error {
 		}
 	}(res.Body)
 
-	// If index exists, return
 	if res.StatusCode == 200 {
 		slog.Info("Index already exists", "index", e.indexName)
 		return nil
 	}
 
-	// Create index with mapping
 	mapping := `{
 		"settings": {
 			"number_of_shards": 1,

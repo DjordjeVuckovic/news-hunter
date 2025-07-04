@@ -74,7 +74,7 @@ func newPipeline(ctx context.Context, cfg *DataImportConfig, coll collector.Coll
 			return nil, err
 		}
 	case storage.ES:
-		storer, err = storage.NewEsStorer(*cfg.Elasticsearch)
+		storer, err = storage.NewEsStorer(ctx, *cfg.Elasticsearch)
 		if err != nil {
 			return nil, err
 		}

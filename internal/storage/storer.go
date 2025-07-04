@@ -15,7 +15,7 @@ type Type string
 
 const (
 	ES    Type = "es"
-	PG    Type = "pg"
+	PG         = "pg"
 	InMem      = "in_mem"
 )
 

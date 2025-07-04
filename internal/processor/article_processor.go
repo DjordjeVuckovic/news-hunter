@@ -10,7 +10,7 @@ import (
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
 )
 
-const defaultBatchSize = 1000
+const defaultBatchSize = 1_000
 
 // Pipeline defines the interface for data processing pipelines
 type Pipeline interface {
