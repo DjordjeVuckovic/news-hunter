@@ -1,4 +1,4 @@
-package storage
+package es
 
 import (
 	"bytes"
@@ -15,21 +15,21 @@ import (
 	"github.com/google/uuid"
 )
 
-type EsStorer struct {
+type Storer struct {
 	typedClient *elasticsearch.TypedClient
 	indexName   string
-	config      EsStorerConfig
+	config      StorerConfig
 }
 
-type EsStorerConfig struct {
+type StorerConfig struct {
 	Addresses []string
 	IndexName string
 	Username  string
 	Password  string
 }
 
-// ESDocument represents the document structure for Elasticsearch
-type ESDocument struct {
+// Document ESDocument represents the document structure for Elasticsearch
+type Document struct {
 	ID          string    `json:"id"`
 	Title       string    `json:"title"`
 	Subtitle    string    `json:"subtitle"`
@@ -47,7 +47,7 @@ type ESDocument struct {
 	IndexedAt   time.Time `json:"indexed_at"`
 }
 
-func NewEsStorer(ctx context.Context, config EsStorerConfig) (*EsStorer, error) {
+func NewStorer(ctx context.Context, config StorerConfig) (*Storer, error) {
 	cfg := elasticsearch.Config{
 		Addresses: config.Addresses,
 	}
@@ -61,7 +61,7 @@ func NewEsStorer(ctx context.Context, config EsStorerConfig) (*EsStorer, error) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Elasticsearch typedClient: %w", err)
 	}
-	storer := &EsStorer{
+	storer := &Storer{
 		typedClient: client,
 		indexName:   config.IndexName,
 		config:      config,
@@ -74,7 +74,7 @@ func NewEsStorer(ctx context.Context, config EsStorerConfig) (*EsStorer, error) 
 	return storer, nil
 }
 
-func (e *EsStorer) Save(ctx context.Context, article domain.Article) (uuid.UUID, error) {
+func (e *Storer) Save(ctx context.Context, article domain.Article) (uuid.UUID, error) {
 	doc := e.articleToESDocument(article)
 
 	res, err := e.typedClient.Index(e.indexName).Id(doc.ID).Document(doc).Do(ctx)
@@ -91,7 +91,7 @@ func (e *EsStorer) Save(ctx context.Context, article domain.Article) (uuid.UUID,
 	return articleID, nil
 }
 
-func (e *EsStorer) SaveBulk(ctx context.Context, articles []domain.Article) error {
+func (e *Storer) SaveBulk(ctx context.Context, articles []domain.Article) error {
 	if len(articles) == 0 {
 		return nil
 	}
@@ -107,15 +107,10 @@ func (e *EsStorer) SaveBulk(ctx context.Context, articles []domain.Article) erro
 		cfg.Password = e.config.Password
 	}
 
-	regularClient, err := elasticsearch.NewClient(cfg)
-	if err != nil {
-		return fmt.Errorf("failed to create regular ES typedClient for bulk operations: %w", err)
-	}
-
 	// Create bulk indexer
 	bi, err := esutil.NewBulkIndexer(esutil.BulkIndexerConfig{
 		Index:         e.indexName,
-		Client:        regularClient,
+		Client:        e.typedClient,
 		NumWorkers:    4,
 		FlushBytes:    5e+6, // 5MB
 		FlushInterval: 30 * time.Second,
@@ -181,11 +176,11 @@ func (e *EsStorer) SaveBulk(ctx context.Context, articles []domain.Article) erro
 	return nil
 }
 
-func (e *EsStorer) articleToESDocument(article domain.Article) ESDocument {
+func (e *Storer) articleToESDocument(article domain.Article) Document {
 	if article.ID == uuid.Nil {
 		article.ID = uuid.New()
 	}
-	return ESDocument{
+	return Document{
 		ID:          article.ID.String(),
 		Title:       article.Title,
 		Subtitle:    article.Subtitle,
@@ -204,7 +199,7 @@ func (e *EsStorer) articleToESDocument(article domain.Article) ESDocument {
 	}
 }
 
-func (e *EsStorer) ensureIndex(ctx context.Context) error {
+func (e *Storer) ensureIndex(ctx context.Context) error {
 	existsRes, err := e.typedClient.Indices.Exists(e.indexName).Do(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to check if index exists: %w", err)
@@ -263,7 +258,7 @@ func (e *EsStorer) ensureIndex(ctx context.Context) error {
 	return nil
 }
 
-func (e *EsStorer) createTextProperty(analyzer string) types.Property {
+func (e *Storer) createTextProperty(analyzer string) types.Property {
 	textProp := types.NewTextProperty()
 	if analyzer != "" {
 		textProp.Analyzer = &analyzer
@@ -271,7 +266,7 @@ func (e *EsStorer) createTextProperty(analyzer string) types.Property {
 	return textProp
 }
 
-func (e *EsStorer) createTextPropertyWithKeyword(analyzer string) types.Property {
+func (e *Storer) createTextPropertyWithKeyword(analyzer string) types.Property {
 	textProp := types.NewTextProperty()
 	if analyzer != "" {
 		textProp.Analyzer = &analyzer

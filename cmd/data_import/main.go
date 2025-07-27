@@ -4,6 +4,8 @@ import (
 	"context"
 	"github.com/DjordjeVuckovic/news-hunter/internal/collector"
 	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
+	"github.com/DjordjeVuckovic/news-hunter/internal/es"
+	"github.com/DjordjeVuckovic/news-hunter/internal/pg"
 	"github.com/DjordjeVuckovic/news-hunter/internal/processor"
 	"github.com/DjordjeVuckovic/news-hunter/internal/reader"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
@@ -69,12 +71,17 @@ func newPipeline(ctx context.Context, cfg *DataImportConfig, coll collector.Coll
 
 	switch cfg.StorageType {
 	case storage.PG:
-		storer, err = storage.NewPgStorer(ctx, *cfg.Postgres)
+		pool, err := pg.NewConnectionPool(ctx, *cfg.Postgres)
+		if err != nil {
+			return nil, err
+		}
+
+		storer, err = pg.NewStorer(pool)
 		if err != nil {
 			return nil, err
 		}
 	case storage.ES:
-		storer, err = storage.NewEsStorer(ctx, *cfg.Elasticsearch)
+		storer, err = es.NewStorer(ctx, *cfg.Elasticsearch)
 		if err != nil {
 			return nil, err
 		}

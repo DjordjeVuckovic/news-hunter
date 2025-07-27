@@ -1,4 +1,4 @@
-package storage
+package pg
 
 import (
 	"context"
@@ -11,28 +11,16 @@ import (
 	"time"
 )
 
-type PgStorer struct {
+type Storer struct {
 	db *pgxpool.Pool
 }
 
-type PgStorerConfig struct {
-	ConnStr string
+func NewStorer(pool *ConnectionPool) (*Storer, error) {
+
+	return &Storer{db: pool.conn}, nil
 }
 
-func NewPgStorer(ctx context.Context, cfg PgStorerConfig) (*PgStorer, error) {
-	dbpool, err := pgxpool.New(ctx, cfg.ConnStr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create connection pool: %w", err)
-	}
-
-	if err := dbpool.Ping(ctx); err != nil {
-		return nil, fmt.Errorf("failed to ping DB: %w", err)
-	}
-
-	return &PgStorer{db: dbpool}, nil
-}
-
-func (s *PgStorer) Save(ctx context.Context, article domain.Article) (uuid.UUID, error) {
+func (s *Storer) Save(ctx context.Context, article domain.Article) (uuid.UUID, error) {
 	if article.ID == uuid.Nil {
 		article.ID = uuid.New()
 	}
@@ -80,7 +68,7 @@ func (s *PgStorer) Save(ctx context.Context, article domain.Article) (uuid.UUID,
 	return id, nil
 }
 
-func (s *PgStorer) SaveBulk(ctx context.Context, articles []domain.Article) error {
+func (s *Storer) SaveBulk(ctx context.Context, articles []domain.Article) error {
 	rows := make([][]interface{}, len(articles))
 	now := time.Now()
 

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"github.com/DjordjeVuckovic/news-hunter/internal/es"
+	"github.com/DjordjeVuckovic/news-hunter/internal/pg"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
 	"github.com/joho/godotenv"
 	"log/slog"
@@ -15,8 +17,8 @@ type AppSettings struct {
 
 type DataImportConfig struct {
 	StorageType     storage.Type
-	Elasticsearch   *storage.EsStorerConfig
-	Postgres        *storage.PgStorerConfig
+	Elasticsearch   *es.StorerConfig
+	Postgres        *pg.Config
 	DatasetPath     string
 	DataMappingPath string
 	BulkOptions     *struct {
@@ -78,7 +80,7 @@ func (ac *AppSettings) LoadConfig() (*DataImportConfig, error) {
 	}
 
 	if storageType == storage.ES {
-		cfg.Elasticsearch = &storage.EsStorerConfig{
+		cfg.Elasticsearch = &es.StorerConfig{
 			Addresses: strings.Split(os.Getenv("ES_ADDRESSES"), ","),
 			IndexName: os.Getenv("ES_INDEX_NAME"),
 			Username:  os.Getenv("ES_USERNAME"),
@@ -91,7 +93,7 @@ func (ac *AppSettings) LoadConfig() (*DataImportConfig, error) {
 	}
 
 	if storageType == storage.PG {
-		cfg.Postgres = &storage.PgStorerConfig{
+		cfg.Postgres = &pg.Config{
 			ConnStr: os.Getenv("PG_CONNECTION_STRING"),
 		}
 		if cfg.Postgres.ConnStr == "" {

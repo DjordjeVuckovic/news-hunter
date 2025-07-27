@@ -12,7 +12,7 @@ BEGIN
             COALESCE(NEW.subtitle, '') || ' ' ||
             COALESCE(NEW.content, '') || ' ' ||
             COALESCE(NEW.author, '')
-                         );
+        );
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
