@@ -5,20 +5,20 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
 	"github.com/elastic/go-elasticsearch/v8"
-	"github.com/elastic/go-elasticsearch/v8/esapi"
+	"github.com/elastic/go-elasticsearch/v8/esutil"
+	"github.com/elastic/go-elasticsearch/v8/typedapi/types"
 	"github.com/google/uuid"
 )
 
 type EsStorer struct {
-	client    *elasticsearch.Client
-	indexName string
+	typedClient *elasticsearch.TypedClient
+	indexName   string
+	config      EsStorerConfig
 }
 
 type EsStorerConfig struct {
@@ -30,20 +30,21 @@ type EsStorerConfig struct {
 
 // ESDocument represents the document structure for Elasticsearch
 type ESDocument struct {
-	ID          string                 `json:"id"`
-	Title       string                 `json:"title"`
-	Description string                 `json:"description"`
-	Content     string                 `json:"content"`
-	Author      string                 `json:"author"`
-	URL         string                 `json:"url"`
-	URLToImage  string                 `json:"url_to_image"`
-	PublishedAt time.Time              `json:"published_at"`
-	Source      string                 `json:"source"`
-	Category    string                 `json:"category"`
-	Language    string                 `json:"language"`
-	Country     string                 `json:"country"`
-	Metadata    map[string]interface{} `json:"metadata"`
-	IndexedAt   time.Time              `json:"indexed_at"`
+	ID          string    `json:"id"`
+	Title       string    `json:"title"`
+	Subtitle    string    `json:"subtitle"`
+	Description string    `json:"description"`
+	Content     string    `json:"content"`
+	Author      string    `json:"author"`
+	URL         string    `json:"url"`
+	Language    string    `json:"language"`
+	CreatedAt   time.Time `json:"created_at"`
+	SourceId    string    `json:"source_id"`
+	SourceName  string    `json:"source_name"`
+	PublishedAt time.Time `json:"published_at"`
+	Category    string    `json:"category"`
+	ImportedAt  time.Time `json:"imported_at"`
+	IndexedAt   time.Time `json:"indexed_at"`
 }
 
 func NewEsStorer(ctx context.Context, config EsStorerConfig) (*EsStorer, error) {
@@ -56,14 +57,14 @@ func NewEsStorer(ctx context.Context, config EsStorerConfig) (*EsStorer, error) 
 		cfg.Password = config.Password
 	}
 
-	client, err := elasticsearch.NewClient(cfg)
+	client, err := elasticsearch.NewTypedClient(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create Elasticsearch client: %w", err)
+		return nil, fmt.Errorf("failed to create Elasticsearch typedClient: %w", err)
 	}
-
 	storer := &EsStorer{
-		client:    client,
-		indexName: config.IndexName,
+		typedClient: client,
+		indexName:   config.IndexName,
+		config:      config,
 	}
 	// Create index if it doesn't exist
 	if err := storer.ensureIndex(ctx); err != nil {
@@ -76,31 +77,9 @@ func NewEsStorer(ctx context.Context, config EsStorerConfig) (*EsStorer, error) 
 func (e *EsStorer) Save(ctx context.Context, article domain.Article) (uuid.UUID, error) {
 	doc := e.articleToESDocument(article)
 
-	docJSON, err := json.Marshal(doc)
-	if err != nil {
-		return uuid.Nil, fmt.Errorf("failed to marshal document: %w", err)
-	}
-
-	req := esapi.IndexRequest{
-		Index:      e.indexName,
-		DocumentID: doc.ID,
-		Body:       bytes.NewReader(docJSON),
-		Refresh:    "true",
-	}
-
-	res, err := req.Do(ctx, e.client)
+	res, err := e.typedClient.Index(e.indexName).Id(doc.ID).Document(doc).Do(ctx)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("failed to index document: %w", err)
-	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			slog.Error("failed to close response body", "error", err)
-		}
-	}(res.Body)
-
-	if res.IsError() {
-		return uuid.Nil, fmt.Errorf("error indexing document: %s", res.String())
 	}
 
 	articleID, err := uuid.Parse(doc.ID)
@@ -108,7 +87,7 @@ func (e *EsStorer) Save(ctx context.Context, article domain.Article) (uuid.UUID,
 		return uuid.Nil, fmt.Errorf("failed to parse article ID: %w", err)
 	}
 
-	slog.Info("document indexed successfully", "id", doc.ID, "index", e.indexName)
+	slog.Info("document indexed successfully", "id", doc.ID, "index", e.indexName, "result", res.Result)
 	return articleID, nil
 }
 
@@ -117,180 +96,188 @@ func (e *EsStorer) SaveBulk(ctx context.Context, articles []domain.Article) erro
 		return nil
 	}
 
-	var buf bytes.Buffer
+	// We need to create a regular ES typedClient from the typed typedClient for esutil
+	// This is a limitation - esutil needs the regular typedClient
+	cfg := elasticsearch.Config{
+		Addresses: e.config.Addresses,
+	}
 
+	if e.config.Username != "" && e.config.Password != "" {
+		cfg.Username = e.config.Username
+		cfg.Password = e.config.Password
+	}
+
+	regularClient, err := elasticsearch.NewClient(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to create regular ES typedClient for bulk operations: %w", err)
+	}
+
+	// Create bulk indexer
+	bi, err := esutil.NewBulkIndexer(esutil.BulkIndexerConfig{
+		Index:         e.indexName,
+		Client:        regularClient,
+		NumWorkers:    4,
+		FlushBytes:    5e+6, // 5MB
+		FlushInterval: 30 * time.Second,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create bulk indexer: %w", err)
+	}
+
+	// Track results
+	var successful, failed int64
+
+	// Add documents to bulk indexer
 	for _, article := range articles {
 		doc := e.articleToESDocument(article)
 
-		// Bulk index action
-		action := map[string]interface{}{
-			"index": map[string]interface{}{
-				"_index": e.indexName,
-				"_id":    doc.ID,
+		docBytes, err := json.Marshal(doc)
+		if err != nil {
+			slog.Error("failed to marshal document", "error", err, "id", doc.ID)
+			failed++
+			continue
+		}
+
+		err = bi.Add(
+			ctx,
+			esutil.BulkIndexerItem{
+				Action:     "index",
+				DocumentID: doc.ID,
+				Body:       bytes.NewReader(docBytes),
+				OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, res esutil.BulkIndexerResponseItem) {
+					successful++
+				},
+				OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, res esutil.BulkIndexerResponseItem, err error) {
+					failed++
+					if err != nil {
+						slog.Error("bulk index error", "error", err, "id", item.DocumentID)
+					} else {
+						slog.Error("bulk index error", "status", res.Status, "error", res.Error.Type, "reason", res.Error.Reason, "id", item.DocumentID)
+					}
+				},
 			},
-		}
-
-		actionJSON, err := json.Marshal(action)
+		)
 		if err != nil {
-			return fmt.Errorf("failed to marshal bulk action: %w", err)
+			failed++
+			slog.Error("failed to add document to bulk indexer", "error", err, "id", doc.ID)
 		}
-
-		docJSON, err := json.Marshal(doc)
-		if err != nil {
-			return fmt.Errorf("failed to marshal document: %w", err)
-		}
-
-		buf.Write(actionJSON)
-		buf.WriteByte('\n')
-		buf.Write(docJSON)
-		buf.WriteByte('\n')
 	}
 
-	req := esapi.BulkRequest{
-		Body:    &buf,
-		Refresh: "true",
+	// Close the indexer and wait for completion
+	if err := bi.Close(ctx); err != nil {
+		return fmt.Errorf("failed to close bulk indexer: %w", err)
 	}
 
-	res, err := req.Do(ctx, e.client)
-	if err != nil {
-		return fmt.Errorf("failed to execute bulk request: %w", err)
-	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			slog.Error("failed to close response body", "error", err)
-		}
-	}(res.Body)
+	slog.Info("Bulk indexing completed",
+		"successful", successful,
+		"failed", failed,
+		"total", len(articles),
+		"index", e.indexName)
 
-	if res.IsError() {
-		return fmt.Errorf("error in bulk request: %s", res.String())
+	if failed > 0 {
+		return fmt.Errorf("failed to index %d out of %d articles", failed, len(articles))
 	}
 
-	// Parse bulk response to check for individual errors
-	var bulkRes map[string]interface{}
-	if err := json.NewDecoder(res.Body).Decode(&bulkRes); err != nil {
-		return fmt.Errorf("failed to parse bulk response: %w", err)
-	}
-
-	if errors, ok := bulkRes["errors"].(bool); ok && errors {
-		slog.Warn("Some documents failed to index in bulk operation")
-	}
-
-	slog.Info("Bulk indexing completed", "count", len(articles), "index", e.indexName)
 	return nil
 }
 
 func (e *EsStorer) articleToESDocument(article domain.Article) ESDocument {
-	// Convert metadata map
-
+	if article.ID == uuid.Nil {
+		article.ID = uuid.New()
+	}
 	return ESDocument{
 		ID:          article.ID.String(),
 		Title:       article.Title,
+		Subtitle:    article.Subtitle,
 		Description: article.Description,
 		Content:     article.Content,
 		Author:      article.Author,
 		URL:         article.URL.String(),
 		Language:    article.Language,
+		CreatedAt:   article.CreatedAt,
+		SourceId:    article.Metadata.SourceId,
+		SourceName:  article.Metadata.SourceName,
+		PublishedAt: article.Metadata.PublishedAt,
+		Category:    article.Metadata.Category,
+		ImportedAt:  article.Metadata.ImportedAt,
 		IndexedAt:   time.Now(),
 	}
 }
 
 func (e *EsStorer) ensureIndex(ctx context.Context) error {
-	req := esapi.IndicesExistsRequest{
-		Index: []string{e.indexName},
-	}
-
-	res, err := req.Do(ctx, e.client)
+	existsRes, err := e.typedClient.Indices.Exists(e.indexName).Do(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to check if index exists: %w", err)
 	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			slog.Error("failed to close response body", "error", err)
-		}
-	}(res.Body)
 
-	if res.StatusCode == 200 {
+	if existsRes {
 		slog.Info("Index already exists", "index", e.indexName)
 		return nil
 	}
 
-	mapping := `{
-		"settings": {
-			"number_of_shards": 1,
-			"number_of_replicas": 0,
-			"analysis": {
-				"analyzer": {
-					"multilingual_analyzer": {
-						"type": "standard",
-						"stopwords": "_none_"
-					}
-				}
-			}
+	settings := types.IndexSettings{
+		NumberOfShards:   "1",
+		NumberOfReplicas: "0",
+		Analysis: &types.IndexSettingsAnalysis{
+			Analyzer: map[string]types.Analyzer{
+				"multilingual_analyzer": types.StandardAnalyzer{
+					Stopwords: []string{"_none_"},
+				},
+			},
 		},
-		"mappings": {
-			"properties": {
-				"id": {"type": "keyword"},
-				"title": {
-					"type": "text",
-					"analyzer": "multilingual_analyzer",
-					"fields": {
-						"keyword": {"type": "keyword"}
-					}
-				},
-				"description": {
-					"type": "text",
-					"analyzer": "multilingual_analyzer"
-				},
-				"content": {
-					"type": "text",
-					"analyzer": "multilingual_analyzer"
-				},
-				"author": {
-					"type": "text",
-					"fields": {
-						"keyword": {"type": "keyword"}
-					}
-				},
-				"url": {"type": "keyword"},
-				"url_to_image": {"type": "keyword"},
-				"published_at": {"type": "date"},
-				"source": {
-					"type": "text",
-					"fields": {
-						"keyword": {"type": "keyword"}
-					}
-				},
-				"category": {"type": "keyword"},
-				"language": {"type": "keyword"},
-				"country": {"type": "keyword"},
-				"metadata": {"type": "object"},
-				"indexed_at": {"type": "date"}
-			}
-		}
-	}`
-
-	createReq := esapi.IndicesCreateRequest{
-		Index: e.indexName,
-		Body:  strings.NewReader(mapping),
 	}
 
-	createRes, err := createReq.Do(ctx, e.client)
+	mappings := types.TypeMapping{
+		Properties: map[string]types.Property{
+			"id":           types.NewKeywordProperty(),
+			"title":        e.createTextPropertyWithKeyword("multilingual_analyzer"),
+			"subtitle":     e.createTextProperty("multilingual_analyzer"),
+			"description":  e.createTextProperty("multilingual_analyzer"),
+			"content":      e.createTextProperty("multilingual_analyzer"),
+			"author":       e.createTextPropertyWithKeyword(""),
+			"url":          types.NewKeywordProperty(),
+			"language":     types.NewKeywordProperty(),
+			"created_at":   types.NewDateProperty(),
+			"source_id":    types.NewKeywordProperty(),
+			"source_name":  e.createTextPropertyWithKeyword(""),
+			"published_at": types.NewDateProperty(),
+			"category":     types.NewKeywordProperty(),
+			"imported_at":  types.NewDateProperty(),
+			"indexed_at":   types.NewDateProperty(),
+		},
+	}
+
+	createRes, err := e.typedClient.Indices.Create(e.indexName).
+		Settings(&settings).
+		Mappings(&mappings).
+		Do(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create index: %w", err)
 	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			slog.Error("failed to close response body", "error", err)
-		}
-	}(createRes.Body)
 
-	if createRes.IsError() {
-		return fmt.Errorf("error creating index: %s", createRes.String())
+	if !createRes.Acknowledged {
+		return fmt.Errorf("index creation was not acknowledged")
 	}
 
 	slog.Info("Index created successfully", "index", e.indexName)
 	return nil
+}
+
+func (e *EsStorer) createTextProperty(analyzer string) types.Property {
+	textProp := types.NewTextProperty()
+	if analyzer != "" {
+		textProp.Analyzer = &analyzer
+	}
+	return textProp
+}
+
+func (e *EsStorer) createTextPropertyWithKeyword(analyzer string) types.Property {
+	textProp := types.NewTextProperty()
+	if analyzer != "" {
+		textProp.Analyzer = &analyzer
+	}
+	textProp.Fields = map[string]types.Property{
+		"keyword": types.NewKeywordProperty(),
+	}
+	return textProp
 }
