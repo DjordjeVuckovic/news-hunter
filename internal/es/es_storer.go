@@ -18,10 +18,10 @@ import (
 type Storer struct {
 	typedClient *elasticsearch.TypedClient
 	indexName   string
-	config      StorerConfig
+	config      Config
 }
 
-type StorerConfig struct {
+type Config struct {
 	Addresses []string
 	IndexName string
 	Username  string
@@ -47,7 +47,7 @@ type Document struct {
 	IndexedAt   time.Time `json:"indexed_at"`
 }
 
-func NewStorer(ctx context.Context, config StorerConfig) (*Storer, error) {
+func NewStorer(ctx context.Context, config Config) (*Storer, error) {
 	cfg := elasticsearch.Config{
 		Addresses: config.Addresses,
 	}
@@ -66,8 +66,8 @@ func NewStorer(ctx context.Context, config StorerConfig) (*Storer, error) {
 		indexName:   config.IndexName,
 		config:      config,
 	}
-	// Create index if it doesn't exist
-	if err := storer.ensureIndex(ctx); err != nil {
+
+	if err := storer.EnsureIndex(ctx); err != nil {
 		return nil, fmt.Errorf("failed to ensure index exists: %w", err)
 	}
 
@@ -199,7 +199,7 @@ func (e *Storer) articleToESDocument(article domain.Article) Document {
 	}
 }
 
-func (e *Storer) ensureIndex(ctx context.Context) error {
+func (e *Storer) EnsureIndex(ctx context.Context) error {
 	existsRes, err := e.typedClient.Indices.Exists(e.indexName).Do(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to check if index exists: %w", err)

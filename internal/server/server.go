@@ -1,11 +1,12 @@
 package server
 
 import (
+	"context"
 	"errors"
-	mw "github.com/DjordjeVuckovic/news-hunter/pkg/middleware"
+	mw "github.com/DjordjeVuckovic/news-hunter/internal/middleware"
+	"github.com/DjordjeVuckovic/news-hunter/pkg/server"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	"golang.org/x/net/context"
 	"net/http"
 	"os"
 	"os/signal"
@@ -17,31 +18,25 @@ const (
 )
 
 type Server struct {
-	Echo *echo.Echo
+	*echo.Echo
 
 	cfg *Config
+
+	checker server.HealthChecker
 }
 
-func NewServer(e *echo.Echo, cfg *Config) *Server {
+func New(cfg *Config, checker server.HealthChecker) *Server {
+	e := echo.New()
+
 	e.DisableHTTP2 = !cfg.UseHttp2
 
 	s := &Server{
-		Echo: e,
-		cfg:  cfg,
+		Echo:    e,
+		cfg:     cfg,
+		checker: checker,
 	}
 
-	s.setupMiddlewares()
-
 	return s
-}
-
-func (s *Server) setupMiddlewares() {
-	s.Echo.Use(mw.Logger())
-	s.Echo.Use(middleware.Recover())
-	s.Echo.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins: s.cfg.CorsOrigins,
-		AllowMethods: []string{http.MethodGet, http.MethodPut, http.MethodPost, http.MethodDelete},
-	}))
 }
 
 func (s *Server) Start() error {
@@ -64,4 +59,29 @@ func (s *Server) Start() error {
 		return err
 	}
 	return nil
+}
+
+func (s *Server) SetupMiddlewares() *Server {
+	s.Echo.Use(mw.Logger())
+	s.Echo.Use(middleware.Recover())
+	s.Echo.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins: s.cfg.CorsOrigins,
+		AllowMethods: []string{http.MethodGet, http.MethodPut, http.MethodPost, http.MethodDelete},
+	}))
+
+	return s
+}
+
+func (s *Server) SetupHealthChecks() *Server {
+	s.Echo.GET("/health", s.handleHealthCheck)
+
+	return s
+}
+
+func (s *Server) handleHealthCheck(c echo.Context) error {
+	if !s.checker.Healthy(c.Request().Context()) {
+		return c.JSON(http.StatusServiceUnavailable, map[string]string{"status": "unhealthy"})
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{"status": "healthy"})
 }

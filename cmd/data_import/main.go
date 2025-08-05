@@ -4,8 +4,6 @@ import (
 	"context"
 	"github.com/DjordjeVuckovic/news-hunter/internal/collector"
 	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
-	"github.com/DjordjeVuckovic/news-hunter/internal/es"
-	"github.com/DjordjeVuckovic/news-hunter/internal/pg"
 	"github.com/DjordjeVuckovic/news-hunter/internal/processor"
 	"github.com/DjordjeVuckovic/news-hunter/internal/reader"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
@@ -66,29 +64,20 @@ func main() {
 }
 
 func newPipeline(ctx context.Context, cfg *DataImportConfig, coll collector.Collector[domain.Article]) (processor.Pipeline, error) {
+	slog.Info("Creating pipeline", "storageType", cfg.StorageType)
+
 	var storer storage.Storer
 	var err error
 
 	switch cfg.StorageType {
-	case storage.PG:
-		pool, err := pg.NewConnectionPool(ctx, *cfg.Postgres)
-		if err != nil {
-			return nil, err
-		}
-
-		storer, err = pg.NewStorer(pool)
-		if err != nil {
-			return nil, err
-		}
 	case storage.ES:
-		storer, err = es.NewStorer(ctx, *cfg.Elasticsearch)
-		if err != nil {
-			return nil, err
-		}
-	case storage.InMem:
-		return nil, storage.ErrUnsupportedStorer
-	default:
-		return nil, storage.ErrUnsupportedStorer
+		storer, err = storage.NewStorer(cfg.StorageType, ctx, *cfg.Elasticsearch)
+	case storage.PG:
+		storer, err = storage.NewStorer(cfg.StorageType, ctx, *cfg.Postgres)
+	}
+	if err != nil {
+		slog.Error("failed to create storer", "error", err)
+		return nil, err
 	}
 
 	return processor.NewPipeline(coll, storer, processor.WithBulk(cfg.BulkOptions.Size)), nil
