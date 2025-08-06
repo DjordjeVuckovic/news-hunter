@@ -7,6 +7,7 @@ import (
 	"github.com/DjordjeVuckovic/news-hunter/internal/processor"
 	"github.com/DjordjeVuckovic/news-hunter/internal/reader"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
+	"github.com/DjordjeVuckovic/news-hunter/internal/storage/factory"
 	"log/slog"
 	"os"
 )
@@ -63,7 +64,10 @@ func main() {
 
 }
 
-func newPipeline(ctx context.Context, cfg *DataImportConfig, coll collector.Collector[domain.Article]) (processor.Pipeline, error) {
+func newPipeline(
+	ctx context.Context,
+	cfg *DataImportConfig,
+	coll collector.Collector[domain.Article]) (processor.Pipeline, error) {
 	slog.Info("Creating pipeline", "storageType", cfg.StorageType)
 
 	var storer storage.Storer
@@ -71,9 +75,9 @@ func newPipeline(ctx context.Context, cfg *DataImportConfig, coll collector.Coll
 
 	switch cfg.StorageType {
 	case storage.ES:
-		storer, err = storage.NewStorer(cfg.StorageType, ctx, *cfg.Elasticsearch)
+		storer, err = factory.NewStorer(cfg.StorageType, ctx, *cfg.Elasticsearch)
 	case storage.PG:
-		storer, err = storage.NewStorer(cfg.StorageType, ctx, *cfg.Postgres)
+		storer, err = factory.NewStorer(cfg.StorageType, ctx, *cfg.Postgres)
 	}
 	if err != nil {
 		slog.Error("failed to create storer", "error", err)

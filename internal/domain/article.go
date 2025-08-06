@@ -32,3 +32,8 @@ type ArticleMetadata struct {
 	// System metadata
 	ImportedAt time.Time `json:"importedAt,omitempty"`
 }
+
+type ArticleSearchResult struct {
+	Article `json:"article" ` // Embedded Article struct for search results
+	Rank    float32           `json:"rank"` // Rank based on search relevance
+}

@@ -1,9 +1,9 @@
 package main
 
 import (
-	"github.com/DjordjeVuckovic/news-hunter/internal/es"
-	"github.com/DjordjeVuckovic/news-hunter/internal/pg"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
+	"github.com/DjordjeVuckovic/news-hunter/internal/storage/es"
+	"github.com/DjordjeVuckovic/news-hunter/internal/storage/pg"
 	"github.com/joho/godotenv"
 	"log/slog"
 	"os"
