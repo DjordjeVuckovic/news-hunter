@@ -2,24 +2,23 @@ package main
 
 import (
 	"context"
+	"log/slog"
+	"os"
+
 	"github.com/DjordjeVuckovic/news-hunter/internal/collector"
 	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
 	"github.com/DjordjeVuckovic/news-hunter/internal/processor"
 	"github.com/DjordjeVuckovic/news-hunter/internal/reader"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage/factory"
-	"log/slog"
-	"os"
 )
 
 func main() {
-	appSettings := AppSettings{
-		ENV: os.Getenv("ENV"),
-	}
-	cfg, err := appSettings.LoadConfig()
+	appSettings := NewAppSettings()
+
+	cfg, err := appSettings.Load()
 	if err != nil {
 		slog.Error("failed to load configuration", "error", err)
-		os.Exit(1)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
 	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"strings"
 )
 
 type Reader struct {
@@ -19,23 +19,6 @@ func NewReader(pool *ConnectionPool) (*Reader, error) {
 }
 
 func (r *Reader) SearchBasic(ctx context.Context, query string, page int, size int) (*storage.SearchResult, error) {
-	// Validate inputs
-	if strings.TrimSpace(query) == "" {
-		return &storage.SearchResult{
-			Articles: []domain.Article{},
-			Total:    0,
-			Page:     page,
-			Size:     size,
-			HasMore:  false,
-		}, nil
-	}
-
-	if page < 1 {
-		page = 1
-	}
-	if size < 1 || size > 100 {
-		size = 10
-	}
 
 	offset := (page - 1) * size
 

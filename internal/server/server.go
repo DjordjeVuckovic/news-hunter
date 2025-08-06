@@ -23,6 +23,8 @@ type Server struct {
 	cfg *Config
 
 	checker server.HealthChecker
+
+	Ctx context.Context
 }
 
 func New(cfg *Config, checker server.HealthChecker) *Server {
@@ -34,6 +36,7 @@ func New(cfg *Config, checker server.HealthChecker) *Server {
 		Echo:    e,
 		cfg:     cfg,
 		checker: checker,
+		Ctx:     context.Background(),
 	}
 
 	return s
@@ -48,6 +51,8 @@ func (s *Server) Start() error {
 			s.Echo.Logger.Fatal("shutting down the server")
 		}
 	}()
+
+	s.Ctx = ctx
 
 	<-ctx.Done()
 

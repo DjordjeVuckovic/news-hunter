@@ -1,17 +1,24 @@
 package main
 
 import (
-	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
-	"github.com/DjordjeVuckovic/news-hunter/internal/storage/es"
-	"github.com/DjordjeVuckovic/news-hunter/internal/storage/pg"
-	"github.com/joho/godotenv"
 	"log/slog"
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
+	"github.com/DjordjeVuckovic/news-hunter/internal/storage/es"
+	"github.com/DjordjeVuckovic/news-hunter/internal/storage/pg"
+	"github.com/DjordjeVuckovic/news-hunter/pkg/config/env"
 )
 
-type AppSettings struct {
+func NewAppSettings() *AppConfig {
+	return &AppConfig{
+		ENV: os.Getenv("ENV"),
+	}
+}
+
+type AppConfig struct {
 	ENV string
 }
 
@@ -27,14 +34,11 @@ type DataImportConfig struct {
 	}
 }
 
-func (ac *AppSettings) LoadConfig() (*DataImportConfig, error) {
-	err := godotenv.Load("cmd/data_import/.env")
+func (as *AppConfig) Load() (*DataImportConfig, error) {
+	err := env.LoadDotEnv(as.ENV, "cmd/data_import/.env")
 	if err != nil {
-		if ac.ENV == "local" || ac.ENV == "" {
-			slog.Error("Failed to load environment variables in local mode", "error", err)
-			return nil, err
-		}
-		slog.Debug("Skipping .env ...")
+		slog.Error("Failed to .env load environment variables", "error", err)
+		return nil, err
 	}
 
 	storageType := (storage.Type)(os.Getenv("STORAGE_TYPE"))

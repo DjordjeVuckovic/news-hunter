@@ -1,9 +1,15 @@
 package router
 
 import (
+	"strconv"
+
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
 	"github.com/labstack/echo/v4"
-	"strconv"
+)
+
+const (
+	defaultPageSize = 10
+	defaultPage     = 1
 )
 
 type SearchRouter struct {
@@ -19,7 +25,7 @@ func NewSearchRouter(e *echo.Echo, storage storage.Reader) *SearchRouter {
 }
 
 func (r *SearchRouter) Bind() {
-	r.e.GET("/search", r.searchHandler)
+	r.e.GET("/search/basic", r.searchHandler)
 }
 
 func (r *SearchRouter) searchHandler(c echo.Context) error {
@@ -32,15 +38,14 @@ func (r *SearchRouter) searchHandler(c echo.Context) error {
 		return c.JSON(400, map[string]string{"error": "query parameter is required"})
 	}
 
-	// Convert page and size to integers with default values
-	pageInt := 1
-	sizeInt := 10
+	pageInt := defaultPage
+	sizeInt := defaultPageSize
 
 	if page != "" {
 		var err error
 		pageInt, err = strconv.Atoi(page)
 		if err != nil || pageInt < 1 {
-			pageInt = 1
+			pageInt = defaultPage
 		}
 	}
 
@@ -48,7 +53,7 @@ func (r *SearchRouter) searchHandler(c echo.Context) error {
 		var err error
 		sizeInt, err = strconv.Atoi(size)
 		if err != nil || sizeInt < 1 {
-			sizeInt = 10
+			sizeInt = defaultPageSize
 		}
 	}
 

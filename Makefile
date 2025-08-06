@@ -67,7 +67,7 @@ deps:
 # Run data import with default config
 run-import: build-data-import
 	@echo "Running data import..."
-	@./$(BIN_DIR)/data-import
+	@ENV_PATH="cmd/data_import/pg.env" ./$(BIN_DIR)/data-import
 
 run-schemagen: build-schemagen
 	@echo "Running schema generator..."
