@@ -12,7 +12,7 @@ import (
 	"github.com/DjordjeVuckovic/news-hunter/pkg/config/env"
 )
 
-func NewAppSettings() *AppConfig {
+func NewAppConfig() *AppConfig {
 	return &AppConfig{
 		ENV: os.Getenv("ENV"),
 	}

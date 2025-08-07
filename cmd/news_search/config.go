@@ -15,7 +15,7 @@ type AppConfig struct {
 	ENV string
 }
 
-func NewAppSettings() *AppConfig {
+func NewAppConfig() *AppConfig {
 	return &AppConfig{
 		ENV: os.Getenv("ENV"),
 	}

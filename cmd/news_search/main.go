@@ -31,7 +31,7 @@ func main() {
 		return c.String(200, "News Hunter API is running")
 	})
 
-	appSettings := NewAppSettings()
+	appSettings := NewAppConfig()
 	cfg, err := appSettings.Load()
 	if err != nil {
 		slog.Error("Failed to load app configuration", "error", err)

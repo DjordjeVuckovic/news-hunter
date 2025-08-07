@@ -14,7 +14,7 @@ import (
 )
 
 func main() {
-	appSettings := NewAppSettings()
+	appSettings := NewAppConfig()
 
 	cfg, err := appSettings.Load()
 	if err != nil {
