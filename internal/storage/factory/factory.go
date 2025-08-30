@@ -3,6 +3,7 @@ package factory
 import (
 	"context"
 	"fmt"
+
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage/es"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage/pg"

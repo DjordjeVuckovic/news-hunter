@@ -28,6 +28,19 @@ func (r *SearchRouter) Bind() {
 	r.e.GET("/search/basic", r.searchHandler)
 }
 
+// searchHandler handles basic search requests
+// @Summary Basic news search
+// @Description Search for news articles using basic text query
+// @Tags search
+// @Accept  json
+// @Produce  json
+// @Param query query string true "Search query"
+// @Param page query int false "Page number (default: 1)"
+// @Param size query int false "Page size (default: 10)"
+// @Success 200 {object} storage.SearchResult
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /search/basic [get]
 func (r *SearchRouter) searchHandler(c echo.Context) error {
 	query := c.QueryParam("query")
 	page := c.QueryParam("page")

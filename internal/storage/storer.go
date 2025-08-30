@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+
 	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
 	"github.com/google/uuid"
 )
@@ -16,6 +17,7 @@ type Type string
 const (
 	ES    Type = "es"
 	PG         = "pg"
+	Solr       = "solr"
 	InMem      = "in_mem"
 )
 

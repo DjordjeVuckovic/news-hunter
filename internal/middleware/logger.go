@@ -2,9 +2,10 @@ package middleware
 
 import (
 	"context"
+	"log/slog"
+
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	"log/slog"
 )
 
 type LoggerOpts func(*middleware.RequestLoggerConfig)

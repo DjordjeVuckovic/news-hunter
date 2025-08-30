@@ -1,17 +1,29 @@
+// Package main News Hunter API
+// @title News Hunter API
+// @version 1.0
+// @description A full-text search engine for exploring multilingual news headlines and articles
+// @termsOfService http://swagger.io/terms/
+// @contact.name API Support
+// @contact.email support@newshunter.com
+// @license.name MIT
+// @license.url https://opensource.org/licenses/MIT
+// @host localhost:8080
+// @BasePath /
 package main
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"os"
 
+	_ "github.com/DjordjeVuckovic/news-hunter/docs"
 	"github.com/DjordjeVuckovic/news-hunter/internal/router"
 	"github.com/DjordjeVuckovic/news-hunter/internal/server"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage/factory"
 	pkgserver "github.com/DjordjeVuckovic/news-hunter/pkg/server"
 	"github.com/labstack/echo/v4"
+	echoSwagger "github.com/swaggo/echo-swagger"
 )
 
 func main() {
@@ -47,6 +59,8 @@ func main() {
 	searchrouter := router.NewSearchRouter(s.Echo, reader)
 	searchrouter.Bind()
 
+	s.Echo.GET("/swagger/*", echoSwagger.WrapHandler)
+
 	err = s.Start()
 	if err != nil {
 		s.Echo.Logger.Error("Failed to start server: ", err)
@@ -55,7 +69,6 @@ func main() {
 }
 
 func newReader(ctx context.Context, cfg *NewsSearchConfig) (storage.Reader, error) {
-	storageType := cfg.StorageType
 	var reader storage.Reader
 	var err error
 
@@ -69,5 +82,5 @@ func newReader(ctx context.Context, cfg *NewsSearchConfig) (storage.Reader, erro
 		slog.Error("failed to create storer", "error", err)
 		return nil, err
 	}
-	return reader, fmt.Errorf("unsupported storage type: %s", storageType)
+	return reader, nil
 }

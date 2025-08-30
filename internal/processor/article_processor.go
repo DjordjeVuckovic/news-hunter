@@ -14,10 +14,8 @@ const defaultBatchSize = 1_000
 
 // Pipeline defines the interface for data processing pipelines
 type Pipeline interface {
-	// Run executes the pipeline with the given context
 	Run(ctx context.Context) error
 
-	// Stop gracefully stops the pipeline
 	Stop()
 }
 

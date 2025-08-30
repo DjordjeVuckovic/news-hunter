@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"strconv"
@@ -44,30 +45,33 @@ func (as *AppConfig) Load() (*DataImportConfig, error) {
 	storageType := (storage.Type)(os.Getenv("STORAGE_TYPE"))
 	if storageType == "" {
 		slog.Error("STORAGE_TYPE environment variable is not set")
-		return nil, err
+		return nil, fmt.Errorf("STORAGE_TYPE environment variable is not set")
 	}
 	if storageType != storage.ES && storageType != storage.PG && storageType != storage.InMem {
-		slog.Error("Invalid STORAGE_TYPE environment variable value", "value", storageType, "expected", []storage.Type{storage.ES, storage.PG, storage.InMem})
-		return nil, err
+		slog.Error("Invalid STORAGE_TYPE environment variable value", "value", storageType)
+		return nil, fmt.Errorf(
+			"invalid STORAGE_TYPE environment variable value: %s, expected one of %v",
+			storageType,
+			[]storage.Type{storage.ES, storage.PG, storage.InMem})
 	}
 
 	mappingPath := os.Getenv("MAPPING_CONFIG_PATH")
 	if mappingPath == "" {
 		slog.Error("MAPPING_CONFIG_PATH environment variable is not set")
-		return nil, err
+		return nil, fmt.Errorf("MAPPING_CONFIG_PATH environment variable is not set")
 	}
 
 	dsPath := os.Getenv("DATASET_PATH")
 	if dsPath == "" {
 		slog.Error("DATASET_PATH environment variable is not set")
-		return nil, err
+		return nil, fmt.Errorf("DATASET_PATH environment variable is not set")
 	}
 
 	bulkEnabled := os.Getenv("BULK_ENABLED")
 	bulkSize := os.Getenv("BULK_SIZE")
 	bulkSizeNum, err := strconv.Atoi(bulkSize)
 	if err != nil {
-		bulkSizeNum = 5000 // Default bulk size if not set or invalid
+		bulkSizeNum = 5_000
 	}
 
 	cfg := &DataImportConfig{
@@ -92,7 +96,7 @@ func (as *AppConfig) Load() (*DataImportConfig, error) {
 		}
 		if len(cfg.Elasticsearch.Addresses) == 0 || cfg.Elasticsearch.IndexName == "" {
 			slog.Error("Elasticsearch configuration is incomplete", "addresses", cfg.Elasticsearch.Addresses, "indexName", cfg.Elasticsearch.IndexName)
-			return nil, err
+			return nil, fmt.Errorf("elasticsearch configuration is incomplete: addresses or index name is missing")
 		}
 	}
 
@@ -102,7 +106,7 @@ func (as *AppConfig) Load() (*DataImportConfig, error) {
 		}
 		if cfg.Postgres.ConnStr == "" {
 			slog.Error("PostgreSQL connection string is not set")
-			return nil, err
+			return nil, fmt.Errorf("postgreSQL connection string is not set")
 		}
 	}
 
