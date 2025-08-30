@@ -1,0 +1,113 @@
+basePath: /
+definitions:
+  domain.Article:
+    properties:
+      author:
+        type: string
+      content:
+        type: string
+      createdAt:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      language:
+        type: string
+      metadata:
+        $ref: '#/definitions/domain.ArticleMetadata'
+      subtitle:
+        type: string
+      title:
+        type: string
+      url:
+        format: uri
+        type: string
+    type: object
+  domain.ArticleMetadata:
+    properties:
+      category:
+        description: Content metadata
+        type: string
+      importedAt:
+        description: System metadata
+        type: string
+      publishedAt:
+        type: string
+      sourceId:
+        description: Essential source tracking
+        type: string
+      sourceName:
+        type: string
+    type: object
+  storage.SearchResult:
+    properties:
+      articles:
+        items:
+          $ref: '#/definitions/domain.Article'
+        type: array
+      has_more:
+        type: boolean
+      page:
+        type: integer
+      size:
+        type: integer
+      total:
+        type: integer
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@newshunter.com
+    name: API Support
+  description: A full-text search engine for exploring multilingual news headlines
+    and articles
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: http://swagger.io/terms/
+  title: News Hunter API
+  version: "1.0"
+paths:
+  /search/basic:
+    get:
+      consumes:
+      - application/json
+      description: Search for news articles using basic text query
+      parameters:
+      - description: Search query
+        in: query
+        name: query
+        required: true
+        type: string
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Page size (default: 10)'
+        in: query
+        name: size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/storage.SearchResult'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Basic news search
+      tags:
+      - search
+swagger: "2.0"

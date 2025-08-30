@@ -16,7 +16,7 @@ import (
 	"log/slog"
 	"os"
 
-	_ "github.com/DjordjeVuckovic/news-hunter/docs"
+	_ "github.com/DjordjeVuckovic/news-hunter/api/openapi-spec"
 	"github.com/DjordjeVuckovic/news-hunter/internal/router"
 	"github.com/DjordjeVuckovic/news-hunter/internal/server"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
