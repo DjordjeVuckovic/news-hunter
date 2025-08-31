@@ -19,6 +19,11 @@ build-data-import:
 	@mkdir -p $(BIN_DIR)
 	@go build -o $(BIN_DIR)/data-import $(CMD_DIR)/data_import
 
+build-news-search:
+	@echo "Building news-searcher..."
+	@mkdir -p $(BIN_DIR)
+	@go build -o $(BIN_DIR)/news-search $(CMD_DIR)/news_search
+
 build-schemagen:
 	@echo "Building schema generator..."
 	@mkdir -p $(BIN_DIR)
@@ -67,12 +72,23 @@ deps:
 # Run data import with default config
 run-import: build-data-import
 	@echo "Running data import..."
-	@ENV_PATH="cmd/data_import/pg.env" ./$(BIN_DIR)/data-import
+	@ENV_PATHS="cmd/data_import/pg.env" ./$(BIN_DIR)/data-import
 
 run-schemagen: build-schemagen
 	@echo "Running schema generator..."
 	@./$(BIN_DIR)/schemagen -output=api
 
+run-search: build-news-search
+	@echo "Running news search service..."
+	@ENV_PATHS="cmd/news_search/.env" ./$(BIN_DIR)/news-search
+
+run-search-pg: build-news-search
+	@echo "Running news search service..."
+	@ENV_PATHS="cmd/news_search/pg.env" ./$(BIN_DIR)/news-search
+
+run-search-es: build-news-search
+	@echo "Running news search service..."
+	@ENV_PATHS="cmd/news_search/es.env" ./$(BIN_DIR)/news-search
 # Development workflow
 dev: fmt vet test schema-gen build-all
 

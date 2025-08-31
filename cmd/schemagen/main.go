@@ -3,11 +3,12 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/DjordjeVuckovic/news-hunter/pkg/apis/datamapping"
-	"github.com/DjordjeVuckovic/news-hunter/pkg/schema"
 	"log"
 	"os"
 	"path/filepath"
+
+	"github.com/DjordjeVuckovic/news-hunter/pkg/apis/datamapping"
+	"github.com/DjordjeVuckovic/news-hunter/pkg/schema"
 )
 
 func main() {

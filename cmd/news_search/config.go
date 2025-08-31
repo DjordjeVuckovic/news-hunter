@@ -23,7 +23,7 @@ func NewAppConfig() *AppConfig {
 
 type NewsSearchConfig struct {
 	StorageType   storage.Type
-	Elasticsearch *es.Config
+	Elasticsearch *es.ClientConfig
 	Postgres      *pg.Config
 }
 
@@ -40,9 +40,11 @@ func (as *AppConfig) Load() (*NewsSearchConfig, error) {
 		slog.Error("Invalid STORAGE_TYPE environment variable value", "value", storageType, "expected", []storage.Type{storage.ES, storage.PG, storage.InMem})
 		return nil, err
 	}
-	var esCfg *es.Config
+	slog.Info("Using storage type", "type", storageType)
+
+	var esCfg *es.ClientConfig
 	if storageType == storage.ES {
-		esCfg = &es.Config{
+		esCfg = &es.ClientConfig{
 			Addresses: strings.Split(os.Getenv("ES_ADDRESSES"), ","),
 			IndexName: os.Getenv("ES_INDEX_NAME"),
 			Username:  os.Getenv("ES_USERNAME"),

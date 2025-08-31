@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/DjordjeVuckovic/news-hunter/pkg/config/env"
 	"github.com/DjordjeVuckovic/news-hunter/pkg/stringsutil"
-	"github.com/joho/godotenv"
 )
 
 type Config struct {
@@ -19,7 +19,7 @@ type Config struct {
 }
 
 func LoadConfig() (*Config, error) {
-	err := godotenv.Load("cmd/news_search/.env")
+	err := env.LoadDotEnv("cmd/news_search/.env")
 	if err != nil {
 		slog.Info("Skipping .env ...", "error", err)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	"github.com/DjordjeVuckovic/news-hunter/internal/dto"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
@@ -19,6 +20,7 @@ func NewReader(pool *ConnectionPool) (*Reader, error) {
 }
 
 func (r *Reader) SearchBasic(ctx context.Context, query string, page int, size int) (*storage.SearchResult, error) {
+	slog.Info("Executing pg basic search", "query", query, "page", page, "size", size)
 
 	offset := (page - 1) * size
 
@@ -91,10 +93,10 @@ func (r *Reader) SearchBasic(ctx context.Context, query string, page int, size i
 	hasMore := int64(offset+size) < total
 
 	return &storage.SearchResult{
-		Articles: articles,
-		Total:    total,
-		Page:     page,
-		Size:     size,
-		HasMore:  hasMore,
+		Items:   articles,
+		Total:   total,
+		Page:    page,
+		Size:    size,
+		HasMore: hasMore,
 	}, nil
 }

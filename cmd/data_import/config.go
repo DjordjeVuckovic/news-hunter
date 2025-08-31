@@ -25,7 +25,7 @@ type AppConfig struct {
 
 type DataImportConfig struct {
 	StorageType     storage.Type
-	Elasticsearch   *es.Config
+	Elasticsearch   *es.ClientConfig
 	Postgres        *pg.Config
 	DatasetPath     string
 	DataMappingPath string
@@ -88,7 +88,7 @@ func (as *AppConfig) Load() (*DataImportConfig, error) {
 	}
 
 	if storageType == storage.ES {
-		cfg.Elasticsearch = &es.Config{
+		cfg.Elasticsearch = &es.ClientConfig{
 			Addresses: strings.Split(os.Getenv("ES_ADDRESSES"), ","),
 			IndexName: os.Getenv("ES_INDEX_NAME"),
 			Username:  os.Getenv("ES_USERNAME"),

@@ -7,11 +7,11 @@ import (
 )
 
 type SearchResult struct {
-	Articles []dto.ArticleSearchResult `json:"articles"`
-	Total    int64                     `json:"total"`
-	Page     int                       `json:"page"`
-	Size     int                       `json:"size"`
-	HasMore  bool                      `json:"has_more"`
+	Items   []dto.ArticleSearchResult `json:"items"`
+	Total   int64                     `json:"total"`
+	Page    int                       `json:"page"`
+	Size    int                       `json:"size"`
+	HasMore bool                      `json:"has_more"`
 }
 
 type Reader interface {

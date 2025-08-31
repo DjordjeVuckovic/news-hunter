@@ -18,14 +18,7 @@ import (
 type Storer struct {
 	client    *elasticsearch.TypedClient
 	indexName string
-	config    Config
-}
-
-type Config struct {
-	Addresses []string
-	IndexName string
-	Username  string
-	Password  string
+	config    ClientConfig
 }
 
 // Document ESDocument represents the document structure for Elasticsearch
@@ -47,17 +40,9 @@ type Document struct {
 	IndexedAt   time.Time `json:"indexed_at"`
 }
 
-func NewStorer(ctx context.Context, config Config) (*Storer, error) {
-	cfg := elasticsearch.Config{
-		Addresses: config.Addresses,
-	}
+func NewStorer(ctx context.Context, config ClientConfig) (*Storer, error) {
+	client, err := newClient(config)
 
-	if config.Username != "" && config.Password != "" {
-		cfg.Username = config.Username
-		cfg.Password = config.Password
-	}
-
-	client, err := elasticsearch.NewTypedClient(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Elasticsearch client: %w", err)
 	}
@@ -96,15 +81,6 @@ func (e *Storer) SaveBulk(ctx context.Context, articles []domain.Article) error 
 		return nil
 	}
 
-	cfg := elasticsearch.Config{
-		Addresses: e.config.Addresses,
-	}
-
-	if e.config.Username != "" && e.config.Password != "" {
-		cfg.Username = e.config.Username
-		cfg.Password = e.config.Password
-	}
-
 	bi, err := esutil.NewBulkIndexer(esutil.BulkIndexerConfig{
 		Index:         e.indexName,
 		Client:        e.client,
@@ -112,14 +88,13 @@ func (e *Storer) SaveBulk(ctx context.Context, articles []domain.Article) error 
 		FlushBytes:    5e+6, // 5MB
 		FlushInterval: 30 * time.Second,
 	})
+
 	if err != nil {
 		return fmt.Errorf("failed to create bulk indexer: %w", err)
 	}
 
-	// Track results
 	var successful, failed int64
 
-	// Add documents to bulk indexer
 	for _, article := range articles {
 		doc := e.articleToESDocument(article)
 
