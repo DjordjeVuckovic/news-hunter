@@ -5,18 +5,18 @@
 // @termsOfService http://swagger.io/terms/
 // @contact.name API Support
 // @contact.email support@newshunter.com
-// @license.name MIT
-// @license.url https://opensource.org/licenses/MIT
-// @host localhost:8080
+// @license.name Apache 2.0
+// @license.url https://opensource.org/licenses/Apache-2.0
 // @BasePath /
 package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 
-	_ "github.com/DjordjeVuckovic/news-hunter/api/openapi-spec"
+	openapi "github.com/DjordjeVuckovic/news-hunter/api/openapi-spec"
 	"github.com/DjordjeVuckovic/news-hunter/internal/router"
 	"github.com/DjordjeVuckovic/news-hunter/internal/server"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
@@ -58,6 +58,9 @@ func main() {
 
 	searchrouter := router.NewSearchRouter(s.Echo, reader)
 	searchrouter.Bind()
+
+	// Configure OpenAPI spec host dynamically based on server port
+	openapi.SwaggerInfo.Host = fmt.Sprintf("localhost:%s", sCfg.Port)
 
 	s.Echo.GET("/swagger/*", echoSwagger.WrapHandler)
 

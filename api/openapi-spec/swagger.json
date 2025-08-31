@@ -14,7 +14,6 @@
         },
         "version": "1.0"
     },
-    "host": "localhost:8080",
     "basePath": "/",
     "paths": {
         "/search/basic": {
@@ -81,7 +80,7 @@
         }
     },
     "definitions": {
-        "domain.Article": {
+        "dto.Article": {
             "type": "object",
             "properties": {
                 "author": {
@@ -103,7 +102,7 @@
                     "type": "string"
                 },
                 "metadata": {
-                    "$ref": "#/definitions/domain.ArticleMetadata"
+                    "$ref": "#/definitions/dto.ArticleMetadata"
                 },
                 "subtitle": {
                     "type": "string"
@@ -113,11 +112,11 @@
                 },
                 "url": {
                     "type": "string",
-                    "format": "uri"
+                    "format": "string"
                 }
             }
         },
-        "domain.ArticleMetadata": {
+        "dto.ArticleMetadata": {
             "type": "object",
             "properties": {
                 "category": {
@@ -140,17 +139,34 @@
                 }
             }
         },
+        "dto.ArticleSearchResult": {
+            "type": "object",
+            "properties": {
+                "article": {
+                    "description": "Embedded Article struct for search results",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.Article"
+                        }
+                    ]
+                },
+                "rank": {
+                    "description": "Rank based on search relevance",
+                    "type": "number"
+                }
+            }
+        },
         "storage.SearchResult": {
             "type": "object",
             "properties": {
-                "articles": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/domain.Article"
-                    }
-                },
                 "has_more": {
                     "type": "boolean"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.ArticleSearchResult"
+                    }
                 },
                 "page": {
                     "type": "integer"
