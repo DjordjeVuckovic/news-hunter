@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
+	"github.com/DjordjeVuckovic/news-hunter/internal/dto"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -51,11 +51,11 @@ func (r *Reader) SearchBasic(ctx context.Context, query string, page int, size i
 	}
 	defer rows.Close()
 
-	var articles []domain.Article
+	var articles []dto.ArticleSearchResult
 	for rows.Next() {
-		var article domain.Article
 		var metadataJSON []byte
 		var rank float32
+		var article dto.Article
 
 		if err := rows.Scan(
 			&article.ID,
@@ -76,8 +76,12 @@ func (r *Reader) SearchBasic(ctx context.Context, query string, page int, size i
 		if err := json.Unmarshal(metadataJSON, &article.Metadata); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal metadata: %w", err)
 		}
+		searchResult := &dto.ArticleSearchResult{
+			Article: article,
+			Rank:    rank,
+		}
 
-		articles = append(articles, article)
+		articles = append(articles, *searchResult)
 	}
 
 	if err := rows.Err(); err != nil {

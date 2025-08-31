@@ -1,13 +1,10 @@
-package domain
+package dto
 
 import (
-	"net/url"
 	"time"
 
 	"github.com/google/uuid"
 )
-
-const ArticleDefaultLanguage = "english"
 
 type Article struct {
 	ID          uuid.UUID       `json:"id"`
@@ -18,7 +15,7 @@ type Article struct {
 	Description string          `json:"description,omitempty"`
 	Language    string          `json:"language,omitempty"`
 	CreatedAt   time.Time       `json:"createdAt"`
-	URL         url.URL         `json:"url,omitempty" swaggertype:"string" format:"uri"`
+	URL         string          `json:"url,omitempty" swaggertype:"string" format:"string"`
 	Metadata    ArticleMetadata `json:"metadata"`
 }
 
@@ -32,4 +29,9 @@ type ArticleMetadata struct {
 
 	// System metadata
 	ImportedAt time.Time `json:"importedAt,omitempty"`
+}
+
+type ArticleSearchResult struct {
+	Article `json:"article" ` // Embedded Article struct for search results
+	Rank    float32           `json:"rank"` // Rank based on search relevance
 }

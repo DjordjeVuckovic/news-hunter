@@ -44,7 +44,7 @@ func (s *Storer) Save(ctx context.Context, article domain.Article) (uuid.UUID, e
 
 	cmd := `
         INSERT INTO articles (id, title, subtitle, content, author, description, url, language, created_at, metadata)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         RETURNING id;
     `
 	var id uuid.UUID
@@ -57,6 +57,7 @@ func (s *Storer) Save(ctx context.Context, article domain.Article) (uuid.UUID, e
 		article.Content,
 		article.Author,
 		article.Description,
+		article.URL.String(),
 		article.Language,
 		article.CreatedAt,
 		metadataJSON,

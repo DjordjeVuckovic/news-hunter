@@ -2,15 +2,16 @@ package storage
 
 import (
 	"context"
-	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
+
+	"github.com/DjordjeVuckovic/news-hunter/internal/dto"
 )
 
 type SearchResult struct {
-	Articles []domain.Article `json:"articles"`
-	Total    int64            `json:"total"`
-	Page     int              `json:"page"`
-	Size     int              `json:"size"`
-	HasMore  bool             `json:"has_more"`
+	Articles []dto.ArticleSearchResult `json:"articles"`
+	Total    int64                     `json:"total"`
+	Page     int                       `json:"page"`
+	Size     int                       `json:"size"`
+	HasMore  bool                      `json:"has_more"`
 }
 
 type Reader interface {

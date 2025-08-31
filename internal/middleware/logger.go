@@ -8,9 +8,9 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 )
 
-type LoggerOpts func(*middleware.RequestLoggerConfig)
+type LoggerOpt func(*middleware.RequestLoggerConfig)
 
-func Logger(opts ...LoggerOpts) echo.MiddlewareFunc {
+func Logger(opts ...LoggerOpt) echo.MiddlewareFunc {
 	o := defaultOpt()
 	for _, opt := range opts {
 		opt(&o)

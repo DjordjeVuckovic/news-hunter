@@ -3,14 +3,15 @@ package server
 import (
 	"context"
 	"errors"
-	mw "github.com/DjordjeVuckovic/news-hunter/internal/middleware"
-	"github.com/DjordjeVuckovic/news-hunter/pkg/server"
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
 	"net/http"
 	"os"
 	"os/signal"
 	"time"
+
+	mw "github.com/DjordjeVuckovic/news-hunter/internal/middleware"
+	"github.com/DjordjeVuckovic/news-hunter/pkg/server"
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 )
 
 const (

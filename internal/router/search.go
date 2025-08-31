@@ -1,6 +1,7 @@
 package router
 
 import (
+	"log/slog"
 	"strconv"
 
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
@@ -72,6 +73,7 @@ func (r *SearchRouter) searchHandler(c echo.Context) error {
 
 	results, err := r.storage.SearchBasic(c.Request().Context(), query, pageInt, sizeInt)
 	if err != nil {
+		slog.Error("Failed to read search results", "error", err)
 		return c.JSON(500, map[string]string{"error": "internal server error"})
 	}
 
