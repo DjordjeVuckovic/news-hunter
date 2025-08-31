@@ -16,9 +16,9 @@ import (
 )
 
 type Storer struct {
-	typedClient *elasticsearch.TypedClient
-	indexName   string
-	config      Config
+	client    *elasticsearch.TypedClient
+	indexName string
+	config    Config
 }
 
 type Config struct {
@@ -59,12 +59,12 @@ func NewStorer(ctx context.Context, config Config) (*Storer, error) {
 
 	client, err := elasticsearch.NewTypedClient(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create Elasticsearch typedClient: %w", err)
+		return nil, fmt.Errorf("failed to create Elasticsearch client: %w", err)
 	}
 	storer := &Storer{
-		typedClient: client,
-		indexName:   config.IndexName,
-		config:      config,
+		client:    client,
+		indexName: config.IndexName,
+		config:    config,
 	}
 
 	if err := storer.EnsureIndex(ctx); err != nil {
@@ -77,7 +77,7 @@ func NewStorer(ctx context.Context, config Config) (*Storer, error) {
 func (e *Storer) Save(ctx context.Context, article domain.Article) (uuid.UUID, error) {
 	doc := e.articleToESDocument(article)
 
-	res, err := e.typedClient.Index(e.indexName).Id(doc.ID).Document(doc).Do(ctx)
+	res, err := e.client.Index(e.indexName).Id(doc.ID).Document(doc).Do(ctx)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("failed to index document: %w", err)
 	}
@@ -96,8 +96,6 @@ func (e *Storer) SaveBulk(ctx context.Context, articles []domain.Article) error 
 		return nil
 	}
 
-	// We need to create a regular ES typedClient from the typed typedClient for esutil
-	// This is a limitation - esutil needs the regular typedClient
 	cfg := elasticsearch.Config{
 		Addresses: e.config.Addresses,
 	}
@@ -107,10 +105,9 @@ func (e *Storer) SaveBulk(ctx context.Context, articles []domain.Article) error 
 		cfg.Password = e.config.Password
 	}
 
-	// Create bulk indexer
 	bi, err := esutil.NewBulkIndexer(esutil.BulkIndexerConfig{
 		Index:         e.indexName,
-		Client:        e.typedClient,
+		Client:        e.client,
 		NumWorkers:    4,
 		FlushBytes:    5e+6, // 5MB
 		FlushInterval: 30 * time.Second,
@@ -200,7 +197,7 @@ func (e *Storer) articleToESDocument(article domain.Article) Document {
 }
 
 func (e *Storer) EnsureIndex(ctx context.Context) error {
-	existsRes, err := e.typedClient.Indices.Exists(e.indexName).Do(ctx)
+	existsRes, err := e.client.Indices.Exists(e.indexName).Do(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to check if index exists: %w", err)
 	}
@@ -211,8 +208,6 @@ func (e *Storer) EnsureIndex(ctx context.Context) error {
 	}
 
 	settings := types.IndexSettings{
-		NumberOfShards:   "1",
-		NumberOfReplicas: "0",
 		Analysis: &types.IndexSettingsAnalysis{
 			Analyzer: map[string]types.Analyzer{
 				"multilingual_analyzer": types.StandardAnalyzer{
@@ -242,7 +237,7 @@ func (e *Storer) EnsureIndex(ctx context.Context) error {
 		},
 	}
 
-	createRes, err := e.typedClient.Indices.Create(e.indexName).
+	createRes, err := e.client.Indices.Create(e.indexName).
 		Settings(&settings).
 		Mappings(&mappings).
 		Do(ctx)

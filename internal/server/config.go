@@ -3,12 +3,13 @@ package server
 import (
 	"errors"
 	"fmt"
-	"github.com/DjordjeVuckovic/news-hunter/pkg/stringsutil"
-	"github.com/joho/godotenv"
 	"log/slog"
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/DjordjeVuckovic/news-hunter/pkg/stringsutil"
+	"github.com/joho/godotenv"
 )
 
 type Config struct {
@@ -39,11 +40,9 @@ func LoadConfig() (*Config, error) {
 	corsOriginsEnv := os.Getenv("CORS_ORIGINS")
 	if corsOriginsEnv != "" {
 		origins = strings.Split(corsOriginsEnv, ",")
-		// Trim whitespace from each origin
 		for i, origin := range origins {
 			origins[i] = strings.TrimSpace(origin)
 		}
-		// Remove empty origins
 		origins = stringsutil.RemoveEmptyStrings(origins)
 	}
 
