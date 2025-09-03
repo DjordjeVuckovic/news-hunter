@@ -3,15 +3,18 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
 	"time"
 
+	openapi "github.com/DjordjeVuckovic/news-hunter/api/openapi-spec"
 	mw "github.com/DjordjeVuckovic/news-hunter/internal/middleware"
 	"github.com/DjordjeVuckovic/news-hunter/pkg/server"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	echoSwagger "github.com/swaggo/echo-swagger"
 )
 
 const (
@@ -78,7 +81,7 @@ func (s *Server) SetupMiddlewares() *Server {
 	return s
 }
 
-func (s *Server) SetupHealthChecks() *Server {
+func (s *Server) SetupHealthChecker() *Server {
 	s.Echo.GET("/health", s.handleHealthCheck)
 
 	return s
@@ -90,4 +93,12 @@ func (s *Server) handleHealthCheck(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{"status": "healthy"})
+}
+
+func (s *Server) SetupOpenApi() *Server {
+	openapi.SwaggerInfo.Host = fmt.Sprintf("localhost:%s", s.cfg.Port)
+
+	s.Echo.GET("/swagger/*", echoSwagger.WrapHandler)
+
+	return s
 }

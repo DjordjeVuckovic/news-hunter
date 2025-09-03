@@ -10,13 +10,10 @@ import (
 )
 
 // NewStorer creates a new storage.Storer based on the storage type
-func NewStorer(storageType storage.Type, ctx context.Context, cfg interface{}) (storage.Storer, error) {
-	switch storageType {
+func NewStorer(ctx context.Context, cfg StorageConfig) (storage.Storer, error) {
+	switch cfg.Type {
 	case storage.PG:
-		pgConfig, ok := cfg.(pg.Config)
-		if !ok {
-			return nil, fmt.Errorf("invalid config type for PostgreSQL storage: expected pg.ClientConfig")
-		}
+		pgConfig := *cfg.Pg
 
 		pool, err := pg.NewConnectionPool(ctx, pgConfig)
 		if err != nil {
@@ -26,10 +23,7 @@ func NewStorer(storageType storage.Type, ctx context.Context, cfg interface{}) (
 		return pg.NewStorer(pool)
 
 	case storage.ES:
-		esConfig, ok := cfg.(es.ClientConfig)
-		if !ok {
-			return nil, fmt.Errorf("invalid config type for Elasticsearch storage: expected es.ClientConfig")
-		}
+		esConfig := *cfg.Es
 
 		return es.NewStorer(ctx, esConfig)
 
@@ -37,18 +31,15 @@ func NewStorer(storageType storage.Type, ctx context.Context, cfg interface{}) (
 		return storage.NewInMemStorer(), nil
 
 	default:
-		return nil, fmt.Errorf(string(storage.ErrUnsupportedStorer), storageType)
+		return nil, fmt.Errorf(string(storage.ErrUnsupportedStorer), cfg.Type)
 	}
 }
 
 // NewReader creates a new storage.Reader based on the storage type
-func NewReader(storageType storage.Type, ctx context.Context, cfg interface{}) (storage.Reader, error) {
-	switch storageType {
+func NewReader(ctx context.Context, cfg StorageConfig) (storage.Reader, error) {
+	switch cfg.Type {
 	case storage.PG:
-		pgConfig, ok := cfg.(pg.Config)
-		if !ok {
-			return nil, fmt.Errorf("invalid config type for PostgreSQL storage: expected pg.ClientConfig")
-		}
+		pgConfig := *cfg.Pg
 
 		pool, err := pg.NewConnectionPool(ctx, pgConfig)
 		if err != nil {
@@ -58,10 +49,7 @@ func NewReader(storageType storage.Type, ctx context.Context, cfg interface{}) (
 		return pg.NewReader(pool)
 
 	case storage.ES:
-		esConfig, ok := cfg.(es.ClientConfig)
-		if !ok {
-			return nil, fmt.Errorf("invalid config type for Elasticsearch storage: expected es.ClientConfig")
-		}
+		esConfig := *cfg.Es
 
 		return es.NewReader(esConfig)
 
@@ -70,6 +58,6 @@ func NewReader(storageType storage.Type, ctx context.Context, cfg interface{}) (
 		return nil, fmt.Errorf("inmem reader not yet implemented")
 
 	default:
-		return nil, fmt.Errorf(string(storage.ErrUnsupportedStorer), storageType)
+		return nil, fmt.Errorf(string(storage.ErrUnsupportedStorer), cfg.Type)
 	}
 }

@@ -18,7 +18,7 @@ type Article struct {
 	Description string          `json:"description,omitempty"`
 	Language    string          `json:"language,omitempty"`
 	CreatedAt   time.Time       `json:"createdAt"`
-	URL         url.URL         `json:"url,omitempty" swaggertype:"string" format:"uri"`
+	URL         url.URL         `json:"url,omitempty" format:"uri"`
 	Metadata    ArticleMetadata `json:"metadata"`
 }
 
