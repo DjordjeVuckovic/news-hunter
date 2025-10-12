@@ -1,4 +1,4 @@
-package stringsutil
+package utils
 
 func RemoveEmptyStrings(slice []string) []string {
 	var result []string

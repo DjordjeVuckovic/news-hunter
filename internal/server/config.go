@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/DjordjeVuckovic/news-hunter/pkg/config/env"
-	"github.com/DjordjeVuckovic/news-hunter/pkg/stringsutil"
+	"github.com/DjordjeVuckovic/news-hunter/pkg/utils"
 )
 
 type Config struct {
@@ -43,7 +43,7 @@ func LoadConfig() (*Config, error) {
 		for i, origin := range origins {
 			origins[i] = strings.TrimSpace(origin)
 		}
-		origins = stringsutil.RemoveEmptyStrings(origins)
+		origins = utils.RemoveEmptyStrings(origins)
 	}
 
 	if len(origins) == 0 {
