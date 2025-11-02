@@ -15,5 +15,5 @@ type SearchResult struct {
 }
 
 type Reader interface {
-	SearchBasic(ctx context.Context, query string, page int, size int) (*SearchResult, error)
+	SearchFullText(ctx context.Context, query string, page int, size int) (*SearchResult, error)
 }

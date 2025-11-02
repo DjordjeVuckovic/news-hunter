@@ -31,7 +31,7 @@ func NewReader(config ClientConfig) (*Reader, error) {
 	}, nil
 }
 
-func (r *Reader) SearchBasic(ctx context.Context, query string, page int, size int) (*storage.SearchResult, error) {
+func (r *Reader) SearchFullText(ctx context.Context, query string, page int, size int) (*storage.SearchResult, error) {
 	slog.Info("Executing es basic search", "query", query, "page", page, "size", size)
 
 	from := (page - 1) * size
