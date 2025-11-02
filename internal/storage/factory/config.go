@@ -17,7 +17,7 @@ type StorageConfig struct {
 	Es *es.ClientConfig
 }
 
-func LoadFromEnv() (*StorageConfig, error) {
+func LoadEnv() (*StorageConfig, error) {
 	storageType := (storage.Type)(os.Getenv("STORAGE_TYPE"))
 	if storageType == "" {
 		slog.Error("STORAGE_TYPE environment variable is not set")

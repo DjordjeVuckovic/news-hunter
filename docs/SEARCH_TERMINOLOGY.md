@@ -18,7 +18,7 @@
 - "Structured Query"
 - "Query Parser" (the component that interprets it)
 
-Common Industry Terms
+### Common Industry Terms
 
 Query Types:
 
@@ -29,7 +29,7 @@ Query Types:
 - Fuzzy Query: Approximate matching (typo tolerance)
 - Range Query: Date/numeric ranges
 
-Search Features:
+### Search Features:
 
 - Full-Text Search (FTS): Search through document content
 - Faceted Search: Filter by categories/attributes

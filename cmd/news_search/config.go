@@ -29,7 +29,7 @@ func (as *AppConfig) Load() (*NewsSearchConfig, error) {
 		slog.Info("Failed to .env load environment variables, continuing with existing environment variables", "error", err)
 	}
 
-	storageCfg, err := factory.LoadFromEnv()
+	storageCfg, err := factory.LoadEnv()
 	if err != nil {
 		slog.Error("Failed to load storage configuration from environment", "error", err)
 		return nil, err

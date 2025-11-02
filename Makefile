@@ -3,6 +3,8 @@ APP_NAME := news-hunter
 CMD_DIR := ./cmd
 BIN_DIR := ./bin
 PKG := github.com/DjordjeVuckovic/news-hunter
+MIGRATIONS_PATH := ./db/migrations
+DB_CONN := "postgresql://news_user:news_password@localhost:54320/news_db?sslmode=disable"
 
 # Go variables
 GOOS ?= $(shell go env GOOS)
@@ -11,6 +13,9 @@ GOARCH ?= $(shell go env GOARCH)
 # Build commands
 .PHONY: build build-all clean test fmt vet schema-gen
 
+migrate-up:
+	@echo "Running database migrations up..."
+	@migrate -path $(MIGRATIONS_PATH) -database $(DB_CONN) up
 # Build all commands
 build-all: build-data-import build-schemagen
 

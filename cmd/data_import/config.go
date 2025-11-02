@@ -31,14 +31,13 @@ type DataImportConfig struct {
 }
 
 func (as *AppConfig) Load() (*DataImportConfig, error) {
-	err := env.LoadDotEnv(as.ENV, "cmd/data_import/.env")
+	err := env.LoadDotEnv(as.ENV, "cmd/data_import/.env", "cmd/data_import/pg.env", "cmd/data_import/rs.env")
 
 	if err != nil {
-		slog.Error("Failed to .env load environment variables", "error", err)
-		return nil, err
+		slog.Info("Skipping .env environment variables...", "error", err)
 	}
 
-	storageCfg, err := factory.LoadFromEnv()
+	storageCfg, err := factory.LoadEnv()
 	if err != nil {
 		slog.Error("Failed to load storage configuration from environment", "error", err)
 		return nil, err
