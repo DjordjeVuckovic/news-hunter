@@ -1,63 +1,90 @@
-# Search Types
+# Search Terminology
 
-1. Simple/Basic Search
+## Current Implementation
 
-- "Keyword Search" or "Full-text Search"
-- Single terms or phrases
-- Example: "climate change"
+### Full-Text Search (`SearchFullText`)
 
-2. Boolean Search
+**What it does:**
+- Analyzes and tokenizes text into searchable terms
+- Performs relevance ranking using scoring algorithms
+- Searches across multiple fields (title, description, content)
+- Handles stemming, stop words, and text normalization
 
-- "Boolean Query" or "Boolean Search"
+**Implementation:**
+- **PostgreSQL**: Uses `tsvector` with `plainto_tsquery` and `ts_rank` for scoring
+- **Elasticsearch**: Uses `MultiMatchQuery` with field boosting (title^3, description^2, content)
+
+**Example queries:**
+```
+"climate change"        → Matches: "Climate", "changing", "climatic"
+"Trump fraud trial"     → Matches across title, description, content with relevance ranking
+"renewable energy"      → Tokenizes and searches for both terms
+```
+
+**API Interface:**
+```go
+package storage
+SearchFullText(ctx context.Context, query string, page int, size int) (*SearchResult, error)
+```
+
+---
+
+## Future Search Types
+
+### Boolean Search (Planned)
 - Uses logical operators: AND, OR, NOT
-- Example: "climate AND change OR global warming"
+- Example: `"climate AND change OR warming NOT denial"`
 
-3. Advanced Query Language
+### Advanced/Structured Search (Planned)
+- Field-specific queries with structured syntax
+- Example: `"title:Trump AND content:fraud AND published_at:[2024-01-01 TO 2024-12-31]"`
 
-- "Query DSL" (Domain Specific Language)
-- "Structured Query"
-- "Query Parser" (the component that interprets it)
+### Keyword Filtering (Planned)
+- Exact match filtering on specific fields
+- Example: `category="politics" AND source="CNN"`
+- Uses `keyword` field type in Elasticsearch
 
-### Common Industry Terms
+---
 
-Query Types:
+## Key Concepts
 
-- Simple Query: Basic keyword matching
-- Boolean Query: Logical operators (AND, OR, NOT)
-- Phrase Query: Exact phrase matching ("exact phrase")
-- Wildcard Query: Pattern matching (clim*, ?ange)
-- Fuzzy Query: Approximate matching (typo tolerance)
-- Range Query: Date/numeric ranges
+### Full-Text Search vs Keyword Search
 
-### Search Features:
+| Aspect | Full-Text Search | Keyword Search |
+|--------|------------------|----------------|
+| **Matching** | Analyzed, tokenized, fuzzy | Exact, case-sensitive |
+| **Use Case** | Content search, articles | Filters, IDs, tags |
+| **Field Type** | `text` (ES), `tsvector` (PG) | `keyword` (ES) |
+| **Example** | "Climate Change" matches "climatic" | author.keyword = "John Smith" |
 
-- Full-Text Search (FTS): Search through document content
-- Faceted Search: Filter by categories/attributes
-- Autocomplete/Typeahead: Search suggestions
-- Semantic Search: Meaning-based search
-- Relevance Scoring: Ranking results by relevance
+### Relevance Ranking
 
-For Your API Documentation:
+Both implementations calculate relevance scores:
+- **PostgreSQL**: `ts_rank()` returns 0-1 normalized scores
+- **Elasticsearch**: BM25 algorithm returns scores typically 1-30+
 
-// SearchRequest represents different search types
-type SearchRequest struct {
-Query string `json:"query"`
-Type  string `json:"type"` // "simple", "boolean", "advanced"
-}
+**Note:** Scores are not directly comparable between backends. See `docs/FUTURE_WORK.md` for ranking unification roadmap.
 
-// Examples:
-// Simple: "climate change"
-// Boolean: "climate AND change OR warming"
-// Advanced: "title:climate AND content:change"
+### Field Boosting (Elasticsearch)
 
-Standard Elasticsearch/Lucene Terminology:
+Different fields have different importance weights:
+```
+title^3        → Title matches are 3x more important
+description^2  → Description matches are 2x more important
+content        → Content matches have base weight
+```
 
-- Match Query: Simple text search
-- Bool Query: Boolean logic with must/should/must_not
-- Query String Query: User-friendly query parser
-- Multi-Match Query: Search across multiple fields
+---
 
-For your API, I'd recommend calling them:
-- "Simple Search" (basic keywords)
-- "Boolean Search" (AND/OR operators)
-- "Advanced Search" (field-specific, complex queries)
+## Search Quality
+
+Current full-text search provides:
+- ✅ Relevance ranking based on term frequency and field importance
+- ✅ Multi-field matching with configurable weights
+- ✅ Language-specific text analysis
+- ✅ Pagination with accurate total counts
+- ⚠️ Different ranking scales between PG and ES (see FUTURE_WORK.md)
+
+---
+
+*Last updated: 2025-11-02*

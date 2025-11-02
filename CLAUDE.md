@@ -80,10 +80,12 @@ Built with Echo framework providing:
 - **Graceful Shutdown**: Proper resource cleanup on termination
 
 **Search Features**:
-- Basic keyword search with relevance ranking
+- Full-text search with relevance ranking
+- Multi-field search across title, description, and content
 - Pagination with total count and hasMore indicators
 - Input validation and error handling
-- PostgreSQL tsvector-based full-text search
+- PostgreSQL tsvector with ts_rank scoring
+- Elasticsearch multi-match with field boosting
 
 ## Development Commands
 
