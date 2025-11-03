@@ -1,16 +1,14 @@
 package router
 
 import (
+	"fmt"
 	"log/slog"
 	"strconv"
 
+	"github.com/DjordjeVuckovic/news-hunter/internal/dto"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
+	"github.com/DjordjeVuckovic/news-hunter/pkg/pagination"
 	"github.com/labstack/echo/v4"
-)
-
-const (
-	defaultPageSize = 10
-	defaultPage     = 1
 )
 
 type SearchRouter struct {
@@ -26,56 +24,86 @@ func NewSearchRouter(e *echo.Echo, storage storage.Reader) *SearchRouter {
 }
 
 func (r *SearchRouter) Bind() {
-	r.e.GET("/search/basic", r.searchHandler)
+	r.e.GET("/v1/articles/search", r.searchHandler)
 }
 
-// searchHandler handles basic search requests
-// @Summary Basic news search
-// @Description Search for news articles using basic text query
+// FTSSearchResponse represents the API response for full-text search
+// This is a concrete type for Swagger documentation (swag doesn't support generics yet)
+type FTSSearchResponse struct {
+	Items      []dto.ArticleSearchResult `json:"items"`
+	NextCursor *string                   `json:"next_cursor,omitempty"`
+	HasMore    bool                      `json:"has_more"`
+}
+
+// searchHandler handles full-text search requests with cursor-based pagination
+// @Summary Full-text news search
+// @Description Search for news articles using full-text query with cursor-based pagination
 // @Tags search
 // @Accept  json
 // @Produce  json
 // @Param query query string true "Search query"
-// @Param page query int false "Page number (default: 1)"
-// @Param size query int false "Page size (default: 10)"
-// @Success 200 {object} storage.SearchResult
+// @Param cursor query string false "Cursor for pagination (base64-encoded)"
+// @Param size query int false "Page size (default: 100, max: 10000)"
+// @Success 200 {object} FTSSearchResponse
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /search/basic [get]
+// @Router /v1/articles/search [get]
 func (r *SearchRouter) searchHandler(c echo.Context) error {
 	query := c.QueryParam("query")
-	page := c.QueryParam("page")
-	size := c.QueryParam("size")
+	cursorStr := c.QueryParam("cursor")
+	sizeStr := c.QueryParam("size")
 
-	// Validate query, page, and size parameters
 	if query == "" {
 		return c.JSON(400, map[string]string{"error": "query parameter is required"})
 	}
 
-	pageInt := defaultPage
-	sizeInt := defaultPageSize
-
-	if page != "" {
+	sizeInt := pagination.PageDefaultSize
+	if sizeStr != "" {
 		var err error
-		pageInt, err = strconv.Atoi(page)
-		if err != nil || pageInt < 1 {
-			pageInt = defaultPage
-		}
-	}
-
-	if size != "" {
-		var err error
-		sizeInt, err = strconv.Atoi(size)
+		sizeInt, err = strconv.Atoi(sizeStr)
 		if err != nil || sizeInt < 1 {
-			sizeInt = defaultPageSize
+			return c.JSON(400, map[string]string{"error": "invalid size parameter"})
+		}
+		if sizeInt > pagination.PageMaxSize {
+			return c.JSON(400,
+				map[string]string{
+					"error": fmt.Sprintf("size parameter exceeds maximum of %d", pagination.PageMaxSize),
+				})
 		}
 	}
 
-	results, err := r.storage.SearchFullText(c.Request().Context(), query, pageInt, sizeInt)
+	var cursor *dto.Cursor
+	if cursorStr != "" {
+		var err error
+		cursor, err = dto.DecodeCursor(cursorStr)
+		if err != nil {
+			return c.JSON(400, map[string]string{"error": "invalid cursor parameter"})
+		}
+	}
+
+	searchResult, err := r.storage.SearchFullText(c.Request().Context(), query, cursor, sizeInt)
 	if err != nil {
-		slog.Error("Failed to read search results", "error", err)
+		slog.Error("Failed to execute search", "error", err, "query", query)
 		return c.JSON(500, map[string]string{"error": "internal server error"})
 	}
 
-	return c.JSON(200, results)
+	// Build API response - encode cursor at this layer
+	var nextCursorStr *string
+	if searchResult.NextCursor != nil {
+		encoded, err := dto.EncodeCursor(searchResult.NextCursor.Rank, searchResult.NextCursor.ID)
+		if err != nil {
+			slog.Error("Failed to encode cursor", "error", err)
+			return c.JSON(500, map[string]string{"error": "internal server error"})
+		}
+		nextCursorStr = &encoded
+	}
+
+	// Create API response with encoded cursor string
+	apiResponse := FTSSearchResponse{
+		Items:      searchResult.Items,
+		NextCursor: nextCursorStr,
+		HasMore:    searchResult.HasMore,
+	}
+
+	return c.JSON(200, apiResponse)
 }

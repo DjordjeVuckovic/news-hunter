@@ -19,35 +19,40 @@ func NewReader(pool *ConnectionPool) (*Reader, error) {
 	return &Reader{db: pool.conn}, nil
 }
 
-func (r *Reader) SearchFullText(ctx context.Context, query string, page int, size int) (*storage.SearchResult, error) {
-	slog.Info("Executing pg basic search", "query", query, "page", page, "size", size)
+func (r *Reader) SearchFullText(ctx context.Context, query string, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
+	slog.Info("Executing pg full-text search", "query", query, "has_cursor", cursor != nil, "size", size)
 
-	offset := (page - 1) * size
+	var searchSQL string
+	var args []interface{}
 
-	// Count total results
-	countSQL := `
-		SELECT COUNT(*)
-		FROM articles
-		WHERE search_vector @@ plainto_tsquery('english', $1)
-	`
-
-	var total int64
-	err := r.db.QueryRow(ctx, countSQL, query).Scan(&total)
-	if err != nil {
-		return nil, fmt.Errorf("failed to count search results: %w", err)
+	if cursor == nil {
+		searchSQL = `
+			SELECT
+				id, title, subtitle, content, author, description, url, language, created_at, metadata,
+				ts_rank(search_vector, plainto_tsquery('english', $1)) as rank
+			FROM articles
+			WHERE search_vector @@ plainto_tsquery('english', $1)
+			ORDER BY rank DESC, id DESC
+			LIMIT $2
+		`
+		args = []interface{}{query, size + 1}
+	} else {
+		searchSQL = `
+			SELECT
+				id, title, subtitle, content, author, description, url, language, created_at, metadata,
+				ts_rank(search_vector, plainto_tsquery('english', $1)) as rank
+			FROM articles
+			WHERE search_vector @@ plainto_tsquery('english', $1)
+			  AND (ts_rank(search_vector, plainto_tsquery('english', $1)), id) < ($2, $3)
+			ORDER BY rank DESC, id DESC
+			LIMIT $4
+		`
+		args = []interface{}{query, cursor.Rank, cursor.ID, size + 1}
 	}
 
-	searchSQL := `
-		SELECT 
-			id, title, subtitle, content, author, description, url, language, created_at, metadata,
-			ts_rank(search_vector, plainto_tsquery('english', $1)) as rank
-		FROM articles
-		WHERE search_vector @@ plainto_tsquery('english', $1)
-		ORDER BY rank DESC, created_at DESC
-		LIMIT $2 OFFSET $3
-	`
+	var err error
 
-	rows, err := r.db.Query(ctx, searchSQL, query, size, offset)
+	rows, err := r.db.Query(ctx, searchSQL, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute search query: %w", err)
 	}
@@ -78,25 +83,37 @@ func (r *Reader) SearchFullText(ctx context.Context, query string, page int, siz
 		if err := json.Unmarshal(metadataJSON, &article.Metadata); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal metadata: %w", err)
 		}
-		searchResult := &dto.ArticleSearchResult{
+
+		searchResult := dto.ArticleSearchResult{
 			Article: article,
 			Rank:    rank,
 		}
 
-		articles = append(articles, *searchResult)
+		articles = append(articles, searchResult)
 	}
 
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating rows: %w", err)
 	}
 
-	hasMore := int64(offset+size) < total
+	// Build result with domain cursor (no encoding)
+	hasMore := len(articles) > size
+	if hasMore {
+		articles = articles[:size] // Trim to requested size
+	}
+
+	var nextCursor *dto.Cursor
+	if hasMore && len(articles) > 0 {
+		lastItem := articles[len(articles)-1]
+		nextCursor = &dto.Cursor{
+			Rank: lastItem.Rank,
+			ID:   lastItem.Article.ID,
+		}
+	}
 
 	return &storage.SearchResult{
-		Items:   articles,
-		Total:   total,
-		Page:    page,
-		Size:    size,
-		HasMore: hasMore,
+		Items:      articles,
+		NextCursor: nextCursor,
+		HasMore:    hasMore,
 	}, nil
 }

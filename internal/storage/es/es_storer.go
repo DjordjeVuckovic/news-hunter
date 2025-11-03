@@ -60,7 +60,7 @@ func NewStorer(ctx context.Context, config ClientConfig) (*Storer, error) {
 }
 
 func (e *Storer) Save(ctx context.Context, article domain.Article) (uuid.UUID, error) {
-	doc := e.articleToESDocument(article)
+	doc := e.mapToESDocument(article)
 
 	res, err := e.client.Index(e.indexName).Id(doc.ID).Document(doc).Do(ctx)
 	if err != nil {
@@ -96,7 +96,7 @@ func (e *Storer) SaveBulk(ctx context.Context, articles []domain.Article) error 
 	var successful, failed int64
 
 	for _, article := range articles {
-		doc := e.articleToESDocument(article)
+		doc := e.mapToESDocument(article)
 
 		docBytes, err := json.Marshal(doc)
 		if err != nil {
@@ -148,7 +148,7 @@ func (e *Storer) SaveBulk(ctx context.Context, articles []domain.Article) error 
 	return nil
 }
 
-func (e *Storer) articleToESDocument(article domain.Article) Document {
+func (e *Storer) mapToESDocument(article domain.Article) Document {
 	if article.ID == uuid.Nil {
 		article.ID = uuid.New()
 	}

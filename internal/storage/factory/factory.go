@@ -27,6 +27,9 @@ func NewStorer(ctx context.Context, cfg StorageConfig) (storage.Storer, error) {
 
 		return es.NewStorer(ctx, esConfig)
 
+	case storage.Solr:
+		return nil, fmt.Errorf("solr storer not yet implemented")
+
 	case storage.InMem:
 		return storage.NewInMemStorer(), nil
 
@@ -52,6 +55,9 @@ func NewReader(ctx context.Context, cfg StorageConfig) (storage.Reader, error) {
 		esConfig := *cfg.Es
 
 		return es.NewReader(esConfig)
+
+	case storage.Solr:
+		return nil, fmt.Errorf("solr reader not yet implemented")
 
 	case storage.InMem:
 		// TODO: Implement InMem Reader when needed

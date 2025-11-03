@@ -74,14 +74,19 @@ deps:
 	@go mod download
 	@go mod tidy
 
-# Run data import with default config
-run-import: build-data-import
-	@echo "Running data import..."
-	@ENV_PATHS="cmd/data_import/pg.env" ./$(BIN_DIR)/data-import
-
 run-schemagen: build-schemagen
 	@echo "Running schema generator..."
 	@./$(BIN_DIR)/schemagen -output=api
+
+# Run data import with default config
+run-import-pg: build-data-import
+	@echo "Running data import..."
+	@ENV_PATHS="cmd/data_import/pg.env" ./$(BIN_DIR)/data-import
+
+# Run data import with default config
+run-import-es: build-data-import
+	@echo "Running data import..."
+	@ENV_PATHS="cmd/data_import/es.env" ./$(BIN_DIR)/data-import
 
 run-search: build-news-search
 	@echo "Running news search service..."

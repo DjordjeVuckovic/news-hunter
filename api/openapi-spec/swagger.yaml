@@ -50,7 +50,7 @@ definitions:
         description: Rank based on search relevance
         type: number
     type: object
-  storage.SearchResult:
+  router.FTSSearchResponse:
     properties:
       has_more:
         type: boolean
@@ -58,12 +58,8 @@ definitions:
         items:
           $ref: '#/definitions/dto.ArticleSearchResult'
         type: array
-      page:
-        type: integer
-      size:
-        type: integer
-      total:
-        type: integer
+      next_cursor:
+        type: string
     type: object
 info:
   contact:
@@ -72,28 +68,29 @@ info:
   description: A full-text search engine for exploring multilingual news headlines
     and articles
   license:
-    name: MIT
-    url: https://opensource.org/licenses/MIT
+    name: Apache 2.0
+    url: https://opensource.org/licenses/Apache-2.0
   termsOfService: http://swagger.io/terms/
   title: News Hunter API
   version: "1.0"
 paths:
-  /search/basic:
+  /v1/articles/search:
     get:
       consumes:
       - application/json
-      description: Search for news articles using basic text query
+      description: Search for news articles using full-text query with cursor-based
+        pagination
       parameters:
       - description: Search query
         in: query
         name: query
         required: true
         type: string
-      - description: 'Page number (default: 1)'
+      - description: Cursor for pagination (base64-encoded)
         in: query
-        name: page
-        type: integer
-      - description: 'Page size (default: 10)'
+        name: cursor
+        type: string
+      - description: 'Page size (default: 100, max: 10000)'
         in: query
         name: size
         type: integer
@@ -103,7 +100,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/storage.SearchResult'
+            $ref: '#/definitions/router.FTSSearchResponse'
         "400":
           description: Bad Request
           schema:
@@ -116,7 +113,7 @@ paths:
             additionalProperties:
               type: string
             type: object
-      summary: Basic news search
+      summary: Full-text news search
       tags:
       - search
 swagger: "2.0"

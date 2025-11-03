@@ -23,7 +23,7 @@ func LoadDotEnv(env string, paths ...string) error {
 	err := godotenv.Load(append(decodedPaths, paths...)...)
 	if err != nil {
 		if env == "local" || env == "" {
-			slog.Error("Failed to load environment variables in local mode", "error", err)
+			slog.Info("Failed to load environment variables in local mode", "error", err)
 			return err
 		}
 		slog.Debug("Skipping .env ...")
