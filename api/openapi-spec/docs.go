@@ -15,17 +15,17 @@ const docTemplate = `{
             "email": "support@newshunter.com"
         },
         "license": {
-            "name": "MIT",
-            "url": "https://opensource.org/licenses/MIT"
+            "name": "Apache 2.0",
+            "url": "https://opensource.org/licenses/Apache-2.0"
         },
         "version": "{{.Version}}"
     },
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/search/basic": {
+        "/v1/articles/search": {
             "get": {
-                "description": "Search for news articles using basic text query",
+                "description": "Search for news articles using full-text query with cursor-based pagination",
                 "consumes": [
                     "application/json"
                 ],
@@ -35,7 +35,7 @@ const docTemplate = `{
                 "tags": [
                     "search"
                 ],
-                "summary": "Basic news search",
+                "summary": "Full-text news search",
                 "parameters": [
                     {
                         "type": "string",
@@ -45,14 +45,14 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "type": "integer",
-                        "description": "Page number (default: 1)",
-                        "name": "page",
+                        "type": "string",
+                        "description": "Cursor for pagination (base64-encoded)",
+                        "name": "cursor",
                         "in": "query"
                     },
                     {
                         "type": "integer",
-                        "description": "Page size (default: 10)",
+                        "description": "Page size (default: 100, max: 10000)",
                         "name": "size",
                         "in": "query"
                     }
@@ -61,7 +61,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/storage.SearchResult"
+                            "$ref": "#/definitions/router.FTSSearchResponse"
                         }
                     },
                     "400": {
@@ -163,7 +163,7 @@ const docTemplate = `{
                 }
             }
         },
-        "storage.SearchResult": {
+        "router.FTSSearchResponse": {
             "type": "object",
             "properties": {
                 "has_more": {
@@ -175,14 +175,8 @@ const docTemplate = `{
                         "$ref": "#/definitions/dto.ArticleSearchResult"
                     }
                 },
-                "page": {
-                    "type": "integer"
-                },
-                "size": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
+                "next_cursor": {
+                    "type": "string"
                 }
             }
         }
