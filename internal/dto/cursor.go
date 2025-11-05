@@ -9,21 +9,21 @@ import (
 )
 
 // Cursor represents a position in a search result set
-// It contains the rank (relevance score) and ID of the last item
+// It contains the relevance score and ID of the last item
 type Cursor struct {
-	Rank float32   `json:"r"`
-	ID   uuid.UUID `json:"i"`
+	Score float64   `json:"s"` // Raw score for pagination consistency
+	ID    uuid.UUID `json:"i"`
 }
 
 // EncodeCursor converts a Cursor to a base64-encoded string
-func EncodeCursor(rank float32, id uuid.UUID) (string, error) {
+func EncodeCursor(score float64, id uuid.UUID) (string, error) {
 	if id == uuid.Nil {
 		return "", fmt.Errorf("cursor ID cannot be nil")
 	}
 
 	c := Cursor{
-		Rank: rank,
-		ID:   id,
+		Score: score,
+		ID:    id,
 	}
 
 	b, err := json.Marshal(c)
@@ -59,8 +59,8 @@ func DecodeCursor(s string) (*Cursor, error) {
 
 // MustEncodeCursor is like EncodeCursor but panics on error
 // Use only when you're certain the inputs are valid
-func MustEncodeCursor(rank float32, id uuid.UUID) string {
-	cursor, err := EncodeCursor(rank, id)
+func MustEncodeCursor(score float64, id uuid.UUID) string {
+	cursor, err := EncodeCursor(score, id)
 	if err != nil {
 		panic(err)
 	}

@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"log/slog"
 
+	"slices"
+
+	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
 	"github.com/DjordjeVuckovic/news-hunter/internal/dto"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
 	"github.com/elastic/go-elasticsearch/v8"
@@ -44,20 +47,16 @@ func (r *Reader) SearchFullText(ctx context.Context, query string, cursor *dto.C
 				Fields: []string{"title^3", "description^2", "content"},
 			},
 		}).
-		Size(size + 1) // Fetch size+1 to determine hasMore
+		Size(size + 1). // Fetch size+1 to determine hasMore
+		TrackScores(true)
 
-	// Add search_after if cursor exists
 	if cursor != nil {
-		// search_after requires [score, id] in descending order
 		searchReq = searchReq.SearchAfter(
-			types.FieldValue(cursor.Rank),
+			types.FieldValue(cursor.Score),
 			types.FieldValue(cursor.ID.String()),
 		)
 	}
 
-	// Add sorting by score (desc) and id (desc) for stable pagination
-	// Score is sorted DESC by default, we need to add id as tiebreaker
-	// Note: We use the document's 'id' field (keyword), not '_id' (metadata field which is not sortable)
 	sortOrderDesc := sortorder.Desc
 	searchReq = searchReq.Sort(
 		&types.SortOptions{
@@ -80,46 +79,57 @@ func (r *Reader) SearchFullText(ctx context.Context, query string, cursor *dto.C
 		return nil, fmt.Errorf("failed to execute search: %w", err)
 	}
 
-	articles, err := r.mapToDomain(res.Hits.Hits)
+	// Get max score for normalization (0-1 range)
+	maxScore := domain.NormalizeScore((*float64)(res.Hits.MaxScore))
+
+	articles, rawScores, err := r.mapToDomain(res.Hits.Hits, maxScore)
 	if err != nil {
 		return nil, fmt.Errorf("failed to map search results to domain: %w", err)
 	}
 
 	slog.Info("Es search results fetched",
-		"fetched_count", res.Hits.Total.Value,
-		"max_score", res.Hits.MaxScore)
+		"total_matches", res.Hits.Total.Value,
+		"returned_count", len(articles),
+		"max_score", *res.Hits.MaxScore,
+		"normalized_max", maxScore)
 
 	hasMore := len(articles) > size
 	if hasMore {
-		articles = articles[:size] // Trim to requested size
+		articles = articles[:size]
+		rawScores = rawScores[:size]
 	}
 
 	var nextCursor *dto.Cursor
 	if hasMore && len(articles) > 0 {
 		lastItem := articles[len(articles)-1]
+		lastRawScore := rawScores[len(rawScores)-1]
 		nextCursor = &dto.Cursor{
-			Rank: lastItem.Rank,
-			ID:   lastItem.Article.ID,
+			Score: lastRawScore,
+			ID:    lastItem.Article.ID,
 		}
 	}
 
 	return &storage.SearchResult{
-		Items:      articles,
-		NextCursor: nextCursor,
-		HasMore:    hasMore,
+		Items:              articles,
+		NextCursor:         nextCursor,
+		HasMore:            hasMore,
+		MaxScore:           float64(*res.Hits.MaxScore),
+		MaxScoreNormalized: slices.Max(rawScores) / maxScore,
 	}, nil
 }
 
-func (r *Reader) mapToDomain(hits []types.Hit) ([]dto.ArticleSearchResult, error) {
+func (r *Reader) mapToDomain(hits []types.Hit, maxScore float64) ([]dto.ArticleSearchResult, []float64, error) {
 	if hits == nil {
-		return make([]dto.ArticleSearchResult, 0), nil
+		return make([]dto.ArticleSearchResult, 0), make([]float64, 0), nil
 	}
 
 	var articles []dto.ArticleSearchResult
+	var rawScores []float64
+
 	for _, hit := range hits {
 		var doc Document
 		if err := json.Unmarshal(hit.Source_, &doc); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal document: %w", err)
+			return nil, nil, fmt.Errorf("failed to unmarshal document: %w", err)
 		}
 
 		article := dto.Article{
@@ -141,13 +151,18 @@ func (r *Reader) mapToDomain(hits []types.Hit) ([]dto.ArticleSearchResult, error
 			},
 		}
 
+		rawScore := float64(*hit.Score_)
+		normalizedRank := rawScore / maxScore
+
 		searchResult := dto.ArticleSearchResult{
-			Article: article,
-			Rank:    float32(*hit.Score_),
+			Article:         article,
+			ScoreNormalized: normalizedRank,
+			Score:           float64(*hit.Score_),
 		}
 
 		articles = append(articles, searchResult)
+		rawScores = append(rawScores, rawScore) // Keep raw score for cursor
 	}
 
-	return articles, nil
+	return articles, rawScores, nil
 }

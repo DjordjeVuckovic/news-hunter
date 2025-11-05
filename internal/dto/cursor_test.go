@@ -147,8 +147,8 @@ func TestCursorRoundtrip(t *testing.T) {
 				t.Fatalf("DecodeCursor() failed: %v", err)
 			}
 
-			if decoded.Rank != tt.rank {
-				t.Errorf("Rank mismatch: got %v, want %v", decoded.Rank, tt.rank)
+			if decoded.Score != tt.rank {
+				t.Errorf("Score mismatch: got %v, want %v", decoded.Score, tt.rank)
 			}
 			if decoded.ID != tt.id {
 				t.Errorf("ID mismatch: got %v, want %v", decoded.ID, tt.id)
