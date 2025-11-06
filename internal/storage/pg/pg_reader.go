@@ -101,8 +101,8 @@ func (r *Reader) SearchFullText(ctx context.Context, query string, cursor *dto.C
 
 		searchResult := dto.ArticleSearchResult{
 			Article:         article,
-			Score:           utils.RoundDecimal(rawScore, domain.ScoreDecimalPlaces),
-			ScoreNormalized: utils.RoundDecimal(rawScore/globalMaxScore, domain.ScoreDecimalPlaces),
+			Score:           utils.RoundFloat64(rawScore, domain.ScoreDecimalPlaces),
+			ScoreNormalized: utils.RoundFloat64(rawScore/globalMaxScore, domain.ScoreDecimalPlaces),
 		}
 
 		articles = append(articles, searchResult)
@@ -125,9 +125,8 @@ func (r *Reader) SearchFullText(ctx context.Context, query string, cursor *dto.C
 
 	var nextCursor *dto.Cursor
 	if hasMore && len(articles) > 0 {
-		lastRawScore := rawScores[len(rawScores)-1]
 		nextCursor = &dto.Cursor{
-			Score: lastRawScore,
+			Score: rawScores[len(rawScores)-1],
 			ID:    articles[len(articles)-1].Article.ID,
 		}
 	}
@@ -136,7 +135,8 @@ func (r *Reader) SearchFullText(ctx context.Context, query string, cursor *dto.C
 		Hits:         articles,
 		NextCursor:   nextCursor,
 		HasMore:      hasMore,
-		MaxScore:     utils.RoundDecimal(globalMaxScore, domain.ScoreDecimalPlaces),
+		MaxScore:     utils.RoundFloat64(globalMaxScore, domain.ScoreDecimalPlaces),
+		PageMaxScore: utils.RoundFloat64(rawScores[0], domain.ScoreDecimalPlaces),
 		TotalMatches: count,
 	}, nil
 }

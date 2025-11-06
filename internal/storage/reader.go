@@ -13,6 +13,7 @@ type SearchResult struct {
 	NextCursor   *dto.Cursor               `json:"-"`
 	HasMore      bool                      `json:"has_more"`
 	MaxScore     float64                   `json:"max_score"`
+	PageMaxScore float64                   `json:"page_max_score,omitempty"`
 	TotalMatches int64                     `json:"total_matches,omitempty"`
 }
 

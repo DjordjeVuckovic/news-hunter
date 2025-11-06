@@ -9,6 +9,7 @@ import (
 	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
 	"github.com/DjordjeVuckovic/news-hunter/internal/dto"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
+	"github.com/DjordjeVuckovic/news-hunter/pkg/utils"
 	"github.com/elastic/go-elasticsearch/v8"
 	"github.com/elastic/go-elasticsearch/v8/typedapi/types"
 	"github.com/elastic/go-elasticsearch/v8/typedapi/types/enums/sortorder"
@@ -98,11 +99,9 @@ func (r *Reader) SearchFullText(ctx context.Context, query string, cursor *dto.C
 
 	var nextCursor *dto.Cursor
 	if hasMore && len(articles) > 0 {
-		lastItem := articles[len(articles)-1]
-		lastRawScore := rawScores[len(rawScores)-1]
 		nextCursor = &dto.Cursor{
-			Score: lastRawScore,
-			ID:    lastItem.Article.ID,
+			Score: rawScores[len(rawScores)-1],
+			ID:    articles[len(articles)-1].Article.ID,
 		}
 	}
 
@@ -110,7 +109,8 @@ func (r *Reader) SearchFullText(ctx context.Context, query string, cursor *dto.C
 		Hits:         articles,
 		NextCursor:   nextCursor,
 		HasMore:      hasMore,
-		MaxScore:     float64(*res.Hits.MaxScore),
+		MaxScore:     utils.RoundFloat64(float64(*res.Hits.MaxScore), domain.ScoreDecimalPlaces),
+		PageMaxScore: utils.RoundFloat64(rawScores[0], domain.ScoreDecimalPlaces),
 		TotalMatches: res.Hits.Total.Value,
 	}, nil
 }

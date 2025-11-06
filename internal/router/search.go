@@ -33,8 +33,9 @@ type FTSSearchResponse struct {
 	NextCursor   *string                   `json:"next_cursor,omitempty"`
 	HasMore      bool                      `json:"has_more"`
 	MaxScore     float64                   `json:"max_score,omitempty"`
+	PageMaxScore float64                   `json:"page_max_score,omitempty"`
 	TotalMatches int64                     `json:"total_matches,omitempty"`
-	Items        []dto.ArticleSearchResult `json:"items"`
+	Hits         []dto.ArticleSearchResult `json:"hits"`
 }
 
 // searchHandler handles full-text search requests with cursor-based pagination
@@ -102,10 +103,11 @@ func (r *SearchRouter) searchHandler(c echo.Context) error {
 
 	// Create API response with encoded cursor string
 	apiResponse := FTSSearchResponse{
-		Items:        searchResult.Hits,
+		Hits:         searchResult.Hits,
 		NextCursor:   nextCursorStr,
 		HasMore:      searchResult.HasMore,
 		MaxScore:     searchResult.MaxScore,
+		PageMaxScore: searchResult.PageMaxScore,
 		TotalMatches: searchResult.TotalMatches,
 	}
 
