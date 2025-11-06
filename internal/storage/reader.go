@@ -9,7 +9,7 @@ import (
 // SearchResult represents search results with cursor-based pagination
 // Contains domain objects - no encoding/decoding at this layer
 type SearchResult struct {
-	Items        []dto.ArticleSearchResult `json:"items"`
+	Hits         []dto.ArticleSearchResult `json:"hits"`
 	NextCursor   *dto.Cursor               `json:"-"`
 	HasMore      bool                      `json:"has_more"`
 	MaxScore     float64                   `json:"max_score"`

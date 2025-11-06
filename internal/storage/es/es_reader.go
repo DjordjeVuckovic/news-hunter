@@ -107,7 +107,7 @@ func (r *Reader) SearchFullText(ctx context.Context, query string, cursor *dto.C
 	}
 
 	return &storage.SearchResult{
-		Items:        articles,
+		Hits:         articles,
 		NextCursor:   nextCursor,
 		HasMore:      hasMore,
 		MaxScore:     float64(*res.Hits.MaxScore),

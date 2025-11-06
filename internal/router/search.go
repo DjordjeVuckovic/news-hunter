@@ -102,7 +102,7 @@ func (r *SearchRouter) searchHandler(c echo.Context) error {
 
 	// Create API response with encoded cursor string
 	apiResponse := FTSSearchResponse{
-		Items:        searchResult.Items,
+		Items:        searchResult.Hits,
 		NextCursor:   nextCursorStr,
 		HasMore:      searchResult.HasMore,
 		MaxScore:     searchResult.MaxScore,
