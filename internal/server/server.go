@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -18,7 +19,7 @@ import (
 )
 
 const (
-	GracefulShutdownTimeout = 10 * time.Second
+	DefaultGracefulShutdownTimeout = 10 * time.Second
 )
 
 type Server struct {
@@ -28,7 +29,10 @@ type Server struct {
 
 	checker server.HealthChecker
 
-	Ctx context.Context
+	ctx context.Context
+
+	gracefulShutdownTimeout time.Duration
+	shutdownSig             chan struct{}
 }
 
 func New(cfg *Config, checker server.HealthChecker) *Server {
@@ -37,13 +41,23 @@ func New(cfg *Config, checker server.HealthChecker) *Server {
 	e.DisableHTTP2 = !cfg.UseHttp2
 
 	s := &Server{
-		Echo:    e,
-		cfg:     cfg,
-		checker: checker,
-		Ctx:     context.Background(),
+		Echo:                    e,
+		cfg:                     cfg,
+		checker:                 checker,
+		ctx:                     context.Background(),
+		gracefulShutdownTimeout: DefaultGracefulShutdownTimeout,
+		shutdownSig:             make(chan struct{}),
 	}
 
 	return s
+}
+
+func (s *Server) Context() context.Context {
+	return s.ctx
+}
+
+func (s *Server) ShutdownSignal() chan struct{} {
+	return s.shutdownSig
 }
 
 func (s *Server) Start() error {
@@ -56,21 +70,26 @@ func (s *Server) Start() error {
 		}
 	}()
 
-	s.Ctx = ctx
+	s.ctx = ctx
 
 	<-ctx.Done()
 
-	ctx, cancel := context.WithTimeout(context.Background(), GracefulShutdownTimeout)
+	close(s.shutdownSig)
+
+	ctx, cancel := context.WithTimeout(context.Background(), s.gracefulShutdownTimeout)
 	defer cancel()
 
 	if err := s.Echo.Shutdown(ctx); err != nil {
 		s.Echo.Logger.Fatal(err)
 		return err
 	}
+	slog.Info("Server shut down gracefully ...")
+
 	return nil
 }
 
 func (s *Server) SetupMiddlewares() *Server {
+	s.Echo.Use(middleware.RequestID())
 	s.Echo.Use(mw.Logger())
 	s.Echo.Use(middleware.Recover())
 	s.Echo.Use(middleware.CORSWithConfig(middleware.CORSConfig{
@@ -81,7 +100,7 @@ func (s *Server) SetupMiddlewares() *Server {
 	return s
 }
 
-func (s *Server) SetupHealthChecker() *Server {
+func (s *Server) SetupHealthChecks() *Server {
 	s.Echo.GET("/health", s.handleHealthCheck)
 
 	return s

@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 
-	"slices"
-
 	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
 	"github.com/DjordjeVuckovic/news-hunter/internal/dto"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
@@ -38,7 +36,6 @@ func NewReader(config ClientConfig) (*Reader, error) {
 func (r *Reader) SearchFullText(ctx context.Context, query string, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
 	slog.Info("Executing es full-text search", "query", query, "has_cursor", cursor != nil, "size", size)
 
-	// Build search request
 	searchReq := r.client.Search().
 		Index(r.indexName).
 		Query(&types.Query{
@@ -110,11 +107,11 @@ func (r *Reader) SearchFullText(ctx context.Context, query string, cursor *dto.C
 	}
 
 	return &storage.SearchResult{
-		Items:              articles,
-		NextCursor:         nextCursor,
-		HasMore:            hasMore,
-		MaxScore:           float64(*res.Hits.MaxScore),
-		MaxScoreNormalized: slices.Max(rawScores) / maxScore,
+		Items:        articles,
+		NextCursor:   nextCursor,
+		HasMore:      hasMore,
+		MaxScore:     float64(*res.Hits.MaxScore),
+		TotalMatches: res.Hits.Total.Value,
 	}, nil
 }
 

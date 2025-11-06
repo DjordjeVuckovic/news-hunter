@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"math"
 
+	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
 	"github.com/DjordjeVuckovic/news-hunter/internal/dto"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
+	"github.com/DjordjeVuckovic/news-hunter/pkg/utils"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -23,23 +24,18 @@ func NewReader(pool *ConnectionPool) (*Reader, error) {
 func (r *Reader) SearchFullText(ctx context.Context, query string, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
 	slog.Info("Executing pg full-text search", "query", query, "has_cursor", cursor != nil, "size", size)
 
-	// Get global max score for normalization
 	var globalMaxScore float64
-	if cursor == nil {
-		// First page: compute global max score across ALL matching documents
-		maxSQL := `
-			SELECT COALESCE(MAX(ts_rank(search_vector, plainto_tsquery('english', $1))), 0.0) as max_score
+	var count int64
+	maxSQL := `
+			SELECT COALESCE(MAX(ts_rank(search_vector, plainto_tsquery('english', $1))), 0.0) as max_score, COUNT(*)
 			FROM articles
 			WHERE search_vector @@ plainto_tsquery('english', $1)
 		`
-		if err := r.db.QueryRow(ctx, maxSQL, query).Scan(&globalMaxScore); err != nil {
-			return nil, fmt.Errorf("failed to compute max score: %w", err)
-		}
-		slog.Info("Computed global max score", "max_score", globalMaxScore)
-	} else {
-		globalMaxScore = cursor.Score
-		slog.Info("Using max score from cursor", "max_score", globalMaxScore)
+	if err := r.db.QueryRow(ctx, maxSQL, query).Scan(&globalMaxScore, &count); err != nil || globalMaxScore <= 0 {
+		slog.Error("Failed to fetch global max score", "error", err)
+		return nil, fmt.Errorf("cannot fetch global max score: %w", err)
 	}
+	slog.Info("Computed global max score", "max_score", globalMaxScore, "total_matches", count)
 
 	var searchSQL string
 	var args []interface{}
@@ -68,8 +64,6 @@ func (r *Reader) SearchFullText(ctx context.Context, query string, cursor *dto.C
 		`
 		args = []interface{}{query, cursor.Score, cursor.ID, size + 1}
 	}
-
-	var err error
 
 	rows, err := r.db.Query(ctx, searchSQL, args...)
 	if err != nil {
@@ -105,11 +99,10 @@ func (r *Reader) SearchFullText(ctx context.Context, query string, cursor *dto.C
 			return nil, fmt.Errorf("failed to unmarshal metadata: %w", err)
 		}
 
-		// Store article with raw score temporarily
 		searchResult := dto.ArticleSearchResult{
 			Article:         article,
-			Score:           rawScore,
-			ScoreNormalized: rawScore,
+			Score:           utils.RoundDecimal(rawScore, domain.ScoreDecimalPlaces),
+			ScoreNormalized: utils.RoundDecimal(rawScore/globalMaxScore, domain.ScoreDecimalPlaces),
 		}
 
 		articles = append(articles, searchResult)
@@ -120,31 +113,18 @@ func (r *Reader) SearchFullText(ctx context.Context, query string, cursor *dto.C
 		return nil, fmt.Errorf("error iterating rows: %w", err)
 	}
 
-	// Normalize scores using GLOBAL max score (not just current page)
-	// This makes scores comparable across different queries
-	// ScoreNormalized keeps the original ts_rank value for debugging
-	if globalMaxScore > 0 {
-		for i := range articles {
-			articles[i].Score = rawScores[i] / globalMaxScore
-			// ScoreNormalized already set above
-		}
-	}
-
 	slog.Info("PG search results fetched",
-		"total_matches", len(articles),
-		"global_max_score", globalMaxScore,
-		"normalized", globalMaxScore > 0)
+		"total_page_matches", len(articles),
+		"global_max_score", globalMaxScore)
 
-	// Build result with domain cursor (no encoding)
 	hasMore := len(articles) > size
 	if hasMore {
-		articles = articles[:size] // Trim to requested size
+		articles = articles[:size]
 		rawScores = rawScores[:size]
 	}
 
 	var nextCursor *dto.Cursor
 	if hasMore && len(articles) > 0 {
-		// Use RAW score in cursor for pagination consistency
 		lastRawScore := rawScores[len(rawScores)-1]
 		nextCursor = &dto.Cursor{
 			Score: lastRawScore,
@@ -153,10 +133,10 @@ func (r *Reader) SearchFullText(ctx context.Context, query string, cursor *dto.C
 	}
 
 	return &storage.SearchResult{
-		Items:              articles,
-		NextCursor:         nextCursor,
-		HasMore:            hasMore,
-		MaxScore:           globalMaxScore,
-		MaxScoreNormalized: math.Round(globalMaxScore*100) / 100, // Keep raw max for comparison
+		Items:        articles,
+		NextCursor:   nextCursor,
+		HasMore:      hasMore,
+		MaxScore:     utils.RoundDecimal(globalMaxScore, domain.ScoreDecimalPlaces),
+		TotalMatches: count,
 	}, nil
 }

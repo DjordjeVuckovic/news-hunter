@@ -32,7 +32,7 @@ func main() {
 
 	s := server.New(sCfg, heathChecker).
 		SetupMiddlewares().
-		SetupHealthChecker().
+		SetupHealthChecks().
 		SetupOpenApi()
 
 	s.Echo.GET("/", func(c echo.Context) error {
@@ -47,7 +47,7 @@ func main() {
 		return
 	}
 
-	reader, err := factory.NewReader(s.Ctx, cfg.StorageConfig)
+	reader, err := factory.NewReader(s.Context(), cfg.StorageConfig)
 	if err != nil {
 		slog.Error("Failed to create storage reader", "error", err)
 		os.Exit(1)
@@ -56,6 +56,11 @@ func main() {
 
 	searchrouter := router.NewSearchRouter(s.Echo, reader)
 	searchrouter.Bind()
+
+	go func() {
+		<-s.ShutdownSignal()
+		slog.Info("Shutdown started, cleaning up resources...")
+	}()
 
 	err = s.Start()
 	if err != nil {
