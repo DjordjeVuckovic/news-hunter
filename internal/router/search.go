@@ -30,9 +30,11 @@ func (r *SearchRouter) Bind() {
 // FTSSearchResponse represents the API response for full-text search
 // This is a concrete type for Swagger documentation (swag doesn't support generics yet)
 type FTSSearchResponse struct {
-	Items      []dto.ArticleSearchResult `json:"items"`
-	NextCursor *string                   `json:"next_cursor,omitempty"`
-	HasMore    bool                      `json:"has_more"`
+	NextCursor   *string                   `json:"next_cursor,omitempty"`
+	HasMore      bool                      `json:"has_more"`
+	MaxScore     float64                   `json:"max_score,omitempty"`
+	TotalMatches int64                     `json:"total_matches,omitempty"`
+	Items        []dto.ArticleSearchResult `json:"items"`
 }
 
 // searchHandler handles full-text search requests with cursor-based pagination
@@ -90,7 +92,7 @@ func (r *SearchRouter) searchHandler(c echo.Context) error {
 	// Build API response - encode cursor at this layer
 	var nextCursorStr *string
 	if searchResult.NextCursor != nil {
-		encoded, err := dto.EncodeCursor(searchResult.NextCursor.Rank, searchResult.NextCursor.ID)
+		encoded, err := dto.EncodeCursor(searchResult.NextCursor.Score, searchResult.NextCursor.ID)
 		if err != nil {
 			slog.Error("Failed to encode cursor", "error", err)
 			return c.JSON(500, map[string]string{"error": "internal server error"})
@@ -100,9 +102,11 @@ func (r *SearchRouter) searchHandler(c echo.Context) error {
 
 	// Create API response with encoded cursor string
 	apiResponse := FTSSearchResponse{
-		Items:      searchResult.Items,
-		NextCursor: nextCursorStr,
-		HasMore:    searchResult.HasMore,
+		Items:        searchResult.Hits,
+		NextCursor:   nextCursorStr,
+		HasMore:      searchResult.HasMore,
+		MaxScore:     searchResult.MaxScore,
+		TotalMatches: searchResult.TotalMatches,
 	}
 
 	return c.JSON(200, apiResponse)

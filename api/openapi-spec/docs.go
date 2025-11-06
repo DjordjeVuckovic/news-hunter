@@ -158,7 +158,7 @@ const docTemplate = `{
                     ]
                 },
                 "rank": {
-                    "description": "Rank based on search relevance",
+                    "description": "Score based on search relevance",
                     "type": "number"
                 }
             }

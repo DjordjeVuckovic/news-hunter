@@ -9,27 +9,27 @@ import (
 func TestEncodeCursor(t *testing.T) {
 	tests := []struct {
 		name        string
-		rank        float32
+		score       float64
 		id          uuid.UUID
 		wantErr     bool
 		errContains string
 	}{
 		{
 			name:    "valid cursor",
-			rank:    0.95,
+			score:   0.95,
 			id:      uuid.MustParse("123e4567-e89b-12d3-a456-426614174000"),
 			wantErr: false,
 		},
 		{
 			name:        "nil UUID",
-			rank:        0.5,
+			score:       0.5,
 			id:          uuid.Nil,
 			wantErr:     true,
 			errContains: "cannot be nil",
 		},
 		{
-			name:    "zero rank",
-			rank:    0.0,
+			name:    "zero score",
+			score:   0.0,
 			id:      uuid.MustParse("123e4567-e89b-12d3-a456-426614174000"),
 			wantErr: false,
 		},
@@ -37,7 +37,7 @@ func TestEncodeCursor(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			encoded, err := EncodeCursor(tt.rank, tt.id)
+			encoded, err := EncodeCursor(tt.score, tt.id)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("EncodeCursor() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -114,30 +114,30 @@ func TestDecodeCursor(t *testing.T) {
 
 func TestCursorRoundtrip(t *testing.T) {
 	tests := []struct {
-		name string
-		rank float32
-		id   uuid.UUID
+		name  string
+		score float64
+		id    uuid.UUID
 	}{
 		{
-			name: "typical rank",
-			rank: 0.75,
-			id:   uuid.MustParse("123e4567-e89b-12d3-a456-426614174000"),
+			name:  "typical score",
+			score: 0.75,
+			id:    uuid.MustParse("123e4567-e89b-12d3-a456-426614174000"),
 		},
 		{
-			name: "high rank",
-			rank: 25.5,
-			id:   uuid.MustParse("987fcdeb-51a2-43d7-b890-123456789abc"),
+			name:  "high score",
+			score: 25.5,
+			id:    uuid.MustParse("987fcdeb-51a2-43d7-b890-123456789abc"),
 		},
 		{
-			name: "zero rank",
-			rank: 0.0,
-			id:   uuid.MustParse("00000000-0000-0000-0000-000000000001"),
+			name:  "zero score",
+			score: 0.0,
+			id:    uuid.MustParse("00000000-0000-0000-0000-000000000001"),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			encoded, err := EncodeCursor(tt.rank, tt.id)
+			encoded, err := EncodeCursor(tt.score, tt.id)
 			if err != nil {
 				t.Fatalf("EncodeCursor() failed: %v", err)
 			}
@@ -147,8 +147,8 @@ func TestCursorRoundtrip(t *testing.T) {
 				t.Fatalf("DecodeCursor() failed: %v", err)
 			}
 
-			if decoded.Rank != tt.rank {
-				t.Errorf("Rank mismatch: got %v, want %v", decoded.Rank, tt.rank)
+			if decoded.Score != tt.score {
+				t.Errorf("Score mismatch: got %v, want %v", decoded.Score, tt.score)
 			}
 			if decoded.ID != tt.id {
 				t.Errorf("ID mismatch: got %v, want %v", decoded.ID, tt.id)
