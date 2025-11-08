@@ -14,13 +14,16 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "Choose a dataset to download from Kaggle:"
-echo "1) News Category Dataset"
-echo "2) Hacker News Posts"
-read -p "Enter the number of your choice: " choice
+echo "1) Global News Dataset"
+echo "2) News Category Dataset"
+echo "3) Hacker News Posts"
+read -r -p "Enter the number of your choice: " choice
 
 if [ "$choice" -eq 1 ]; then
     dataset="rmisra/news-category-dataset"
 elif [ "$choice" -eq 2 ]; then
+    dataset="everydaycodings/global-news-dataset"
+elif [ "$choice" -eq 3 ]; then
     dataset="hacker-news/hacker-news-posts"
 else
     echo "Invalid choice. Exiting."
@@ -30,4 +33,4 @@ fi
 # Download and unzip the dataset
 kaggle datasets download "$dataset" --unzip -p ../dataset/kaggle
 
-echo "Dataset downloaded and extracted to data/ directory 🎇"
+echo "Dataset downloaded and extracted to dataset/kaggle 🎇"

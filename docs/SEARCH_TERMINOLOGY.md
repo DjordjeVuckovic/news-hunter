@@ -12,7 +12,7 @@
 
 **Implementation:**
 - **PostgreSQL**: Uses `tsvector` with `plainto_tsquery` and `ts_rank` for scoring
-- **Elasticsearch**: Uses `MultiMatchQuery` with field boosting (title^3, description^2, content)
+- **Elasticsearch**: Uses `MultiMatchQuery` with field boosting (title, description, content)
 
 **Example queries:**
 ```
@@ -43,6 +43,7 @@ SearchFullText(ctx context.Context, query string, page int, size int) (*SearchRe
 - Exact match filtering on specific fields
 - Example: `category="politics" AND source="CNN"`
 - Uses `keyword` field type in Elasticsearch
+- Uses exact match queries in PostgreSQL
 
 ---
 
@@ -60,18 +61,28 @@ SearchFullText(ctx context.Context, query string, page int, size int) (*SearchRe
 ### Relevance Ranking
 
 Both implementations calculate relevance scores:
-- **PostgreSQL**: `ts_rank()` returns 0-1 normalized scores
+- **PostgreSQL**: `ts_rank()` returns 0-1 scores
 - **Elasticsearch**: BM25 algorithm returns scores typically 1-30+
 
 **Note:** Scores are not directly comparable between backends. See `docs/FUTURE_WORK.md` for ranking unification roadmap.
 
-### Field Boosting (Elasticsearch)
-
-Different fields have different importance weights:
+### Field Boosting
+#### Elasticsearch
+- Different fields have different importance weights:
 ```
 title^3        → Title matches are 3x more important
 description^2  → Description matches are 2x more important
 content        → Content matches have base weight
+```
+#### PostgreSQL
+- Similar effect achieved by combining multiple `tsvector` fields with weighted contributions in the ranking function:
+```
+ts_rank(
+  setweight(to_tsvector(coalesce(title, '')), 'A') ||
+  setweight(to_tsvector(coalesce(description, '')), 'B') ||
+  setweight(to_tsvector(coalesce(content, '')), 'C'),
+  plainto_tsquery('search terms')
+)
 ```
 
 ---

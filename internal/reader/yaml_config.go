@@ -1,9 +1,10 @@
 package reader
 
 import (
+	"io"
+
 	"github.com/DjordjeVuckovic/news-hunter/pkg/apis/datamapping"
 	"gopkg.in/yaml.v3"
-	"io"
 )
 
 type YAMLConfigLoader struct {

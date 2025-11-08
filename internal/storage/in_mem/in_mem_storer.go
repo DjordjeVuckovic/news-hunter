@@ -20,7 +20,7 @@ func NewInMemStorer() *InMemStorer {
 	}
 }
 
-func (s *InMemStorer) Save(ctx context.Context, article domain.Article) (uuid.UUID, error) {
+func (s *InMemStorer) Save(_ context.Context, article domain.Article) (uuid.UUID, error) {
 	// Implement the logic to save the article to a JSON file
 	// This is a placeholder implementation
 	// You would typically use encoding/json to marshal the article and write it to the file

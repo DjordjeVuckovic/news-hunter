@@ -34,6 +34,8 @@ go.work.sum
 **/testdata
 
 dataset/*.csv
+dataset/*.json
+dataset/kagle/**
 dataset/kaggle/gl_news_data.csv
 bin/**
 
