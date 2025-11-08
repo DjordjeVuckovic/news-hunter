@@ -42,10 +42,10 @@ func (r *Reader) SearchFullText(ctx context.Context, query string, cursor *dto.C
 		Query(&types.Query{
 			MultiMatch: &types.MultiMatchQuery{
 				Query:  query,
-				Fields: []string{"title^3", "description^2", "content"},
+				Fields: []string{"title", "description", "content"},
 			},
 		}).
-		Size(size + 1). // Fetch size+1 to determine hasMore
+		Size(size + 1).
 		TrackScores(true)
 
 	if cursor != nil {
@@ -77,8 +77,7 @@ func (r *Reader) SearchFullText(ctx context.Context, query string, cursor *dto.C
 		return nil, fmt.Errorf("failed to execute search: %w", err)
 	}
 
-	// Get max score for normalization (0-1 range)
-	maxScore := domain.NormalizeScore((*float64)(res.Hits.MaxScore))
+	maxScore := domain.CalcSafeScore((*float64)(res.Hits.MaxScore))
 
 	articles, rawScores, err := r.mapToDomain(res.Hits.Hits, maxScore)
 	if err != nil {
@@ -158,7 +157,7 @@ func (r *Reader) mapToDomain(hits []types.Hit, maxScore float64) ([]dto.ArticleS
 		}
 
 		articles = append(articles, searchResult)
-		rawScores = append(rawScores, rawScore) // Keep raw score for cursor
+		rawScores = append(rawScores, rawScore)
 	}
 
 	return articles, rawScores, nil

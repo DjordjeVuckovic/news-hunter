@@ -6,6 +6,7 @@ import (
 
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage/es"
+	"github.com/DjordjeVuckovic/news-hunter/internal/storage/in_mem"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage/pg"
 )
 
@@ -31,7 +32,7 @@ func NewStorer(ctx context.Context, cfg StorageConfig) (storage.Storer, error) {
 		return nil, fmt.Errorf("solr storer not yet implemented")
 
 	case storage.InMem:
-		return storage.NewInMemStorer(), nil
+		return in_mem.NewInMemStorer(), nil
 
 	default:
 		return nil, fmt.Errorf(string(storage.ErrUnsupportedStorer), cfg.Type)

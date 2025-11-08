@@ -1,11 +1,12 @@
-package storage
+package in_mem
 
 import (
 	"context"
-	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
-	"github.com/google/uuid"
 	"log/slog"
 	"sync"
+
+	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
+	"github.com/google/uuid"
 )
 
 type InMemStorer struct {
