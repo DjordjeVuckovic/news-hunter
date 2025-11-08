@@ -34,10 +34,10 @@ func NewReader(config ClientConfig) (*Reader, error) {
 	}, nil
 }
 
-// SearchLexical implements storage.Reader interface
+// SearchFullText implements storage.Reader interface
 // Performs token-based full-text search using Elasticsearch's multi_match query with BM25
-func (r *Reader) SearchLexical(ctx context.Context, query *domain.LexicalQuery, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
-	slog.Info("Executing es lexical search", "query", query.Text, "has_cursor", cursor != nil, "size", size)
+func (r *Reader) SearchFullText(ctx context.Context, query *domain.FullTextQuery, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
+	slog.Info("Executing es full-text search", "query", query.Text, "has_cursor", cursor != nil, "size", size)
 
 	searchReq := r.client.Search().
 		Index(r.indexName).

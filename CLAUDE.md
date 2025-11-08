@@ -24,7 +24,7 @@ This project is part of a master thesis research that explores PostgreSQL's comp
 - **Multilingual Support**: Text search across different languages and character sets
 
 **Search Paradigms to Explore**:
-1. **Lexical Search**: Traditional keyword-based full-text search with relevance ranking
+1. **Full-Text Search**: Traditional keyword-based full-text search with relevance ranking
 2. **Structured Search**: Boolean operators and field-specific queries
 3. **Fuzzy/Approximate Search**: Trigram similarity (pg_trgm), Levenshtein distance for typo tolerance
 4. **Semantic Search**: Vector-based similarity search using embeddings

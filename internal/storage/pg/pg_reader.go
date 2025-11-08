@@ -21,10 +21,10 @@ func NewReader(pool *ConnectionPool) (*Reader, error) {
 	return &Reader{db: pool.conn}, nil
 }
 
-// SearchLexical implements storage.Reader interface
+// SearchFullText implements storage.Reader interface
 // Performs token-based full-text search using PostgreSQL's tsvector and plainto_tsquery
-func (r *Reader) SearchLexical(ctx context.Context, query *domain.LexicalQuery, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
-	slog.Info("Executing pg lexical search", "query", query.Text, "has_cursor", cursor != nil, "size", size)
+func (r *Reader) SearchFullText(ctx context.Context, query *domain.FullTextQuery, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
+	slog.Info("Executing pg full-text search", "query", query.Text, "has_cursor", cursor != nil, "size", size)
 
 	var globalMaxScore float64
 	var count int64

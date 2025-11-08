@@ -19,14 +19,14 @@ type SearchResult struct {
 }
 
 // Reader is the base interface that ALL storage backends must implement
-// Provides lexical (full-text) search capability
+// Provides full-text search capability
 type Reader interface {
-	// SearchLexical performs token-based full-text search with relevance ranking
+	// SearchFullText performs token-based full-text search with relevance ranking
 	// Uses stemming, stop words, and multi-field search (title, description, content)
 	// cursor: optional decoded cursor from previous result (nil for first page)
 	// size: number of results to return per page
 	// Returns domain objects with domain cursor (not encoded string)
-	SearchLexical(ctx context.Context, query *domain.LexicalQuery, cursor *dto.Cursor, size int) (*SearchResult, error)
+	SearchFullText(ctx context.Context, query *domain.FullTextQuery, cursor *dto.Cursor, size int) (*SearchResult, error)
 }
 
 // BooleanSearcher is an optional interface for boolean search capabilities

@@ -4,8 +4,8 @@ package domain
 type QueryType string
 
 const (
-	// QueryTypeLexical: Token-based full-text search with relevance ranking
-	QueryTypeLexical QueryType = "lexical"
+	// QueryTypeFullText: Token-based full-text search with relevance ranking
+	QueryTypeFullText QueryType = "full_text"
 
 	// QueryTypeBoolean: Structured queries with logical operators (AND, OR, NOT)
 	QueryTypeBoolean QueryType = "boolean"
@@ -14,14 +14,14 @@ const (
 // SearchQuery is the top-level query container
 // Only one query field should be non-nil based on Type
 type SearchQuery struct {
-	Type    QueryType     `json:"type"`
-	Lexical *LexicalQuery `json:"lexical,omitempty"`
-	Boolean *BooleanQuery `json:"boolean,omitempty"`
+	Type     QueryType      `json:"type"`
+	FullText *FullTextQuery `json:"full_text,omitempty"`
+	Boolean  *BooleanQuery  `json:"boolean,omitempty"`
 }
 
-// LexicalQuery: Token-based full-text search with relevance ranking
+// FullTextQuery: Token-based full-text search with relevance ranking
 // Analyzes and tokenizes text, performs stemming, handles stop words
-type LexicalQuery struct {
+type FullTextQuery struct {
 	Text string `json:"text" validate:"required,min=1"`
 
 	// FieldWeights: Optional field-specific boosting/weights
@@ -81,7 +81,7 @@ type BooleanQuery struct {
 	Expression string `json:"expression" validate:"required,min=1"`
 }
 
-// Default values for lexical search
+// Default values for full-text search
 const (
 	DefaultLanguage = "english"
 )
@@ -106,9 +106,9 @@ var (
 	}
 )
 
-// WithDefaults returns a copy of LexicalQuery with default values applied
-func (q *LexicalQuery) WithDefaults() *LexicalQuery {
-	result := &LexicalQuery{
+// WithDefaults returns a copy of FullTextQuery with default values applied
+func (q *FullTextQuery) WithDefaults() *FullTextQuery {
+	result := &FullTextQuery{
 		Text:         q.Text,
 		FieldWeights: q.FieldWeights,
 		Language:     q.Language,
@@ -137,7 +137,7 @@ func (q *LexicalQuery) WithDefaults() *LexicalQuery {
 }
 
 // GetLanguage returns the language with default fallback
-func (q *LexicalQuery) GetLanguage() string {
+func (q *FullTextQuery) GetLanguage() string {
 	if q.Language == "" {
 		return DefaultLanguage
 	}
@@ -145,7 +145,7 @@ func (q *LexicalQuery) GetLanguage() string {
 }
 
 // GetFields returns the fields with default fallback
-func (q *LexicalQuery) GetFields() []string {
+func (q *FullTextQuery) GetFields() []string {
 	if len(q.Fields) == 0 {
 		return DefaultFields
 	}
@@ -153,7 +153,7 @@ func (q *LexicalQuery) GetFields() []string {
 }
 
 // GetFieldWeight returns the weight for a specific field, or 1.0 if not specified
-func (q *LexicalQuery) GetFieldWeight(field string) float64 {
+func (q *FullTextQuery) GetFieldWeight(field string) float64 {
 	if len(q.FieldWeights) == 0 {
 		return 1.0
 	}

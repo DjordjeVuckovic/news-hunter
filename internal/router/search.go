@@ -85,12 +85,12 @@ func (r *SearchRouter) searchHandler(c echo.Context) error {
 		}
 	}
 
-	// For now, treat query parameter as lexical search
+	// For now, treat query parameter as full-text search
 	// TODO: Add support for query type parameter to support boolean, fuzzy, etc.
-	lexicalQuery := &domain.LexicalQuery{Text: query}
-	searchResult, err := r.storage.SearchLexical(c.Request().Context(), lexicalQuery, cursor, sizeInt)
+	fullTextQuery := &domain.FullTextQuery{Text: query}
+	searchResult, err := r.storage.SearchFullText(c.Request().Context(), fullTextQuery, cursor, sizeInt)
 	if err != nil {
-		slog.Error("Failed to execute lexical search", "error", err, "query", query)
+		slog.Error("Failed to execute full-text search", "error", err, "query", query)
 		return c.JSON(500, map[string]string{"error": "internal server error"})
 	}
 
