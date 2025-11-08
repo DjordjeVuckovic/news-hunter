@@ -21,8 +21,10 @@ func NewReader(pool *ConnectionPool) (*Reader, error) {
 	return &Reader{db: pool.conn}, nil
 }
 
-func (r *Reader) SearchFullText(ctx context.Context, query string, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
-	slog.Info("Executing pg full-text search", "query", query, "has_cursor", cursor != nil, "size", size)
+// SearchLexical implements storage.Reader interface
+// Performs token-based full-text search using PostgreSQL's tsvector and plainto_tsquery
+func (r *Reader) SearchLexical(ctx context.Context, query *domain.LexicalQuery, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
+	slog.Info("Executing pg lexical search", "query", query.Text, "has_cursor", cursor != nil, "size", size)
 
 	var globalMaxScore float64
 	var count int64
@@ -31,7 +33,7 @@ func (r *Reader) SearchFullText(ctx context.Context, query string, cursor *dto.C
 			FROM articles
 			WHERE search_vector @@ plainto_tsquery('english', $1)
 		`
-	if err := r.db.QueryRow(ctx, maxSQL, query).Scan(&globalMaxScore, &count); err != nil || globalMaxScore <= 0 {
+	if err := r.db.QueryRow(ctx, maxSQL, query.Text).Scan(&globalMaxScore, &count); err != nil || globalMaxScore <= 0 {
 		slog.Error("Failed to fetch global max score", "error", err)
 		return nil, fmt.Errorf("cannot fetch global max score: %w", err)
 	}
@@ -50,7 +52,7 @@ func (r *Reader) SearchFullText(ctx context.Context, query string, cursor *dto.C
 			ORDER BY rank DESC, id DESC
 			LIMIT $2
 		`
-		args = []interface{}{query, size + 1}
+		args = []interface{}{query.Text, size + 1}
 	} else {
 		searchSQL = `
 			SELECT
@@ -62,7 +64,7 @@ func (r *Reader) SearchFullText(ctx context.Context, query string, cursor *dto.C
 			ORDER BY rank DESC, id DESC
 			LIMIT $4
 		`
-		args = []interface{}{query, cursor.Score, cursor.ID, size + 1}
+		args = []interface{}{query.Text, cursor.Score, cursor.ID, size + 1}
 	}
 
 	rows, err := r.db.Query(ctx, searchSQL, args...)
@@ -140,3 +142,20 @@ func (r *Reader) SearchFullText(ctx context.Context, query string, cursor *dto.C
 		TotalMatches: count,
 	}, nil
 }
+
+// SearchBoolean implements storage.BooleanSearcher interface
+// Performs boolean search using PostgreSQL's tsquery with AND (&), OR (|), NOT (!) operators
+func (r *Reader) SearchBoolean(ctx context.Context, query *domain.BooleanQuery, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
+	slog.Info("Executing pg boolean search", "expression", query.Expression, "has_cursor", cursor != nil, "size", size)
+
+	// TODO: Implement boolean query parser
+	// Parse query.Expression: "climate AND (change OR warming) AND NOT politics"
+	// Convert to PostgreSQL tsquery syntax: "climate & (change | warming) & !politics"
+	// Use websearch_to_tsquery or to_tsquery for parsing
+
+	return nil, fmt.Errorf("boolean search not yet implemented for PostgreSQL")
+}
+
+// Compile-time interface assertions
+var _ storage.Reader = (*Reader)(nil)
+var _ storage.BooleanSearcher = (*Reader)(nil)

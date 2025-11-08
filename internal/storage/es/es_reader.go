@@ -34,14 +34,16 @@ func NewReader(config ClientConfig) (*Reader, error) {
 	}, nil
 }
 
-func (r *Reader) SearchFullText(ctx context.Context, query string, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
-	slog.Info("Executing es full-text search", "query", query, "has_cursor", cursor != nil, "size", size)
+// SearchLexical implements storage.Reader interface
+// Performs token-based full-text search using Elasticsearch's multi_match query with BM25
+func (r *Reader) SearchLexical(ctx context.Context, query *domain.LexicalQuery, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
+	slog.Info("Executing es lexical search", "query", query.Text, "has_cursor", cursor != nil, "size", size)
 
 	searchReq := r.client.Search().
 		Index(r.indexName).
 		Query(&types.Query{
 			MultiMatch: &types.MultiMatchQuery{
-				Query:  query,
+				Query:  query.Text,
 				Fields: []string{"title", "description", "content"},
 			},
 		}).
@@ -73,7 +75,7 @@ func (r *Reader) SearchFullText(ctx context.Context, query string, cursor *dto.C
 
 	res, err := searchReq.Do(ctx)
 	if err != nil {
-		slog.Error("Elasticsearch query failed", "error", err, "query", query, "cursor", cursor != nil)
+		slog.Error("Elasticsearch query failed", "error", err, "query", query.Text, "cursor", cursor != nil)
 		return nil, fmt.Errorf("failed to execute search: %w", err)
 	}
 
@@ -162,3 +164,19 @@ func (r *Reader) mapToDomain(hits []types.Hit, maxScore float64) ([]dto.ArticleS
 
 	return articles, rawScores, nil
 }
+
+// SearchBoolean implements storage.BooleanSearcher interface
+// Performs boolean search using Elasticsearch's bool query with must, should, must_not clauses
+func (r *Reader) SearchBoolean(ctx context.Context, query *domain.BooleanQuery, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
+	slog.Info("Executing es boolean search", "expression", query.Expression, "has_cursor", cursor != nil, "size", size)
+
+	// TODO: Implement boolean query parser
+	// Parse query.Expression: "climate AND (change OR warming) AND NOT politics"
+	// Convert to Elasticsearch bool query with must, should, must_not clauses
+
+	return nil, fmt.Errorf("boolean search not yet implemented for Elasticsearch")
+}
+
+// Compile-time interface assertions
+var _ storage.Reader = (*Reader)(nil)
+var _ storage.BooleanSearcher = (*Reader)(nil)

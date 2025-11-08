@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 
+	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
 	"github.com/DjordjeVuckovic/news-hunter/internal/dto"
 )
 
@@ -17,10 +18,22 @@ type SearchResult struct {
 	TotalMatches int64                     `json:"total_matches,omitempty"`
 }
 
+// Reader is the base interface that ALL storage backends must implement
+// Provides lexical (full-text) search capability
 type Reader interface {
-	// SearchFullText performs full-text search with cursor-based pagination
+	// SearchLexical performs token-based full-text search with relevance ranking
+	// Uses stemming, stop words, and multi-field search (title, description, content)
 	// cursor: optional decoded cursor from previous result (nil for first page)
 	// size: number of results to return per page
 	// Returns domain objects with domain cursor (not encoded string)
-	SearchFullText(ctx context.Context, query string, cursor *dto.Cursor, size int) (*SearchResult, error)
+	SearchLexical(ctx context.Context, query *domain.LexicalQuery, cursor *dto.Cursor, size int) (*SearchResult, error)
+}
+
+// BooleanSearcher is an optional interface for boolean search capabilities
+// Storage backends that support structured queries with AND, OR, NOT operators should implement this
+type BooleanSearcher interface {
+	// SearchBoolean performs boolean search with logical operators
+	// Supports AND, OR, NOT operators with grouping via parentheses
+	// Example: "climate AND (change OR warming) AND NOT politics"
+	SearchBoolean(ctx context.Context, query *domain.BooleanQuery, cursor *dto.Cursor, size int) (*SearchResult, error)
 }

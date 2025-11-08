@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"strconv"
 
+	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
 	"github.com/DjordjeVuckovic/news-hunter/internal/dto"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
 	"github.com/DjordjeVuckovic/news-hunter/pkg/pagination"
@@ -84,9 +85,12 @@ func (r *SearchRouter) searchHandler(c echo.Context) error {
 		}
 	}
 
-	searchResult, err := r.storage.SearchFullText(c.Request().Context(), query, cursor, sizeInt)
+	// For now, treat query parameter as lexical search
+	// TODO: Add support for query type parameter to support boolean, fuzzy, etc.
+	lexicalQuery := &domain.LexicalQuery{Text: query}
+	searchResult, err := r.storage.SearchLexical(c.Request().Context(), lexicalQuery, cursor, sizeInt)
 	if err != nil {
-		slog.Error("Failed to execute search", "error", err, "query", query)
+		slog.Error("Failed to execute lexical search", "error", err, "query", query)
 		return c.JSON(500, map[string]string{"error": "internal server error"})
 	}
 

@@ -4,7 +4,33 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-News Hunter is a full-text search engine for exploring multilingual news headlines and articles. The project uses Go 1.24 and focuses on importing, processing, and storing news data from various sources (currently Kaggle datasets).
+News Hunter is a full-text search engine for exploring multilingual news headlines and articles. The project uses Go 1.25 and focuses on importing, processing, and storing news data from various sources (currently Kaggle datasets).
+
+## Research Goals
+
+**Master Thesis**: "PostgreSQL as a Search Engine"
+
+This project is part of a master thesis research that explores PostgreSQL's comprehensive search capabilities and compares its performance with Elasticsearch through extensive benchmarks across multiple search paradigms.
+
+**Research Focus**:
+- **Full-Text Search**: Advanced features (tsvector, ts_rank, text search configurations, ranking, relevance)
+- **Boolean Search**: Complex query operators (AND, OR, NOT) within full-text search context
+- **Field-Level Search**: Targeted searches on specific fields (e.g., title:"Trump" & description:"Melania")
+- **Fuzzy Search**: Typo tolerance and approximate matching using Levenshtein distance and similarity algorithms
+- **Trigram Similarity (pg_trgm)**: Character-level matching for handling spelling variations, typos, and partial matches
+- **Vector Search**: Semantic/similarity search using pgvector extension for embedding-based retrieval
+- **Performance Benchmarking**: Query response time, indexing performance, resource utilization
+- **Relevance Evaluation**: Comparing search quality and ranking algorithms between PostgreSQL and Elasticsearch
+- **Multilingual Support**: Text search across different languages and character sets
+
+**Search Paradigms to Explore**:
+1. **Lexical Search**: Traditional keyword-based full-text search with relevance ranking
+2. **Structured Search**: Boolean operators and field-specific queries
+3. **Fuzzy/Approximate Search**: Trigram similarity (pg_trgm), Levenshtein distance for typo tolerance
+4. **Semantic Search**: Vector-based similarity search using embeddings
+5. **Hybrid Search**: Combining multiple search approaches for optimal results
+
+**Key Goal**: Evaluate PostgreSQL as a comprehensive alternative to dedicated search engines like Elasticsearch, exploring capabilities beyond basic exact matching and simple filtering.
 
 ## Architecture
 
