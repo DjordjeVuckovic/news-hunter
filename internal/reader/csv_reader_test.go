@@ -2,10 +2,11 @@ package reader
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCSVReader_Read(t *testing.T) {

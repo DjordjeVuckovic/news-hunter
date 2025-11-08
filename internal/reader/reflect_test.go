@@ -1,13 +1,14 @@
 package reader
 
 import (
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"net/url"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type ArticleReflectTest struct {
@@ -83,7 +84,7 @@ func TestSetNestedField(t *testing.T) {
 	// Test int
 	err = SetNestedField(val, []string{"Meta", "Priority"}, "5", "int", "")
 	require.NoError(t, err)
-	assert.Equal(t, int(5), article.Meta.Priority)
+	assert.Equal(t, 5, article.Meta.Priority)
 
 	// Test float
 	err = SetNestedField(val, []string{"Meta", "Score"}, "3.14", "float", "")

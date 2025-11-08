@@ -1,11 +1,12 @@
 package reader
 
 import (
-	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
-	"github.com/DjordjeVuckovic/news-hunter/pkg/apis/datamapping"
 	"log/slog"
 	"reflect"
 	"strings"
+
+	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
+	"github.com/DjordjeVuckovic/news-hunter/pkg/apis/datamapping"
 )
 
 type ArticleMapper struct {

@@ -1,13 +1,14 @@
 package reader
 
 import (
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"net/url"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestYAMLMapper_Map(t *testing.T) {

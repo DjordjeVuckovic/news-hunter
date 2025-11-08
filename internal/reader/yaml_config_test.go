@@ -1,12 +1,13 @@
 package reader
 
 import (
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestYAMLMapper_String_LoadConfig(t *testing.T) {
@@ -50,7 +51,12 @@ func TestYAMLMapper_File_LoadConfig(t *testing.T) {
 		return file, nil
 	}
 	reader, err := fileReader()
-	defer os.Remove(path)
+	defer func(name string) {
+		err := os.Remove(name)
+		if err != nil {
+			t.Logf("failed to remove test file: %v", err)
+		}
+	}(path)
 	require.NoError(t, err)
 
 	loader := NewYAMLConfigLoader(reader)

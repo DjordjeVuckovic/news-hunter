@@ -2,11 +2,12 @@ package reader
 
 import (
 	"fmt"
-	"github.com/google/uuid"
 	"net/url"
 	"reflect"
 	"strconv"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // setFieldValue sets a reflect.Value field with the converted value
