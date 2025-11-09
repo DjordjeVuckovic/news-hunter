@@ -85,16 +85,13 @@ func (r *SearchRouter) searchHandler(c echo.Context) error {
 		}
 	}
 
-	// For now, treat query parameter as full-text search
-	// TODO: Add support for query type parameter to support boolean, fuzzy, etc.
-	fullTextQuery := &domain.FullTextQuery{Text: query}
+	fullTextQuery := domain.NewFullTextQuery(query)
 	searchResult, err := r.storage.SearchFullText(c.Request().Context(), fullTextQuery, cursor, sizeInt)
 	if err != nil {
 		slog.Error("Failed to execute full-text search", "error", err, "query", query)
 		return c.JSON(500, map[string]string{"error": "internal server error"})
 	}
 
-	// Build API response - encode cursor at this layer
 	var nextCursorStr *string
 	if searchResult.NextCursor != nil {
 		encoded, err := dto.EncodeCursor(searchResult.NextCursor.Score, searchResult.NextCursor.ID)

@@ -25,22 +25,12 @@ type FullTextQuery struct {
 	Text string `json:"text" validate:"required,min=1"`
 
 	// FieldWeights: Optional field-specific boosting/weights
-	// Map of field name to boost multiplier
-	// Example: {"title": 3.0, "description": 2.0, "content": 1.0}
-	// PostgreSQL: Uses setweight() with A, B, C, D based on weight values
-	// Elasticsearch: Uses field^boost syntax in multi_match query
-	// If nil/empty, uses default equal weighting across all fields
 	FieldWeights map[string]float64 `json:"field_weights,omitempty"`
 
 	// Language: Text search language configuration
-	// PostgreSQL: Maps to text search configuration (e.g., 'english', 'spanish', 'french')
-	// Elasticsearch: Maps to analyzer (e.g., 'english', 'spanish')
-	// Default: 'english' if not specified
-	Language string `json:"language,omitempty"`
+	Language SearchLanguage `json:"language,omitempty"`
 
 	// Fields: Which fields to search
-	// Example: ["title", "description", "content"]
-	// If nil/empty, searches all text fields (title, description, content)
 	Fields []string `json:"fields,omitempty"`
 
 	// Operator: How to combine multiple terms (AND vs OR behavior)
@@ -50,21 +40,9 @@ type FullTextQuery struct {
 	// Elasticsearch: Sets the "operator" parameter in multi_match query
 	// Default: "or"
 	Operator string `json:"operator,omitempty"`
-
-	// MinimumShouldMatch: Minimum number/percentage of terms that should match
-	// Examples: "2", "75%", "3<90%"
-	// Elasticsearch: Direct mapping to minimum_should_match parameter
-	// PostgreSQL: Custom implementation with partial matching
-	// Default: nil (uses operator setting)
-	MinimumShouldMatch *string `json:"minimum_should_match,omitempty"`
 }
 
 // BooleanQuery: Structured queries using logical operators
-// Allows complex logic with AND, OR, NOT operators and grouping with parentheses
-//
-// Example: "climate AND (change OR warming) AND NOT politics"
-// PostgreSQL: Converts to tsquery syntax: 'climate' & ('change' | 'warming') & !'politics'
-// Elasticsearch: Converts to bool query with must, should, must_not clauses
 type BooleanQuery struct {
 	// Expression: Boolean query string with operators
 	// Supported operators:
@@ -80,11 +58,6 @@ type BooleanQuery struct {
 	//   "(climate OR weather) AND (change OR warming)"
 	Expression string `json:"expression" validate:"required,min=1"`
 }
-
-// Default values for full-text search
-const (
-	DefaultLanguage = "english"
-)
 
 var (
 	// DefaultFields are the default fields to search when not specified
@@ -106,6 +79,22 @@ var (
 	}
 )
 
+type FullTextQueryOption func(q *FullTextQuery)
+
+func NewFullTextQuery(text string, opts ...FullTextQueryOption) *FullTextQuery {
+	q := &FullTextQuery{
+		Text: text,
+	}
+
+	qBase := q.WithDefaults()
+
+	for _, opt := range opts {
+		opt(qBase)
+	}
+
+	return qBase
+}
+
 // WithDefaults returns a copy of FullTextQuery with default values applied
 func (q *FullTextQuery) WithDefaults() *FullTextQuery {
 	result := &FullTextQuery{
@@ -115,17 +104,14 @@ func (q *FullTextQuery) WithDefaults() *FullTextQuery {
 		Fields:       q.Fields,
 	}
 
-	// Set default language
 	if result.Language == "" {
-		result.Language = DefaultLanguage
+		result.Language = DefaultSearchLanguage
 	}
 
-	// Set default fields
 	if len(result.Fields) == 0 {
 		result.Fields = DefaultFields
 	}
 
-	// Set default field weights (equal weighting if not specified)
 	if len(result.FieldWeights) == 0 {
 		result.FieldWeights = make(map[string]float64)
 		for _, field := range result.Fields {
@@ -137,9 +123,9 @@ func (q *FullTextQuery) WithDefaults() *FullTextQuery {
 }
 
 // GetLanguage returns the language with default fallback
-func (q *FullTextQuery) GetLanguage() string {
+func (q *FullTextQuery) GetLanguage() SearchLanguage {
 	if q.Language == "" {
-		return DefaultLanguage
+		return DefaultSearchLanguage
 	}
 	return q.Language
 }

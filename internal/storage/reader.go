@@ -22,7 +22,6 @@ type SearchResult struct {
 // Provides full-text search capability
 type Reader interface {
 	// SearchFullText performs token-based full-text search with relevance ranking
-	// Uses stemming, stop words, and multi-field search (title, description, content)
 	// cursor: optional decoded cursor from previous result (nil for first page)
 	// size: number of results to return per page
 	// Returns domain objects with domain cursor (not encoded string)

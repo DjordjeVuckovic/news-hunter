@@ -12,6 +12,7 @@ import (
 	"github.com/DjordjeVuckovic/news-hunter/pkg/utils"
 	"github.com/elastic/go-elasticsearch/v8"
 	"github.com/elastic/go-elasticsearch/v8/typedapi/types"
+	"github.com/elastic/go-elasticsearch/v8/typedapi/types/enums/operator"
 	"github.com/elastic/go-elasticsearch/v8/typedapi/types/enums/sortorder"
 	"github.com/google/uuid"
 )
@@ -37,15 +38,56 @@ func NewReader(config ClientConfig) (*Reader, error) {
 // SearchFullText implements storage.Reader interface
 // Performs token-based full-text search using Elasticsearch's multi_match query with BM25
 func (r *Reader) SearchFullText(ctx context.Context, query *domain.FullTextQuery, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
-	slog.Info("Executing es full-text search", "query", query.Text, "has_cursor", cursor != nil, "size", size)
+	// Extract query parameters with defaults
+	fields := query.GetFields()
+	queryOperator := query.Operator
+	if queryOperator == "" {
+		queryOperator = "or" // default to OR behavior
+	}
+
+	slog.Info("Executing es full-text search",
+		"query", query.Text,
+		"language", query.GetLanguage(),
+		"fields", fields,
+		"operator", queryOperator,
+		"has_cursor", cursor != nil,
+		"size", size)
+
+	// Build field list with boosting
+	// Format: "title^3", "description^2", "content^1"
+	fieldsWithBoost := make([]string, 0, len(fields))
+	for _, field := range fields {
+		weight := query.GetFieldWeight(field)
+		if weight != 1.0 {
+			fieldsWithBoost = append(fieldsWithBoost, fmt.Sprintf("%s^%.1f", field, weight))
+		} else {
+			fieldsWithBoost = append(fieldsWithBoost, field)
+		}
+	}
+
+	// Build multi_match query
+	multiMatch := &types.MultiMatchQuery{
+		Query:  query.Text,
+		Fields: fieldsWithBoost,
+	}
+
+	// Set operator (AND/OR)
+	if queryOperator == "and" {
+		and := operator.And
+		multiMatch.Operator = &and
+	} else {
+		or := operator.Or
+		multiMatch.Operator = &or
+	}
+
+	slog.Debug("Elasticsearch multi_match query",
+		"fields_with_boost", fieldsWithBoost,
+		"operator", queryOperator)
 
 	searchReq := r.client.Search().
 		Index(r.indexName).
 		Query(&types.Query{
-			MultiMatch: &types.MultiMatchQuery{
-				Query:  query.Text,
-				Fields: []string{"title", "description", "content"},
-			},
+			MultiMatch: multiMatch,
 		}).
 		Size(size + 1).
 		TrackScores(true)

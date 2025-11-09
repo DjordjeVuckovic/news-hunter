@@ -957,10 +957,45 @@ Term → [doc1, doc2, doc3, ...]
 ```
 Precision = Relevant Retrieved / Total Retrieved
 ```
-
 **Recall**: Proportion of relevant documents that are retrieved
-```
+```text
 Recall = Relevant Retrieved / Total Relevant
+```
+**R-Precision**: Precision at R, where R = total relevant documents
+```
+R-Precision = Relevant Retrieved at R / R
+```
+**Precision@K**: Precision at top K results
+```text
+Precision@K = Relevant Retrieved in top K / K
+```
+```text
+Precision@10  = Relevant in top 10 / 10
+Precision@50  = Relevant in top 50 / 50
+Precision@100 = Relevant in top 100 / 100
+```
+**Example**:
+```text
+P@10  = 9/10  = 90%  ← Excellent top results
+P@50  = 40/50 = 80%  ← Still good
+P@100 = 70/100= 70%  ← Quality declining
+```
+**Recall@K**: Recall at top K results
+```text
+Recall@K = Relevant Retrieved in top K / Total Relevant
+```
+```text
+True Recall@K requires independent knowledge of total relevant
+
+Example with labeled dataset:
+- Dataset: 800 docs
+- Pre-labeled relevant: 150 docs
+- Your system retrieves top 100: 85 are in the 150
+
+Recall@100 = 85/150 = 56.7%
+Precision@100 = 85/100 = 85%
+
+Different values! Both meaningful!
 ```
 
 **F1 Score**: Harmonic mean of precision and recall
