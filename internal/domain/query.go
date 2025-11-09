@@ -63,18 +63,10 @@ var (
 	// DefaultFields are the default fields to search when not specified
 	DefaultFields = []string{"title", "description", "content"}
 
-	// DefaultFieldWeights are the default field weights (equal weighting)
-	DefaultFieldWeights = map[string]float64{
+	// FieldWeights are the default field weights (equal weighting)
+	FieldWeights = map[string]float64{
 		"title":       1.0,
 		"description": 1.0,
-		"content":     1.0,
-	}
-
-	// RecommendedFieldWeights are recommended weights based on field importance
-	// Title is most important, description is medium, content is base
-	RecommendedFieldWeights = map[string]float64{
-		"title":       3.0,
-		"description": 2.0,
 		"content":     1.0,
 	}
 )

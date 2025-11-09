@@ -1,4 +1,4 @@
-package operator
+package domain
 
 type Operator string
 

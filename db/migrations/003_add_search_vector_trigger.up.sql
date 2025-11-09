@@ -17,6 +17,33 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+CREATE OR REPLACE FUNCTION update_article_search_vector()
+    RETURNS TRIGGER AS $$
+BEGIN
+    -- Only compute if not already set by application
+    IF NEW.search_vector IS NULL OR NEW.search_vector = ''::tsvector THEN
+        NEW.search_vector :=
+                -- Title: Weight A (highest)
+            setweight(to_tsvector(COALESCE(NEW.language, 'english')::regconfig,
+                                  COALESCE(NEW.title, '')), 'A') ||
+
+                -- Subtitle: Weight B (high)
+            setweight(to_tsvector(COALESCE(NEW.language, 'english')::regconfig,
+                                  COALESCE(NEW.subtitle, '')), 'B') ||
+
+                -- Content: Weight C (medium)
+            setweight(to_tsvector(COALESCE(NEW.language, 'english')::regconfig,
+                                  COALESCE(NEW.content, '')), 'C') ||
+
+                -- Author: Weight D (lowest)
+            setweight(to_tsvector(COALESCE(NEW.language, 'english')::regconfig,
+                                  COALESCE(NEW.author, '')), 'D');
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+
 -- Create trigger to automatically update search_vector on INSERT and UPDATE
 DROP TRIGGER IF EXISTS trigger_update_article_search_vector ON articles;
 CREATE TRIGGER trigger_update_article_search_vector

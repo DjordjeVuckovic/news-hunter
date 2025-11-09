@@ -7,7 +7,11 @@ go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@lat
 ```
 - Run migrations
 ```bash
-migrate -path db/migrations -database "postgres://username:password@localhost:5432/news_hunter?sslmode=disable" up
+migrate -path db/migrations -database "postgres://username:password@localhost:5432/news_db?sslmode=disable" up
+```
+- Local Postgres with Docker
+```bash
+migrate -path db/migrations -database "postgres://news_user:news_password@localhost:54320/news_db?sslmode=disable" up
 ```
 ## OpenAPI Schema gen
 - Install swag CLI

@@ -88,7 +88,12 @@ func TestYAMLMapper_LoadConfig_ShouldFail(t *testing.T) {
 		return file, nil
 	}
 	reader, err := fileReader()
-	defer os.Remove(path)
+	defer func(name string) {
+		err := os.Remove(name)
+		if err != nil {
+			t.Logf("failed to remove test file: %v", err)
+		}
+	}(path)
 	require.NoError(t, err)
 
 	loader := NewYAMLConfigLoader(reader)
