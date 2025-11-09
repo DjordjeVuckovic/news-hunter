@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/DjordjeVuckovic/news-hunter/internal/collector"
-	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
+	"github.com/DjordjeVuckovic/news-hunter/internal/domain/document"
 	"github.com/DjordjeVuckovic/news-hunter/internal/processor"
 	"github.com/DjordjeVuckovic/news-hunter/internal/reader"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage/factory"
@@ -65,7 +65,7 @@ func main() {
 func newPipeline(
 	ctx context.Context,
 	cfg *DataImportConfig,
-	coll collector.Collector[domain.Article]) (processor.Pipeline, error) {
+	coll collector.Collector[document.Article]) (processor.Pipeline, error) {
 	slog.Info("Creating pipeline", "storageType", cfg.StorageConfig.Type)
 
 	storer, err := factory.NewStorer(ctx, cfg.StorageConfig)

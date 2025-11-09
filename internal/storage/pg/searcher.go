@@ -6,24 +6,24 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
+	dquery "github.com/DjordjeVuckovic/news-hunter/internal/domain/query"
 	"github.com/DjordjeVuckovic/news-hunter/internal/dto"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
 	"github.com/DjordjeVuckovic/news-hunter/pkg/utils"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type Reader struct {
+type Searcher struct {
 	db *pgxpool.Pool
 }
 
-func NewReader(pool *ConnectionPool) (*Reader, error) {
-	return &Reader{db: pool.conn}, nil
+func NewReader(pool *ConnectionPool) (*Searcher, error) {
+	return &Searcher{db: pool.conn}, nil
 }
 
-// SearchFullText implements storage.Reader interface
+// SearchFullText implements storage.FTSSearcher interface
 // Performs token-based full-text search using PostgreSQL's tsvector and plainto_tsquery
-func (r *Reader) SearchFullText(ctx context.Context, query *domain.FullTextQuery, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
+func (r *Searcher) SearchFullText(ctx context.Context, query *dquery.FullText, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
 	slog.Info("Executing pg full-text search", "query", query.Text, "has_cursor", cursor != nil, "size", size)
 
 	var globalMaxScore float64
@@ -103,8 +103,8 @@ func (r *Reader) SearchFullText(ctx context.Context, query *domain.FullTextQuery
 
 		searchResult := dto.ArticleSearchResult{
 			Article:         article,
-			Score:           utils.RoundFloat64(rawScore, domain.ScoreDecimalPlaces),
-			ScoreNormalized: utils.RoundFloat64(rawScore/globalMaxScore, domain.ScoreDecimalPlaces),
+			Score:           utils.RoundFloat64(rawScore, dquery.ScoreDecimalPlaces),
+			ScoreNormalized: utils.RoundFloat64(rawScore/globalMaxScore, dquery.ScoreDecimalPlaces),
 		}
 
 		articles = append(articles, searchResult)
@@ -137,15 +137,15 @@ func (r *Reader) SearchFullText(ctx context.Context, query *domain.FullTextQuery
 		Hits:         articles,
 		NextCursor:   nextCursor,
 		HasMore:      hasMore,
-		MaxScore:     utils.RoundFloat64(globalMaxScore, domain.ScoreDecimalPlaces),
-		PageMaxScore: utils.RoundFloat64(rawScores[0], domain.ScoreDecimalPlaces),
+		MaxScore:     utils.RoundFloat64(globalMaxScore, dquery.ScoreDecimalPlaces),
+		PageMaxScore: utils.RoundFloat64(rawScores[0], dquery.ScoreDecimalPlaces),
 		TotalMatches: count,
 	}, nil
 }
 
 // SearchBoolean implements storage.BooleanSearcher interface
 // Performs boolean search using PostgreSQL's tsquery with AND (&), OR (|), NOT (!) operators
-func (r *Reader) SearchBoolean(ctx context.Context, query *domain.BooleanQuery, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
+func (r *Searcher) SearchBoolean(ctx context.Context, query *dquery.BooleanQuery, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
 	slog.Info("Executing pg boolean search", "expression", query.Expression, "has_cursor", cursor != nil, "size", size)
 
 	// TODO: Implement boolean query parser
@@ -158,7 +158,7 @@ func (r *Reader) SearchBoolean(ctx context.Context, query *domain.BooleanQuery, 
 
 // SearchMatch implements storage.MatchSearcher interface
 // Performs single-field match query using PostgreSQL's tsvector
-func (r *Reader) SearchMatch(ctx context.Context, query *domain.MatchQuery, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
+func (r *Searcher) SearchMatch(ctx context.Context, query *dquery.Match, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
 	slog.Info("Executing pg match search",
 		"query", query.Query,
 		"field", query.Field,
@@ -259,8 +259,8 @@ func (r *Reader) SearchMatch(ctx context.Context, query *domain.MatchQuery, curs
 
 		searchResult := dto.ArticleSearchResult{
 			Article:         article,
-			Score:           utils.RoundFloat64(rawScore, domain.ScoreDecimalPlaces),
-			ScoreNormalized: utils.RoundFloat64(rawScore/globalMaxScore, domain.ScoreDecimalPlaces),
+			Score:           utils.RoundFloat64(rawScore, dquery.ScoreDecimalPlaces),
+			ScoreNormalized: utils.RoundFloat64(rawScore/globalMaxScore, dquery.ScoreDecimalPlaces),
 		}
 
 		articles = append(articles, searchResult)
@@ -293,15 +293,15 @@ func (r *Reader) SearchMatch(ctx context.Context, query *domain.MatchQuery, curs
 		Hits:         articles,
 		NextCursor:   nextCursor,
 		HasMore:      hasMore,
-		MaxScore:     utils.RoundFloat64(globalMaxScore, domain.ScoreDecimalPlaces),
-		PageMaxScore: utils.RoundFloat64(rawScores[0], domain.ScoreDecimalPlaces),
+		MaxScore:     utils.RoundFloat64(globalMaxScore, dquery.ScoreDecimalPlaces),
+		PageMaxScore: utils.RoundFloat64(rawScores[0], dquery.ScoreDecimalPlaces),
 		TotalMatches: count,
 	}, nil
 }
 
 // SearchMultiMatch implements storage.MultiMatchSearcher interface
 // Performs multi-field match query using PostgreSQL's weighted tsvector
-func (r *Reader) SearchMultiMatch(ctx context.Context, query *domain.MultiMatchQuery, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
+func (r *Searcher) SearchMultiMatch(ctx context.Context, query *dquery.MultiMatch, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
 	slog.Info("Executing pg multi_match search",
 		"query", query.Query,
 		"fields", query.Fields,
@@ -403,8 +403,8 @@ func (r *Reader) SearchMultiMatch(ctx context.Context, query *domain.MultiMatchQ
 
 		searchResult := dto.ArticleSearchResult{
 			Article:         article,
-			Score:           utils.RoundFloat64(rawScore, domain.ScoreDecimalPlaces),
-			ScoreNormalized: utils.RoundFloat64(rawScore/globalMaxScore, domain.ScoreDecimalPlaces),
+			Score:           utils.RoundFloat64(rawScore, dquery.ScoreDecimalPlaces),
+			ScoreNormalized: utils.RoundFloat64(rawScore/globalMaxScore, dquery.ScoreDecimalPlaces),
 		}
 
 		articles = append(articles, searchResult)
@@ -437,14 +437,14 @@ func (r *Reader) SearchMultiMatch(ctx context.Context, query *domain.MultiMatchQ
 		Hits:         articles,
 		NextCursor:   nextCursor,
 		HasMore:      hasMore,
-		MaxScore:     utils.RoundFloat64(globalMaxScore, domain.ScoreDecimalPlaces),
-		PageMaxScore: utils.RoundFloat64(rawScores[0], domain.ScoreDecimalPlaces),
+		MaxScore:     utils.RoundFloat64(globalMaxScore, dquery.ScoreDecimalPlaces),
+		PageMaxScore: utils.RoundFloat64(rawScores[0], dquery.ScoreDecimalPlaces),
 		TotalMatches: count,
 	}, nil
 }
 
 // Compile-time interface assertions
-var _ storage.Reader = (*Reader)(nil)
-var _ storage.BooleanSearcher = (*Reader)(nil)
-var _ storage.MatchSearcher = (*Reader)(nil)
-var _ storage.MultiMatchSearcher = (*Reader)(nil)
+var _ storage.FTSSearcher = (*Searcher)(nil)
+var _ storage.BooleanSearcher = (*Searcher)(nil)
+var _ storage.MatchSearcher = (*Searcher)(nil)
+var _ storage.MultiMatchSearcher = (*Searcher)(nil)

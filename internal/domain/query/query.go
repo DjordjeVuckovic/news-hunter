@@ -1,48 +1,50 @@
-package domain
+package query
 
-import "github.com/DjordjeVuckovic/news-hunter/internal/domain/operator"
+import (
+	"github.com/DjordjeVuckovic/news-hunter/internal/domain/operator"
+)
 
 // QueryType represents the search paradigm to use
-type QueryType string
+type Type string
 
 const (
 	// QueryTypeFullText: Token-based full-text search with relevance ranking
-	QueryTypeFullText QueryType = "full_text"
+	QueryTypeFullText Type = "full_text"
 
 	// QueryTypeMatch: Single-field match query (Elasticsearch terminology)
 	// ES: match query on single field
 	// PG: tsvector search on single field
-	QueryTypeMatch QueryType = "match"
+	QueryTypeMatch Type = "match"
 
 	// QueryTypeMultiMatch: Multi-field match query (Elasticsearch terminology)
 	// ES: multi_match query with field boosting
 	// PG: weighted tsvector search across multiple fields
-	QueryTypeMultiMatch QueryType = "multi_match"
+	QueryTypeMultiMatch Type = "multi_match"
 
 	// QueryTypeBoolean: Structured queries with logical operators (AND, OR, NOT)
-	QueryTypeBoolean QueryType = "boolean"
+	QueryTypeBoolean Type = "boolean"
 )
 
 // SearchQuery is the top-level query container
 // Only one query field should be non-nil based on Type
 type SearchQuery struct {
-	Type       QueryType        `json:"type"`
-	FullText   *FullTextQuery   `json:"full_text,omitempty"`
-	Match      *MatchQuery      `json:"match,omitempty"`
-	MultiMatch *MultiMatchQuery `json:"multi_match,omitempty"`
-	Boolean    *BooleanQuery    `json:"boolean,omitempty"`
+	Type       Type          `json:"type"`
+	FullText   *FullText     `json:"full_text,omitempty"`
+	Match      *Match        `json:"match,omitempty"`
+	MultiMatch *MultiMatch   `json:"multi_match,omitempty"`
+	Boolean    *BooleanQuery `json:"boolean,omitempty"`
 }
 
-// FullTextQuery: Token-based full-text search with relevance ranking
+// FullText: Token-based full-text search with relevance ranking
 // Analyzes and tokenizes text, performs stemming, handles stop words
-type FullTextQuery struct {
+type FullText struct {
 	Text string `json:"text" validate:"required,min=1"`
 
 	// FieldWeights: Optional field-specific boosting/weights
 	FieldWeights map[string]float64 `json:"field_weights,omitempty"`
 
 	// Language: Text search language configuration
-	Language SearchLanguage `json:"language,omitempty"`
+	Language Language `json:"language,omitempty"`
 
 	// Fields: Which fields to search
 	Fields []string `json:"fields,omitempty"`
@@ -81,10 +83,10 @@ var (
 	}
 )
 
-type FullTextQueryOption func(q *FullTextQuery)
+type FullTextQueryOption func(q *FullText)
 
-func NewFullTextQuery(text string, opts ...FullTextQueryOption) *FullTextQuery {
-	q := &FullTextQuery{
+func NewFullTextQuery(text string, opts ...FullTextQueryOption) *FullText {
+	q := &FullText{
 		Text: text,
 	}
 
@@ -97,9 +99,9 @@ func NewFullTextQuery(text string, opts ...FullTextQueryOption) *FullTextQuery {
 	return qBase
 }
 
-// WithDefaults returns a copy of FullTextQuery with default values applied
-func (q *FullTextQuery) WithDefaults() *FullTextQuery {
-	result := &FullTextQuery{
+// WithDefaults returns a copy of FullText with default values applied
+func (q *FullText) WithDefaults() *FullText {
+	result := &FullText{
 		Text:         q.Text,
 		FieldWeights: q.FieldWeights,
 		Language:     q.Language,
@@ -107,7 +109,7 @@ func (q *FullTextQuery) WithDefaults() *FullTextQuery {
 	}
 
 	if result.Language == "" {
-		result.Language = DefaultSearchLanguage
+		result.Language = DefaultLanguage
 	}
 
 	if len(result.Fields) == 0 {
@@ -125,15 +127,15 @@ func (q *FullTextQuery) WithDefaults() *FullTextQuery {
 }
 
 // GetLanguage returns the language with default fallback
-func (q *FullTextQuery) GetLanguage() SearchLanguage {
+func (q *FullText) GetLanguage() Language {
 	if q.Language == "" {
-		return DefaultSearchLanguage
+		return DefaultLanguage
 	}
 	return q.Language
 }
 
 // GetFields returns the fields with default fallback
-func (q *FullTextQuery) GetFields() []string {
+func (q *FullText) GetFields() []string {
 	if len(q.Fields) == 0 {
 		return DefaultFields
 	}
@@ -141,7 +143,7 @@ func (q *FullTextQuery) GetFields() []string {
 }
 
 // GetFieldWeight returns the weight for a specific field, or 1.0 if not specified
-func (q *FullTextQuery) GetFieldWeight(field string) float64 {
+func (q *FullText) GetFieldWeight(field string) float64 {
 	if len(q.FieldWeights) == 0 {
 		return 1.0
 	}
@@ -151,7 +153,7 @@ func (q *FullTextQuery) GetFieldWeight(field string) float64 {
 	return 1.0
 }
 
-// MatchQuery: Single-field match query (Elasticsearch terminology)
+// Match: Single-field match query (Elasticsearch terminology)
 // Performs analyzed full-text search on a single field with relevance scoring
 //
 // Elasticsearch: Translates to {"match": {"field": {"query": "text"}}}
@@ -160,7 +162,7 @@ func (q *FullTextQuery) GetFieldWeight(field string) float64 {
 // Example:
 //
 //	{"field": "title", "query": "climate change", "operator": "and"}
-type MatchQuery struct {
+type Match struct {
 	// Query: The text to search for (analyzed and tokenized)
 	Query string `json:"query" validate:"required,min=1"`
 
@@ -168,7 +170,7 @@ type MatchQuery struct {
 	Field string `json:"field" validate:"required"`
 
 	// Language: Text search language configuration
-	Language SearchLanguage `json:"language,omitempty"`
+	Language Language `json:"language,omitempty"`
 
 	// Operator: How to combine multiple terms
 	// Default: operator.Or
@@ -182,28 +184,28 @@ type MatchQuery struct {
 }
 
 // GetLanguage returns the language with default fallback
-func (q *MatchQuery) GetLanguage() SearchLanguage {
+func (q *Match) GetLanguage() Language {
 	if q.Language == "" {
-		return DefaultSearchLanguage
+		return DefaultLanguage
 	}
 	return q.Language
 }
 
 // GetOperator returns the operator with default fallback
-func (q *MatchQuery) GetOperator() operator.Operator {
+func (q *Match) GetOperator() operator.Operator {
 	if q.Operator == "" {
 		return operator.Default
 	}
 	return q.Operator
 }
 
-type MatchQueryOption func(q *MatchQuery)
+type MatchQueryOption func(q *Match)
 
-func NewMatchQuery(field, query string, opts ...MatchQueryOption) *MatchQuery {
-	q := &MatchQuery{
+func NewMatch(field, query string, opts ...MatchQueryOption) *Match {
+	q := &Match{
 		Field:    field,
 		Query:    query,
-		Language: DefaultSearchLanguage,
+		Language: DefaultLanguage,
 		Operator: operator.Default,
 	}
 
@@ -214,7 +216,7 @@ func NewMatchQuery(field, query string, opts ...MatchQueryOption) *MatchQuery {
 	return q
 }
 
-// MultiMatchQuery: Multi-field match query (Elasticsearch terminology)
+// MultiMatch: Multi-field match query (Elasticsearch terminology)
 // Performs analyzed full-text search across multiple fields with per-field boosting
 //
 // Elasticsearch: Translates to {"multi_match": {"query": "text", "fields": ["title^3", "content"]}}
@@ -223,7 +225,7 @@ func NewMatchQuery(field, query string, opts ...MatchQueryOption) *MatchQuery {
 // Example:
 //
 //	{"query": "climate change", "fields": ["title", "content"], "field_weights": {"title": 3.0, "content": 1.0}}
-type MultiMatchQuery struct {
+type MultiMatch struct {
 	// Query: The text to search for (analyzed and tokenized)
 	Query string `json:"query" validate:"required,min=1"`
 
@@ -236,24 +238,24 @@ type MultiMatchQuery struct {
 	FieldWeights map[string]float64 `json:"field_weights,omitempty"`
 
 	// Language: Text search language configuration
-	Language SearchLanguage `json:"language,omitempty"`
+	Language Language `json:"language,omitempty"`
 
 	// Operator: How to combine multiple terms
 	// Default: operator.Or
 	Operator operator.Operator `json:"operator,omitempty"`
 }
-type MultiMatchQueryOption func(q *MultiMatchQuery)
+type MultiMatchQueryOption func(q *MultiMatch)
 
 func WithMultiMatchFieldWeights(weights map[string]float64) MultiMatchQueryOption {
-	return func(q *MultiMatchQuery) {
+	return func(q *MultiMatch) {
 		q.FieldWeights = weights
 	}
 }
-func NewMultiMatchQuery(query string, fields []string, opts ...MultiMatchQueryOption) *MultiMatchQuery {
-	q := &MultiMatchQuery{
+func NewMultiMatchQuery(query string, fields []string, opts ...MultiMatchQueryOption) *MultiMatch {
+	q := &MultiMatch{
 		Query:        query,
 		Fields:       fields,
-		Language:     DefaultSearchLanguage,
+		Language:     DefaultLanguage,
 		Operator:     operator.Default,
 		FieldWeights: make(map[string]float64),
 	}
@@ -266,15 +268,15 @@ func NewMultiMatchQuery(query string, fields []string, opts ...MultiMatchQueryOp
 }
 
 // GetLanguage returns the language with default fallback
-func (q *MultiMatchQuery) GetLanguage() SearchLanguage {
+func (q *MultiMatch) GetLanguage() Language {
 	if q.Language == "" {
-		return DefaultSearchLanguage
+		return DefaultLanguage
 	}
 	return q.Language
 }
 
 // GetFields returns the fields with default fallback
-func (q *MultiMatchQuery) GetFields() []string {
+func (q *MultiMatch) GetFields() []string {
 	if len(q.Fields) == 0 {
 		return DefaultFields
 	}
@@ -282,7 +284,7 @@ func (q *MultiMatchQuery) GetFields() []string {
 }
 
 // GetFieldWeight returns the weight for a specific field, or 1.0 if not specified
-func (q *MultiMatchQuery) GetFieldWeight(field string) float64 {
+func (q *MultiMatch) GetFieldWeight(field string) float64 {
 	if len(q.FieldWeights) == 0 {
 		return 1.0
 	}
@@ -293,7 +295,7 @@ func (q *MultiMatchQuery) GetFieldWeight(field string) float64 {
 }
 
 // GetOperator returns the operator with default fallback
-func (q *MultiMatchQuery) GetOperator() operator.Operator {
+func (q *MultiMatch) GetOperator() operator.Operator {
 	if q.Operator == "" {
 		return operator.Default
 	}

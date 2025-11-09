@@ -8,29 +8,30 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
+	"github.com/DjordjeVuckovic/news-hunter/internal/domain/document"
 	"github.com/elastic/go-elasticsearch/v8"
 	"github.com/elastic/go-elasticsearch/v8/esutil"
-	"github.com/elastic/go-elasticsearch/v8/typedapi/types"
 	"github.com/google/uuid"
 )
 
-type Storer struct {
-	client    *elasticsearch.TypedClient
-	indexName string
-	config    ClientConfig
+type Indexer struct {
+	client       *elasticsearch.TypedClient
+	indexName    string
+	config       ClientConfig
+	indexBuilder *IndexBuilder
 }
 
-func NewStorer(ctx context.Context, config ClientConfig) (*Storer, error) {
+func NewIndexer(ctx context.Context, config ClientConfig) (*Indexer, error) {
 	client, err := newClient(config)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Elasticsearch client: %w", err)
 	}
-	storer := &Storer{
-		client:    client,
-		indexName: config.IndexName,
-		config:    config,
+	storer := &Indexer{
+		client:       client,
+		indexName:    config.IndexName,
+		config:       config,
+		indexBuilder: NewIndexBuilder(),
 	}
 
 	if err := storer.EnsureIndex(ctx); err != nil {
@@ -40,8 +41,8 @@ func NewStorer(ctx context.Context, config ClientConfig) (*Storer, error) {
 	return storer, nil
 }
 
-func (e *Storer) Save(ctx context.Context, article domain.Article) (uuid.UUID, error) {
-	doc := e.mapToESDocument(article)
+func (e *Indexer) Save(ctx context.Context, article document.Article) (uuid.UUID, error) {
+	doc := e.indexBuilder.mapToESDocument(article)
 
 	res, err := e.client.Index(e.indexName).Id(doc.ID).Document(doc).Do(ctx)
 	if err != nil {
@@ -57,7 +58,7 @@ func (e *Storer) Save(ctx context.Context, article domain.Article) (uuid.UUID, e
 	return articleID, nil
 }
 
-func (e *Storer) SaveBulk(ctx context.Context, articles []domain.Article) error {
+func (e *Indexer) SaveBulk(ctx context.Context, articles []document.Article) error {
 	if len(articles) == 0 {
 		return nil
 	}
@@ -77,7 +78,7 @@ func (e *Storer) SaveBulk(ctx context.Context, articles []domain.Article) error 
 	var successful, failed int64
 
 	for _, article := range articles {
-		doc := e.mapToESDocument(article)
+		doc := e.indexBuilder.mapToESDocument(article)
 
 		docBytes, err := json.Marshal(doc)
 		if err != nil {
@@ -129,30 +130,7 @@ func (e *Storer) SaveBulk(ctx context.Context, articles []domain.Article) error 
 	return nil
 }
 
-func (e *Storer) mapToESDocument(article domain.Article) Document {
-	if article.ID == uuid.Nil {
-		article.ID = uuid.New()
-	}
-	return Document{
-		ID:          article.ID.String(),
-		Title:       article.Title,
-		Subtitle:    article.Subtitle,
-		Description: article.Description,
-		Content:     article.Content,
-		Author:      article.Author,
-		URL:         article.URL.String(),
-		Language:    article.Language,
-		CreatedAt:   article.CreatedAt,
-		SourceId:    article.Metadata.SourceId,
-		SourceName:  article.Metadata.SourceName,
-		PublishedAt: article.Metadata.PublishedAt,
-		Category:    article.Metadata.Category,
-		ImportedAt:  article.Metadata.ImportedAt,
-		IndexedAt:   time.Now(),
-	}
-}
-
-func (e *Storer) EnsureIndex(ctx context.Context) error {
+func (e *Indexer) EnsureIndex(ctx context.Context) error {
 	existsRes, err := e.client.Indices.Exists(e.indexName).Do(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to check if index exists: %w", err)
@@ -163,35 +141,9 @@ func (e *Storer) EnsureIndex(ctx context.Context) error {
 		return nil
 	}
 
-	settings := types.IndexSettings{
-		Analysis: &types.IndexSettingsAnalysis{
-			Analyzer: map[string]types.Analyzer{
-				"multilingual_analyzer": types.StandardAnalyzer{
-					Stopwords: []string{"_none_"},
-				},
-			},
-		},
-	}
+	settings := e.indexBuilder.buildSettings()
 
-	mappings := types.TypeMapping{
-		Properties: map[string]types.Property{
-			"id":           types.NewKeywordProperty(),
-			"title":        e.createTextPropertyWithKeyword("multilingual_analyzer"),
-			"subtitle":     e.createTextProperty("multilingual_analyzer"),
-			"description":  e.createTextProperty("multilingual_analyzer"),
-			"content":      e.createTextProperty("multilingual_analyzer"),
-			"author":       e.createTextPropertyWithKeyword(""),
-			"url":          types.NewKeywordProperty(),
-			"language":     types.NewKeywordProperty(),
-			"created_at":   types.NewDateProperty(),
-			"source_id":    types.NewKeywordProperty(),
-			"source_name":  e.createTextPropertyWithKeyword(""),
-			"published_at": types.NewDateProperty(),
-			"category":     types.NewKeywordProperty(),
-			"imported_at":  types.NewDateProperty(),
-			"indexed_at":   types.NewDateProperty(),
-		},
-	}
+	mappings := e.indexBuilder.buildMapping()
 
 	createRes, err := e.client.Indices.Create(e.indexName).
 		Settings(&settings).
@@ -207,23 +159,4 @@ func (e *Storer) EnsureIndex(ctx context.Context) error {
 
 	slog.Info("Index created successfully", "index", e.indexName)
 	return nil
-}
-
-func (e *Storer) createTextProperty(analyzer string) types.Property {
-	textProp := types.NewTextProperty()
-	if analyzer != "" {
-		textProp.Analyzer = &analyzer
-	}
-	return textProp
-}
-
-func (e *Storer) createTextPropertyWithKeyword(analyzer string) types.Property {
-	textProp := types.NewTextProperty()
-	if analyzer != "" {
-		textProp.Analyzer = &analyzer
-	}
-	textProp.Fields = map[string]types.Property{
-		"keyword": types.NewKeywordProperty(),
-	}
-	return textProp
 }

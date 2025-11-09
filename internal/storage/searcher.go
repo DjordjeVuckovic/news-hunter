@@ -3,7 +3,7 @@ package storage
 import (
 	"context"
 
-	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
+	"github.com/DjordjeVuckovic/news-hunter/internal/domain/query"
 	"github.com/DjordjeVuckovic/news-hunter/internal/dto"
 )
 
@@ -18,14 +18,14 @@ type SearchResult struct {
 	TotalMatches int64                     `json:"total_matches,omitempty"`
 }
 
-// Reader is the base interface that ALL storage backends must implement
+// FTSSearcher is the base interface that ALL storage backends must implement
 // Provides full-text search capability
-type Reader interface {
+type FTSSearcher interface {
 	// SearchFullText performs token-based full-text search with relevance ranking
 	// cursor: optional decoded cursor from previous result (nil for first page)
 	// size: number of results to return per page
 	// Returns domain objects with domain cursor (not encoded string)
-	SearchFullText(ctx context.Context, query *domain.FullTextQuery, cursor *dto.Cursor, size int) (*SearchResult, error)
+	SearchFullText(ctx context.Context, query *query.FullText, cursor *dto.Cursor, size int) (*SearchResult, error)
 }
 
 // MatchSearcher is an optional interface for single-field match queries
@@ -34,7 +34,7 @@ type MatchSearcher interface {
 	// SearchMatch performs single-field match query with relevance scoring
 	// Elasticsearch: Uses match query on specified field
 	// PostgreSQL: Uses weighted tsvector on specified field
-	SearchMatch(ctx context.Context, query *domain.MatchQuery, cursor *dto.Cursor, size int) (*SearchResult, error)
+	SearchMatch(ctx context.Context, query *query.Match, cursor *dto.Cursor, size int) (*SearchResult, error)
 }
 
 // MultiMatchSearcher is an optional interface for multi-field match queries
@@ -43,7 +43,7 @@ type MultiMatchSearcher interface {
 	// SearchMultiMatch performs multi-field match query with per-field boosting
 	// Elasticsearch: Uses multi_match query with field weights
 	// PostgreSQL: Uses weighted tsvector across multiple fields
-	SearchMultiMatch(ctx context.Context, query *domain.MultiMatchQuery, cursor *dto.Cursor, size int) (*SearchResult, error)
+	SearchMultiMatch(ctx context.Context, query *query.MultiMatch, cursor *dto.Cursor, size int) (*SearchResult, error)
 }
 
 // BooleanSearcher is an optional interface for boolean search capabilities
@@ -52,5 +52,5 @@ type BooleanSearcher interface {
 	// SearchBoolean performs boolean search with logical operators
 	// Supports AND, OR, NOT operators with grouping via parentheses
 	// Example: "climate AND (change OR warming) AND NOT politics"
-	SearchBoolean(ctx context.Context, query *domain.BooleanQuery, cursor *dto.Cursor, size int) (*SearchResult, error)
+	SearchBoolean(ctx context.Context, query *query.BooleanQuery, cursor *dto.Cursor, size int) (*SearchResult, error)
 }

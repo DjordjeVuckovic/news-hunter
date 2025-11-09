@@ -3,8 +3,8 @@ package pg
 import (
 	"fmt"
 
-	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
 	"github.com/DjordjeVuckovic/news-hunter/internal/domain/operator"
+	"github.com/DjordjeVuckovic/news-hunter/internal/domain/query"
 )
 
 // buildSearchVector returns the tsvector expression for full-text search
@@ -15,7 +15,7 @@ import (
 //   - author: 'D' (weight 0.1)
 //
 // The pre-computed column is GIN-indexed for fast searches.
-func buildSearchVector(fields []string, weights map[string]float64, lang domain.SearchLanguage) string {
+func buildSearchVector(fields []string, weights map[string]float64, lang query.Language) string {
 	// Always use pre-computed weighted search_vector
 	// It's pre-indexed and has field weights baked in
 	// Custom field weights are applied via ts_rank weights array instead
@@ -25,9 +25,9 @@ func buildSearchVector(fields []string, weights map[string]float64, lang domain.
 // buildTsQuery constructs a PostgreSQL tsquery expression based on operator
 // paramNum: The parameter number to use ($1, $2, etc.)
 // Returns: "plainto_tsquery('english'::regconfig, $1)" or "websearch_to_tsquery(...)"
-func buildTsQuery(op operator.Operator, lang domain.SearchLanguage, paramNum int) string {
+func buildTsQuery(op operator.Operator, lang query.Language, paramNum int) string {
 	if lang == "" {
-		lang = domain.LanguageEnglish
+		lang = query.LanguageEnglish
 	}
 
 	if op.IsOr() {
@@ -46,7 +46,7 @@ func buildTsQuery(op operator.Operator, lang domain.SearchLanguage, paramNum int
 // PostgreSQL's default weight values are: A=1.0, B=0.4, C=0.2, D=0.1
 // If custom FieldWeights are specified, we override these defaults via the weights array
 // Returns: "ts_rank('{3.0, 2.0, 1.0, 0.1}', search_vector, query)" or default "ts_rank(search_vector, query)"
-func buildRankExpression(fields []string, weights map[string]float64, lang domain.SearchLanguage, op operator.Operator, paramNum int) string {
+func buildRankExpression(fields []string, weights map[string]float64, lang query.Language, op operator.Operator, paramNum int) string {
 	vectorExpr := buildSearchVector(fields, weights, lang)
 	queryExpr := buildTsQuery(op, lang, paramNum)
 
@@ -86,7 +86,7 @@ func buildRankExpression(fields []string, weights map[string]float64, lang domai
 
 // buildTsWhereClause constructs the WHERE clause for full-text search
 // Always uses the pre-computed weighted search_vector with GIN index
-func buildTsWhereClause(fields []string, weights map[string]float64, lang domain.SearchLanguage, op operator.Operator, paramNum int) string {
+func buildTsWhereClause(fields []string, weights map[string]float64, lang query.Language, op operator.Operator, paramNum int) string {
 	vectorExpr := buildSearchVector(fields, weights, lang) // Returns "search_vector"
 	queryExpr := buildTsQuery(op, lang, paramNum)
 

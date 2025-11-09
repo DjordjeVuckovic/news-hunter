@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
+	dquery "github.com/DjordjeVuckovic/news-hunter/internal/domain/query"
 	"github.com/DjordjeVuckovic/news-hunter/internal/dto"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
 	"github.com/DjordjeVuckovic/news-hunter/pkg/utils"
@@ -17,27 +17,27 @@ import (
 	"github.com/google/uuid"
 )
 
-type Reader struct {
+type Searcher struct {
 	client    *elasticsearch.TypedClient
 	indexName string
 }
 
-func NewReader(config ClientConfig) (*Reader, error) {
+func NewSeacher(config ClientConfig) (*Searcher, error) {
 	client, err := newClient(config)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Elasticsearch client: %w", err)
 	}
 
-	return &Reader{
+	return &Searcher{
 		client:    client,
 		indexName: config.IndexName,
 	}, nil
 }
 
-// SearchFullText implements storage.Reader interface
+// SearchFullText implements storage.FTSSearcher interface
 // Performs token-based full-text search using Elasticsearch's multi_match query with BM25
-func (r *Reader) SearchFullText(ctx context.Context, query *domain.FullTextQuery, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
+func (r *Searcher) SearchFullText(ctx context.Context, query *dquery.FullText, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
 	// Extract query parameters with defaults
 	fields := query.GetFields()
 	queryOperator := query.Operator
@@ -121,9 +121,9 @@ func (r *Reader) SearchFullText(ctx context.Context, query *domain.FullTextQuery
 		return nil, fmt.Errorf("failed to execute search: %w", err)
 	}
 
-	maxScore := domain.CalcSafeScore((*float64)(res.Hits.MaxScore))
+	maxScore := dquery.CalcSafeScore((*float64)(res.Hits.MaxScore))
 
-	articles, rawScores, err := r.mapToDomain(res.Hits.Hits, maxScore)
+	articles, rawScores, err := r.mapToResult(res.Hits.Hits, maxScore)
 	if err != nil {
 		return nil, fmt.Errorf("failed to map search results to domain: %w", err)
 	}
@@ -152,13 +152,13 @@ func (r *Reader) SearchFullText(ctx context.Context, query *domain.FullTextQuery
 		Hits:         articles,
 		NextCursor:   nextCursor,
 		HasMore:      hasMore,
-		MaxScore:     utils.RoundFloat64(float64(*res.Hits.MaxScore), domain.ScoreDecimalPlaces),
-		PageMaxScore: utils.RoundFloat64(rawScores[0], domain.ScoreDecimalPlaces),
+		MaxScore:     utils.RoundFloat64(float64(*res.Hits.MaxScore), dquery.ScoreDecimalPlaces),
+		PageMaxScore: utils.RoundFloat64(rawScores[0], dquery.ScoreDecimalPlaces),
 		TotalMatches: res.Hits.Total.Value,
 	}, nil
 }
 
-func (r *Reader) mapToDomain(hits []types.Hit, maxScore float64) ([]dto.ArticleSearchResult, []float64, error) {
+func (r *Searcher) mapToResult(hits []types.Hit, maxScore float64) ([]dto.ArticleSearchResult, []float64, error) {
 	if hits == nil {
 		return make([]dto.ArticleSearchResult, 0), make([]float64, 0), nil
 	}
@@ -167,7 +167,7 @@ func (r *Reader) mapToDomain(hits []types.Hit, maxScore float64) ([]dto.ArticleS
 	var rawScores []float64
 
 	for _, hit := range hits {
-		var doc Document
+		var doc ArticleDocument
 		if err := json.Unmarshal(hit.Source_, &doc); err != nil {
 			return nil, nil, fmt.Errorf("failed to unmarshal document: %w", err)
 		}
@@ -209,7 +209,7 @@ func (r *Reader) mapToDomain(hits []types.Hit, maxScore float64) ([]dto.ArticleS
 
 // SearchBoolean implements storage.BooleanSearcher interface
 // Performs boolean search using Elasticsearch's bool query with must, should, must_not clauses
-func (r *Reader) SearchBoolean(ctx context.Context, query *domain.BooleanQuery, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
+func (r *Searcher) SearchBoolean(ctx context.Context, query *dquery.BooleanQuery, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
 	slog.Info("Executing es boolean search", "expression", query.Expression, "has_cursor", cursor != nil, "size", size)
 
 	// TODO: Implement boolean query parser
@@ -221,7 +221,7 @@ func (r *Reader) SearchBoolean(ctx context.Context, query *domain.BooleanQuery, 
 
 // SearchMatch implements storage.MatchSearcher interface
 // Performs single-field match query using Elasticsearch's match query
-func (r *Reader) SearchMatch(ctx context.Context, query *domain.MatchQuery, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
+func (r *Searcher) SearchMatch(ctx context.Context, query *dquery.Match, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
 	slog.Info("Executing es match search",
 		"query", query.Query,
 		"field", query.Field,
@@ -294,9 +294,9 @@ func (r *Reader) SearchMatch(ctx context.Context, query *domain.MatchQuery, curs
 		return nil, fmt.Errorf("failed to execute match search: %w", err)
 	}
 
-	maxScore := domain.CalcSafeScore((*float64)(res.Hits.MaxScore))
+	maxScore := dquery.CalcSafeScore((*float64)(res.Hits.MaxScore))
 
-	articles, rawScores, err := r.mapToDomain(res.Hits.Hits, maxScore)
+	articles, rawScores, err := r.mapToResult(res.Hits.Hits, maxScore)
 	if err != nil {
 		return nil, fmt.Errorf("failed to map search results to domain: %w", err)
 	}
@@ -325,15 +325,15 @@ func (r *Reader) SearchMatch(ctx context.Context, query *domain.MatchQuery, curs
 		Hits:         articles,
 		NextCursor:   nextCursor,
 		HasMore:      hasMore,
-		MaxScore:     utils.RoundFloat64(float64(*res.Hits.MaxScore), domain.ScoreDecimalPlaces),
-		PageMaxScore: utils.RoundFloat64(rawScores[0], domain.ScoreDecimalPlaces),
+		MaxScore:     utils.RoundFloat64(float64(*res.Hits.MaxScore), dquery.ScoreDecimalPlaces),
+		PageMaxScore: utils.RoundFloat64(rawScores[0], dquery.ScoreDecimalPlaces),
 		TotalMatches: res.Hits.Total.Value,
 	}, nil
 }
 
 // SearchMultiMatch implements storage.MultiMatchSearcher interface
 // Performs multi-field match query using Elasticsearch's multi_match query
-func (r *Reader) SearchMultiMatch(ctx context.Context, query *domain.MultiMatchQuery, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
+func (r *Searcher) SearchMultiMatch(ctx context.Context, query *dquery.MultiMatch, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
 	slog.Info("Executing es multi_match search",
 		"query", query.Query,
 		"fields", query.Fields,
@@ -409,9 +409,9 @@ func (r *Reader) SearchMultiMatch(ctx context.Context, query *domain.MultiMatchQ
 		return nil, fmt.Errorf("failed to execute multi_match search: %w", err)
 	}
 
-	maxScore := domain.CalcSafeScore((*float64)(res.Hits.MaxScore))
+	maxScore := dquery.CalcSafeScore((*float64)(res.Hits.MaxScore))
 
-	articles, rawScores, err := r.mapToDomain(res.Hits.Hits, maxScore)
+	articles, rawScores, err := r.mapToResult(res.Hits.Hits, maxScore)
 	if err != nil {
 		return nil, fmt.Errorf("failed to map search results to domain: %w", err)
 	}
@@ -440,14 +440,14 @@ func (r *Reader) SearchMultiMatch(ctx context.Context, query *domain.MultiMatchQ
 		Hits:         articles,
 		NextCursor:   nextCursor,
 		HasMore:      hasMore,
-		MaxScore:     utils.RoundFloat64(float64(*res.Hits.MaxScore), domain.ScoreDecimalPlaces),
-		PageMaxScore: utils.RoundFloat64(rawScores[0], domain.ScoreDecimalPlaces),
+		MaxScore:     utils.RoundFloat64(float64(*res.Hits.MaxScore), dquery.ScoreDecimalPlaces),
+		PageMaxScore: utils.RoundFloat64(rawScores[0], dquery.ScoreDecimalPlaces),
 		TotalMatches: res.Hits.Total.Value,
 	}, nil
 }
 
 // Compile-time interface assertions
-var _ storage.Reader = (*Reader)(nil)
-var _ storage.BooleanSearcher = (*Reader)(nil)
-var _ storage.MatchSearcher = (*Reader)(nil)
-var _ storage.MultiMatchSearcher = (*Reader)(nil)
+var _ storage.FTSSearcher = (*Searcher)(nil)
+var _ storage.BooleanSearcher = (*Searcher)(nil)
+var _ storage.MatchSearcher = (*Searcher)(nil)
+var _ storage.MultiMatchSearcher = (*Searcher)(nil)

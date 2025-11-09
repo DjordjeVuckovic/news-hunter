@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/DjordjeVuckovic/news-hunter/internal/collector"
-	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
+	"github.com/DjordjeVuckovic/news-hunter/internal/domain/document"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
 )
 
@@ -33,8 +33,8 @@ type PipelineConfig struct {
 
 // ArticlePipeline handles article processing from collection to storage
 type ArticlePipeline struct {
-	collector collector.Collector[domain.Article]
-	storer    storage.Storer
+	collector collector.Collector[document.Article]
+	storer    storage.Indexer
 	config    *PipelineConfig
 }
 
@@ -59,7 +59,7 @@ func WithConfig(config *PipelineConfig) PipelineOption {
 }
 
 // NewPipeline creates a new generic article processing pipeline
-func NewPipeline(c collector.Collector[domain.Article], storer storage.Storer, opts ...PipelineOption) *ArticlePipeline {
+func NewPipeline(c collector.Collector[document.Article], storer storage.Indexer, opts ...PipelineOption) *ArticlePipeline {
 	p := &ArticlePipeline{
 		collector: c,
 		storer:    storer,
@@ -113,7 +113,7 @@ func (p *ArticlePipeline) Run(ctx context.Context) error {
 }
 
 // processBasic handles individual article processing
-func (p *ArticlePipeline) processBasic(ctx context.Context, results <-chan collector.Result[domain.Article]) error {
+func (p *ArticlePipeline) processBasic(ctx context.Context, results <-chan collector.Result[document.Article]) error {
 	processedCount := 0
 	errorCount := 0
 
@@ -162,8 +162,8 @@ func (p *ArticlePipeline) processBasic(ctx context.Context, results <-chan colle
 }
 
 // processBatch handles bulk article processing
-func (p *ArticlePipeline) processBatch(ctx context.Context, results <-chan collector.Result[domain.Article]) error {
-	var articles []domain.Article
+func (p *ArticlePipeline) processBatch(ctx context.Context, results <-chan collector.Result[document.Article]) error {
+	var articles []document.Article
 	processedCount := 0
 	errorCount := 0
 	batchCount := 0
@@ -256,9 +256,9 @@ func (p *ArticlePipeline) Stop() {
 	}
 
 	if p.storer != nil {
-		// Storer cleanup logic would go here if available
+		// Indexer cleanup logic would go here if available
 		p.storer = nil
-		slog.Debug("Storer cleaned up", "pipeline", p.config.Name)
+		slog.Debug("Indexer cleaned up", "pipeline", p.config.Name)
 	}
 
 	slog.Info("Pipeline stopped", "pipeline", p.config.Name)

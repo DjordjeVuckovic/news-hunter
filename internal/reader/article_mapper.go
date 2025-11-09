@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
+	"github.com/DjordjeVuckovic/news-hunter/internal/domain/document"
 	"github.com/DjordjeVuckovic/news-hunter/pkg/apis/datamapping"
 )
 
@@ -19,12 +19,12 @@ func NewArticleMapper(cfg *datamapping.DataMapper) *ArticleMapper {
 	}
 }
 
-func (m *ArticleMapper) Map(record map[string]string, _ *MappingOptions) (domain.Article, error) {
+func (m *ArticleMapper) Map(record map[string]string, _ *MappingOptions) (document.Article, error) {
 	if err := m.cfg.Validate(); err != nil {
-		return domain.Article{}, err
+		return document.Article{}, err
 	}
 
-	article := domain.Article{}
+	article := document.Article{}
 	val := reflect.ValueOf(&article).Elem()
 
 	for _, fm := range m.cfg.FieldMappings {
@@ -42,7 +42,7 @@ func (m *ArticleMapper) Map(record map[string]string, _ *MappingOptions) (domain
 			if err != nil {
 				if fm.Required {
 					slog.Error("failed to set nested field", "field", fm.Target, "error", err)
-					return domain.Article{}, err
+					return document.Article{}, err
 				} else {
 					slog.Warn("skipping optional nested field", "field", fm.Target, "error", err)
 					continue
@@ -56,7 +56,7 @@ func (m *ArticleMapper) Map(record map[string]string, _ *MappingOptions) (domain
 		if err != nil {
 			if fm.Required {
 				slog.Error("failed to set flat field", "field", fm.Target, "error", err)
-				return domain.Article{}, err
+				return document.Article{}, err
 			} else {
 				slog.Warn("skipping optional field", "field", fm.Target, "error", err)
 				continue

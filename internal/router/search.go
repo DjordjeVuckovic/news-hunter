@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"strconv"
 
-	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
+	dquery "github.com/DjordjeVuckovic/news-hunter/internal/domain/query"
 	"github.com/DjordjeVuckovic/news-hunter/internal/dto"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
 	"github.com/DjordjeVuckovic/news-hunter/pkg/pagination"
@@ -14,10 +14,10 @@ import (
 
 type SearchRouter struct {
 	e       *echo.Echo
-	storage storage.Reader
+	storage storage.FTSSearcher
 }
 
-func NewSearchRouter(e *echo.Echo, storage storage.Reader) *SearchRouter {
+func NewSearchRouter(e *echo.Echo, storage storage.FTSSearcher) *SearchRouter {
 	return &SearchRouter{
 		e:       e,
 		storage: storage,
@@ -85,7 +85,7 @@ func (r *SearchRouter) searchHandler(c echo.Context) error {
 		}
 	}
 
-	fullTextQuery := domain.NewFullTextQuery(query)
+	fullTextQuery := dquery.NewFullTextQuery(query)
 	searchResult, err := r.storage.SearchFullText(c.Request().Context(), fullTextQuery, cursor, sizeInt)
 	if err != nil {
 		slog.Error("Failed to execute full-text search", "error", err, "query", query)

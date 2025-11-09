@@ -10,8 +10,8 @@ import (
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage/pg"
 )
 
-// NewStorer creates a new storage.Storer based on the storage type
-func NewStorer(ctx context.Context, cfg StorageConfig) (storage.Storer, error) {
+// NewStorer creates a new storage.Indexer based on the storage type
+func NewStorer(ctx context.Context, cfg StorageConfig) (storage.Indexer, error) {
 	switch cfg.Type {
 	case storage.PG:
 		pgConfig := *cfg.Pg
@@ -21,26 +21,26 @@ func NewStorer(ctx context.Context, cfg StorageConfig) (storage.Storer, error) {
 			return nil, fmt.Errorf("failed to create PostgreSQL connection pool: %w", err)
 		}
 
-		return pg.NewStorer(pool)
+		return pg.NewIndexer(pool)
 
 	case storage.ES:
 		esConfig := *cfg.Es
 
-		return es.NewStorer(ctx, esConfig)
+		return es.NewIndexer(ctx, esConfig)
 
 	case storage.Solr:
 		return nil, fmt.Errorf("solr storer not yet implemented")
 
 	case storage.InMem:
-		return in_mem.NewInMemStorer(), nil
+		return in_mem.NewInMemIndexer(), nil
 
 	default:
 		return nil, fmt.Errorf(string(storage.ErrUnsupportedStorer), cfg.Type)
 	}
 }
 
-// NewReader creates a new storage.Reader based on the storage type
-func NewReader(ctx context.Context, cfg StorageConfig) (storage.Reader, error) {
+// NewReader creates a new storage.FTSSearcher based on the storage type
+func NewReader(ctx context.Context, cfg StorageConfig) (storage.FTSSearcher, error) {
 	switch cfg.Type {
 	case storage.PG:
 		pgConfig := *cfg.Pg
@@ -55,13 +55,13 @@ func NewReader(ctx context.Context, cfg StorageConfig) (storage.Reader, error) {
 	case storage.ES:
 		esConfig := *cfg.Es
 
-		return es.NewReader(esConfig)
+		return es.NewSeacher(esConfig)
 
 	case storage.Solr:
 		return nil, fmt.Errorf("solr reader not yet implemented")
 
 	case storage.InMem:
-		// TODO: Implement InMem Reader when needed
+		// TODO: Implement InMem FTSSearcher when needed
 		return nil, fmt.Errorf("inmem reader not yet implemented")
 
 	default:

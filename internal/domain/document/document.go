@@ -1,4 +1,4 @@
-package domain
+package document
 
 type WeightedDocument interface {
 	ContainField(field string) bool
