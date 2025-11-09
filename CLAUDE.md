@@ -173,3 +173,79 @@ Commands expect environment variables (typically in `.env` files):
 Tests are located alongside source files with `_test.go` suffix. Use standard Go testing patterns:
 - `go test ./...` - Run all tests
 - `go test -v ./internal/reader` - Run specific package tests with verbose output
+
+## Design Principles
+
+### Domain-Driven Design (DDD)
+
+The project follows Domain-Driven Design principles where valuable and appropriate:
+
+**Value Objects**:
+- Use value objects for domain concepts with rich behavior and validation
+- Example: `operator.Operator` - encapsulates AND/OR logic with validation and behavior
+- Value objects are immutable and validated at creation
+- Provide meaningful methods like `IsAnd()`, `IsOr()` rather than string comparisons
+- **Idiomatic Go**: Place value objects in dedicated packages for clean namespacing
+
+**When to use Value Objects**:
+- Domain concepts with validation rules (e.g., operator.Operator, domain.SearchLanguage)
+- Concepts that should be immutable once created
+- Types that benefit from type safety over primitive types (no string mistakes)
+- Concepts with behavior that belongs to the value itself
+
+**Package Structure for Value Objects**:
+Follow Go's idiomatic approach of using packages as namespaces:
+- `internal/domain/operator/` - Contains `operator.Operator` type
+- Usage: `operator.And`, `operator.Or` (not `OperatorAnd`, `OperatorOr`)
+- Mirrors Go stdlib (`time.Monday`) and popular libraries (`http.MethodGet`)
+
+**Example - Operator Value Object**:
+```go
+// ✅ Good: Dedicated package with clean namespacing
+// File: internal/domain/operator/operator.go
+package operator
+
+type Operator string
+
+const (
+    And Operator = "and"  // Clean: operator.And
+    Or  Operator = "or"   // Clean: operator.Or
+)
+
+func New(op string) (Operator, error) {
+    switch op {
+    case "and", "AND":
+        return And, nil
+    case "or", "OR", "":
+        return Or, nil
+    default:
+        return "", fmt.Errorf("invalid operator: %q", op)
+    }
+}
+
+func (o Operator) IsAnd() bool { return o == And }
+func (o Operator) IsOr() bool { return o == Or }
+
+// Usage in domain types:
+query.Operator = operator.And  // ✅ Clean and idiomatic
+
+// ❌ Bad: All in domain package with redundant prefixes
+const OperatorAnd = "and"  // Would be domain.OperatorAnd - redundant!
+```
+
+**Ubiquitous Language**:
+- Use Elasticsearch terminology as the ubiquitous language for search concepts
+- Rationale: ES is the industry standard, aids benchmarking clarity, helps with adoption
+- General search concepts (fuzziness, operators) are preferred over engine-specific features
+- Document engine-specific limitations (e.g., "PostgreSQL: Ignored", "Elasticsearch: Full support")
+
+**Engine Neutrality**:
+- Avoid exposing engine-specific features in domain layer when they don't translate
+- Example: Removed `tie_breaker` (ES-only) from MultiMatchQuery domain model
+- Keep general concepts like `fuzziness` with documentation of engine support
+- Let storage implementations handle engine-specific optimizations
+
+**Domain Layer Purity**:
+- Domain types should represent search concepts, not implementation details
+- Storage layer translates domain queries to engine-specific queries
+- Domain validation ensures type safety before reaching storage layer

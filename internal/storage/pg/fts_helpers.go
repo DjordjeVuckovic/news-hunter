@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
+	"github.com/DjordjeVuckovic/news-hunter/internal/domain/operator"
 )
 
 // buildSearchVector returns the tsvector expression for full-text search
@@ -23,23 +24,21 @@ func buildSearchVector(fields []string, weights map[string]float64, lang domain.
 
 // buildTsQuery constructs a PostgreSQL tsquery expression based on operator
 // paramNum: The parameter number to use ($1, $2, etc.)
-// Returns: "plainto_tsquery('english'::regconfig, $1)" or "to_tsquery(...)"
-func buildTsQuery(operator string, lang domain.SearchLanguage, paramNum int) string {
+// Returns: "plainto_tsquery('english'::regconfig, $1)" or "websearch_to_tsquery(...)"
+func buildTsQuery(op operator.Operator, lang domain.SearchLanguage, paramNum int) string {
 	if lang == "" {
 		lang = domain.LanguageEnglish
 	}
 
-	switch operator {
-	case "and":
-		// to_tsquery requires & between terms, but we'll use websearch_to_tsquery
-		// which understands "climate change" as "climate & change" automatically
+	if op.IsOr() {
+		// websearch_to_tsquery treats space-separated terms as AND
+		// "climate change" -> "climate & change"
 		return fmt.Sprintf("websearch_to_tsquery('%s'::regconfig, $%d)", lang, paramNum)
-	case "or":
-		fallthrough
-	default:
-		// plainto_tsquery uses OR by default: "climate change" -> "climate | change"
-		return fmt.Sprintf("plainto_tsquery('%s'::regconfig, $%d)", lang, paramNum)
 	}
+
+	// plainto_tsquery uses AND by default
+	// "climate change" -> "climate | change"
+	return fmt.Sprintf("plainto_tsquery('%s'::regconfig, $%d)", lang, paramNum)
 }
 
 // buildRankExpression constructs a ts_rank expression with custom field weights
@@ -47,9 +46,9 @@ func buildTsQuery(operator string, lang domain.SearchLanguage, paramNum int) str
 // PostgreSQL's default weight values are: A=1.0, B=0.4, C=0.2, D=0.1
 // If custom FieldWeights are specified, we override these defaults via the weights array
 // Returns: "ts_rank('{3.0, 2.0, 1.0, 0.1}', search_vector, query)" or default "ts_rank(search_vector, query)"
-func buildRankExpression(fields []string, weights map[string]float64, lang domain.SearchLanguage, operator string, paramNum int) string {
+func buildRankExpression(fields []string, weights map[string]float64, lang domain.SearchLanguage, op operator.Operator, paramNum int) string {
 	vectorExpr := buildSearchVector(fields, weights, lang)
-	queryExpr := buildTsQuery(operator, lang, paramNum)
+	queryExpr := buildTsQuery(op, lang, paramNum)
 
 	// Map field names to PostgreSQL weight labels (A, B, C, D)
 	//   title → A (weights[0])
@@ -85,11 +84,11 @@ func buildRankExpression(fields []string, weights map[string]float64, lang domai
 	return fmt.Sprintf("ts_rank(%s, %s)", vectorExpr, queryExpr)
 }
 
-// buildWhereClause constructs the WHERE clause for full-text search
+// buildTsWhereClause constructs the WHERE clause for full-text search
 // Always uses the pre-computed weighted search_vector with GIN index
-func buildWhereClause(fields []string, weights map[string]float64, lang domain.SearchLanguage, operator string, paramNum int) string {
+func buildTsWhereClause(fields []string, weights map[string]float64, lang domain.SearchLanguage, op operator.Operator, paramNum int) string {
 	vectorExpr := buildSearchVector(fields, weights, lang) // Returns "search_vector"
-	queryExpr := buildTsQuery(operator, lang, paramNum)
+	queryExpr := buildTsQuery(op, lang, paramNum)
 
 	return fmt.Sprintf("%s @@ %s", vectorExpr, queryExpr)
 }

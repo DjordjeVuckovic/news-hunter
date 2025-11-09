@@ -28,6 +28,24 @@ type Reader interface {
 	SearchFullText(ctx context.Context, query *domain.FullTextQuery, cursor *dto.Cursor, size int) (*SearchResult, error)
 }
 
+// MatchSearcher is an optional interface for single-field match queries
+// Storage backends that support ES-style match queries should implement this
+type MatchSearcher interface {
+	// SearchMatch performs single-field match query with relevance scoring
+	// Elasticsearch: Uses match query on specified field
+	// PostgreSQL: Uses weighted tsvector on specified field
+	SearchMatch(ctx context.Context, query *domain.MatchQuery, cursor *dto.Cursor, size int) (*SearchResult, error)
+}
+
+// MultiMatchSearcher is an optional interface for multi-field match queries
+// Storage backends that support ES-style multi_match queries should implement this
+type MultiMatchSearcher interface {
+	// SearchMultiMatch performs multi-field match query with per-field boosting
+	// Elasticsearch: Uses multi_match query with field weights
+	// PostgreSQL: Uses weighted tsvector across multiple fields
+	SearchMultiMatch(ctx context.Context, query *domain.MultiMatchQuery, cursor *dto.Cursor, size int) (*SearchResult, error)
+}
+
 // BooleanSearcher is an optional interface for boolean search capabilities
 // Storage backends that support structured queries with AND, OR, NOT operators should implement this
 type BooleanSearcher interface {

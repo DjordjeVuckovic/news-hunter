@@ -13,6 +13,21 @@
 9. [Performance Tips](#performance-tips)
 
 ---
+## Introduction
+### Full-Text Search (FTS) vs Term-Level Queries
+ES Full-Text Query Family:
+- match - Single field FTS
+- multi_match - Multiple fields FTS
+- match_phrase - Phrase matching
+- match_phrase_prefix - Prefix phrase matching
+- query_string - Advanced with operators
+- simple_query_string - Simplified query_string
+
+NOT considered FTS (term-level):
+- term, terms - Exact matching (no analysis)
+- range, exists - Filtering
+- prefix, wildcard, regexp - Pattern matching
+- fuzzy - Typo tolerance
 
 ## Query Structure Basics
 

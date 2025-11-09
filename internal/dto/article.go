@@ -1,6 +1,7 @@
 package dto
 
 import (
+	"reflect"
 	"time"
 
 	"github.com/google/uuid"
@@ -35,4 +36,10 @@ type ArticleSearchResult struct {
 	Article         `json:"article" ` // Embedded Article struct for search results
 	Score           float64           `json:"score"`                      // Score rank between 0 and 1
 	ScoreNormalized float64           `json:"score_normalized,omitempty"` // ScoreNormalized is the normalized(between 0-1) score
+}
+
+func (ar *Article) ContainField(field string) bool {
+	reflectType := reflect.TypeOf(*ar)
+	_, found := reflectType.FieldByName(field)
+	return found
 }

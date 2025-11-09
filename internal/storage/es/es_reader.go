@@ -219,6 +219,235 @@ func (r *Reader) SearchBoolean(ctx context.Context, query *domain.BooleanQuery, 
 	return nil, fmt.Errorf("boolean search not yet implemented for Elasticsearch")
 }
 
+// SearchMatch implements storage.MatchSearcher interface
+// Performs single-field match query using Elasticsearch's match query
+func (r *Reader) SearchMatch(ctx context.Context, query *domain.MatchQuery, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
+	slog.Info("Executing es match search",
+		"query", query.Query,
+		"field", query.Field,
+		"operator", query.GetOperator(),
+		"fuzziness", query.Fuzziness,
+		"has_cursor", cursor != nil,
+		"size", size)
+
+	// Build single-field match query
+	matchQuery := &types.MatchQuery{
+		Query: query.Query,
+	}
+
+	// Set operator using value object
+	if query.GetOperator().IsAnd() {
+		and := operator.And
+		matchQuery.Operator = &and
+	} else {
+		or := operator.Or
+		matchQuery.Operator = &or
+	}
+
+	// Set fuzziness if specified
+	if query.Fuzziness != "" {
+		matchQuery.Fuzziness = &query.Fuzziness
+	}
+
+	slog.Debug("Elasticsearch match query",
+		"field", query.Field,
+		"operator", query.GetOperator(),
+		"fuzziness", query.Fuzziness)
+
+	// Build search request with match query on specific field
+	searchReq := r.client.Search().
+		Index(r.indexName).
+		Query(&types.Query{
+			Match: map[string]types.MatchQuery{
+				query.Field: *matchQuery,
+			},
+		}).
+		Size(size + 1).
+		TrackScores(true)
+
+	// Add cursor support and sorting
+	if cursor != nil {
+		searchReq = searchReq.SearchAfter(
+			types.FieldValue(cursor.Score),
+			types.FieldValue(cursor.ID.String()),
+		)
+	}
+
+	sortOrderDesc := sortorder.Desc
+	searchReq = searchReq.Sort(
+		&types.SortOptions{
+			SortOptions: map[string]types.FieldSort{
+				"_score": {Order: &sortOrderDesc},
+			},
+		},
+		&types.SortOptions{
+			SortOptions: map[string]types.FieldSort{
+				"id": {Order: &sortOrderDesc},
+			},
+		},
+	)
+
+	// Execute query
+	res, err := searchReq.Do(ctx)
+	if err != nil {
+		slog.Error("Elasticsearch match query failed", "error", err, "query", query.Query, "field", query.Field)
+		return nil, fmt.Errorf("failed to execute match search: %w", err)
+	}
+
+	maxScore := domain.CalcSafeScore((*float64)(res.Hits.MaxScore))
+
+	articles, rawScores, err := r.mapToDomain(res.Hits.Hits, maxScore)
+	if err != nil {
+		return nil, fmt.Errorf("failed to map search results to domain: %w", err)
+	}
+
+	slog.Info("ES match search results fetched",
+		"total_matches", res.Hits.Total.Value,
+		"returned_count", len(articles),
+		"max_score", *res.Hits.MaxScore,
+		"normalized_max", maxScore)
+
+	hasMore := len(articles) > size
+	if hasMore {
+		articles = articles[:size]
+		rawScores = rawScores[:size]
+	}
+
+	var nextCursor *dto.Cursor
+	if hasMore && len(articles) > 0 {
+		nextCursor = &dto.Cursor{
+			Score: rawScores[len(rawScores)-1],
+			ID:    articles[len(articles)-1].Article.ID,
+		}
+	}
+
+	return &storage.SearchResult{
+		Hits:         articles,
+		NextCursor:   nextCursor,
+		HasMore:      hasMore,
+		MaxScore:     utils.RoundFloat64(float64(*res.Hits.MaxScore), domain.ScoreDecimalPlaces),
+		PageMaxScore: utils.RoundFloat64(rawScores[0], domain.ScoreDecimalPlaces),
+		TotalMatches: res.Hits.Total.Value,
+	}, nil
+}
+
+// SearchMultiMatch implements storage.MultiMatchSearcher interface
+// Performs multi-field match query using Elasticsearch's multi_match query
+func (r *Reader) SearchMultiMatch(ctx context.Context, query *domain.MultiMatchQuery, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
+	slog.Info("Executing es multi_match search",
+		"query", query.Query,
+		"fields", query.Fields,
+		"operator", query.GetOperator(),
+		"has_cursor", cursor != nil,
+		"size", size)
+
+	// Extract query parameters
+	fields := query.GetFields()
+	queryOperator := query.GetOperator()
+
+	// Build field list with boosting
+	fieldsWithBoost := make([]string, 0, len(fields))
+	for _, field := range fields {
+		weight := query.GetFieldWeight(field)
+		if weight != 1.0 {
+			fieldsWithBoost = append(fieldsWithBoost, fmt.Sprintf("%s^%.1f", field, weight))
+		} else {
+			fieldsWithBoost = append(fieldsWithBoost, field)
+		}
+	}
+
+	// Build multi_match query
+	multiMatch := &types.MultiMatchQuery{
+		Query:  query.Query,
+		Fields: fieldsWithBoost,
+	}
+
+	// Set operator using value object
+	if queryOperator.IsAnd() {
+		and := operator.And
+		multiMatch.Operator = &and
+	} else {
+		or := operator.Or
+		multiMatch.Operator = &or
+	}
+
+	// Build and execute search request
+	searchReq := r.client.Search().
+		Index(r.indexName).
+		Query(&types.Query{
+			MultiMatch: multiMatch,
+		}).
+		Size(size + 1).
+		TrackScores(true)
+
+	// Add cursor support and sorting
+	if cursor != nil {
+		searchReq = searchReq.SearchAfter(
+			types.FieldValue(cursor.Score),
+			types.FieldValue(cursor.ID.String()),
+		)
+	}
+
+	sortOrderDesc := sortorder.Desc
+	searchReq = searchReq.Sort(
+		&types.SortOptions{
+			SortOptions: map[string]types.FieldSort{
+				"_score": {Order: &sortOrderDesc},
+			},
+		},
+		&types.SortOptions{
+			SortOptions: map[string]types.FieldSort{
+				"id": {Order: &sortOrderDesc},
+			},
+		},
+	)
+
+	// Execute query
+	res, err := searchReq.Do(ctx)
+	if err != nil {
+		slog.Error("Elasticsearch multi_match query failed", "error", err, "query", query.Query)
+		return nil, fmt.Errorf("failed to execute multi_match search: %w", err)
+	}
+
+	maxScore := domain.CalcSafeScore((*float64)(res.Hits.MaxScore))
+
+	articles, rawScores, err := r.mapToDomain(res.Hits.Hits, maxScore)
+	if err != nil {
+		return nil, fmt.Errorf("failed to map search results to domain: %w", err)
+	}
+
+	slog.Info("ES multi_match search results fetched",
+		"total_matches", res.Hits.Total.Value,
+		"returned_count", len(articles),
+		"max_score", *res.Hits.MaxScore,
+		"normalized_max", maxScore)
+
+	hasMore := len(articles) > size
+	if hasMore {
+		articles = articles[:size]
+		rawScores = rawScores[:size]
+	}
+
+	var nextCursor *dto.Cursor
+	if hasMore && len(articles) > 0 {
+		nextCursor = &dto.Cursor{
+			Score: rawScores[len(rawScores)-1],
+			ID:    articles[len(articles)-1].Article.ID,
+		}
+	}
+
+	return &storage.SearchResult{
+		Hits:         articles,
+		NextCursor:   nextCursor,
+		HasMore:      hasMore,
+		MaxScore:     utils.RoundFloat64(float64(*res.Hits.MaxScore), domain.ScoreDecimalPlaces),
+		PageMaxScore: utils.RoundFloat64(rawScores[0], domain.ScoreDecimalPlaces),
+		TotalMatches: res.Hits.Total.Value,
+	}, nil
+}
+
 // Compile-time interface assertions
 var _ storage.Reader = (*Reader)(nil)
 var _ storage.BooleanSearcher = (*Reader)(nil)
+var _ storage.MatchSearcher = (*Reader)(nil)
+var _ storage.MultiMatchSearcher = (*Reader)(nil)
