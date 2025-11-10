@@ -21,10 +21,11 @@ func NewReader(pool *ConnectionPool) (*Searcher, error) {
 	return &Searcher{db: pool.conn}, nil
 }
 
-// SearchFullText implements storage.FTSSearcher interface
-// Performs token-based full-text search using PostgreSQL's tsvector and plainto_tsquery
-func (r *Searcher) SearchFullText(ctx context.Context, query *dquery.FullText, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
-	slog.Info("Executing pg full-text search", "query", query.Text, "has_cursor", cursor != nil, "size", size)
+// SearchQueryString implements storage.FTSSearcher interface
+// Performs simple string-based search using PostgreSQL's tsvector and plainto_tsquery
+// Application determines optimal fields and weights based on index configuration
+func (r *Searcher) SearchQueryString(ctx context.Context, query *dquery.QueryString, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
+	slog.Info("Executing pg query_string search", "query", query.Query, "has_cursor", cursor != nil, "size", size)
 
 	var globalMaxScore float64
 	var count int64
@@ -33,7 +34,7 @@ func (r *Searcher) SearchFullText(ctx context.Context, query *dquery.FullText, c
 			FROM articles
 			WHERE search_vector @@ plainto_tsquery('english', $1)
 		`
-	if err := r.db.QueryRow(ctx, maxSQL, query.Text).Scan(&globalMaxScore, &count); err != nil || globalMaxScore <= 0 {
+	if err := r.db.QueryRow(ctx, maxSQL, query.Query).Scan(&globalMaxScore, &count); err != nil || globalMaxScore <= 0 {
 		slog.Error("Failed to fetch global max score", "error", err)
 		return nil, fmt.Errorf("cannot fetch global max score: %w", err)
 	}
@@ -52,7 +53,7 @@ func (r *Searcher) SearchFullText(ctx context.Context, query *dquery.FullText, c
 			ORDER BY rank DESC, id DESC
 			LIMIT $2
 		`
-		args = []interface{}{query.Text, size + 1}
+		args = []interface{}{query.Query, size + 1}
 	} else {
 		searchSQL = `
 			SELECT
@@ -64,7 +65,7 @@ func (r *Searcher) SearchFullText(ctx context.Context, query *dquery.FullText, c
 			ORDER BY rank DESC, id DESC
 			LIMIT $4
 		`
-		args = []interface{}{query.Text, cursor.Score, cursor.ID, size + 1}
+		args = []interface{}{query.Query, cursor.Score, cursor.ID, size + 1}
 	}
 
 	rows, err := r.db.Query(ctx, searchSQL, args...)
@@ -141,19 +142,6 @@ func (r *Searcher) SearchFullText(ctx context.Context, query *dquery.FullText, c
 		PageMaxScore: utils.RoundFloat64(rawScores[0], dquery.ScoreDecimalPlaces),
 		TotalMatches: count,
 	}, nil
-}
-
-// SearchBoolean implements storage.BooleanSearcher interface
-// Performs boolean search using PostgreSQL's tsquery with AND (&), OR (|), NOT (!) operators
-func (r *Searcher) SearchBoolean(ctx context.Context, query *dquery.BooleanQuery, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
-	slog.Info("Executing pg boolean search", "expression", query.Expression, "has_cursor", cursor != nil, "size", size)
-
-	// TODO: Implement boolean query parser
-	// Parse query.Expression: "climate AND (change OR warming) AND NOT politics"
-	// Convert to PostgreSQL tsquery syntax: "climate & (change | warming) & !politics"
-	// Use websearch_to_tsquery or to_tsquery for parsing
-
-	return nil, fmt.Errorf("boolean search not yet implemented for PostgreSQL")
 }
 
 // SearchMatch implements storage.MatchSearcher interface
@@ -441,6 +429,19 @@ func (r *Searcher) SearchMultiMatch(ctx context.Context, query *dquery.MultiMatc
 		PageMaxScore: utils.RoundFloat64(rawScores[0], dquery.ScoreDecimalPlaces),
 		TotalMatches: count,
 	}, nil
+}
+
+// SearchBoolean implements storage.BooleanSearcher interface
+// Performs boolean search using PostgreSQL's tsquery with AND (&), OR (|), NOT (!) operators
+func (r *Searcher) SearchBoolean(ctx context.Context, query *dquery.BooleanQuery, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
+	slog.Info("Executing pg boolean search", "expression", query.Expression, "has_cursor", cursor != nil, "size", size)
+
+	// TODO: Implement boolean query parser
+	// Parse query.Expression: "climate AND (change OR warming) AND NOT politics"
+	// Convert to PostgreSQL tsquery syntax: "climate & (change | warming) & !politics"
+	// Use websearch_to_tsquery or to_tsquery for parsing
+
+	return nil, fmt.Errorf("boolean search not yet implemented for PostgreSQL")
 }
 
 // Compile-time interface assertions

@@ -42,7 +42,10 @@ The project follows a layered architecture pattern:
   - `schemagen/`: Schema generation utilities
 
 - **internal/**: Core business logic organized by domain
-  - `domain/`: Core data structures (Article, ArticleMetadata, Query)
+  - `domain/`: Core domain layer organized by bounded contexts
+    - `document/`: Document domain (Article, ArticleMetadata, WeightedDocument)
+    - `query/`: Query domain (search query types, language, scoring)
+    - `operator/`: Operator value object (AND/OR logic)
   - `reader/`: CSV reading and YAML configuration mapping
   - `collector/`: Article collection orchestration
   - `processor/`: Article processing logic
@@ -53,6 +56,7 @@ The project follows a layered architecture pattern:
   - `server/`: HTTP server configuration and setup
   - `router/`: HTTP route handlers
   - `middleware/`: HTTP middleware (logging, etc.)
+  - `dto/`: Data transfer objects for API layer
 
 - **pkg/**: Shared packages and APIs
   - `apis/datamapping/`: Data mapping type definitions
@@ -73,21 +77,74 @@ The project follows a layered architecture pattern:
 
 ## Key Components
 
+### Domain Layer Organization
+
+The domain layer is organized into bounded contexts, each with its own package:
+
+**Document Context** (`internal/domain/document/`):
+- `Article`: Core article entity with metadata
+- `ArticleMetadata`: Article metadata (source, publication date, category)
+- `WeightedDocument`: Interface for documents with field weights
+- Responsible for: Document structure, validation, and field access
+
+**Query Context** (`internal/domain/query/`):
+- Query types: `QueryString`, `Match`, `MultiMatch`, `BooleanQuery`
+- `Language`: Search language configuration (English, Serbian, etc.)
+- `Score`: Relevance scoring utilities
+- Responsible for: Search query modeling, language configuration, scoring logic
+
+**Query Type Design**:
+- **`QueryString`**: Simple application-level API - user provides text, application determines fields/weights
+- **`Match`**: Explicit single-field control - user specifies field, operator, fuzziness
+- **`MultiMatch`**: Explicit multi-field control - user specifies fields, weights, operator
+- **`BooleanQuery`**: Structured boolean queries with AND/OR/NOT operators
+
+**Type Renamings** (simplified for clarity):
+- `FullTextQuery` → `QueryString` (following Elasticsearch terminology)
+- `MatchQuery` → `Match`
+- `MultiMatchQuery` → `MultiMatch`
+- `QueryType` → `Type`
+- `SearchLanguage` → `Language`
+
+**Operator Context** (`internal/domain/operator/`):
+- `Operator`: AND/OR logical operators for search queries
+- Responsible for: Boolean logic validation and behavior
+
+**Benefits of this organization**:
+- Clear separation of concerns between document and query domains
+- Reduced import cycles through proper package boundaries
+- Clean namespacing (e.g., `query.QueryString`, `document.Article`)
+- Easier to understand and navigate domain concepts
+- Follows DDD bounded context principles
+- Query API design follows industry standards (Elasticsearch `query_string` terminology)
+
 ### Data Mapping System
 The project uses YAML configuration files to map source data fields to internal Article structure. Configuration files follow the DataMapping schema with fieldMappings that specify source/target fields and their types.
 
 ### Storage Layer
 Follows idiomatic Go patterns with sub-package organization:
-- **Interfaces**: `Reader` and `Storer` interfaces define storage contracts
+- **Interfaces**: Storage contracts define clear responsibilities
+  - `FTSSearcher`: Full-text search operations
+  - `Indexer`: Document indexing operations
+  - `Reader`: Document retrieval operations
 - **Factory Pattern**: `storage/factory` package provides centralized creation logic
 - **PostgreSQL**: `storage/pg` - Full-text search with tsvector, ranking, and pagination
 - **Elasticsearch**: `storage/es` - Multilingual search with advanced indexing
 - **In-memory**: Built-in implementation for development/testing
 
+**File Organization**:
+Elasticsearch storage package files have been renamed for clarity:
+- `client.go` - ES client creation and configuration (formerly `es_client.go`)
+- `indexer.go` - Document indexing implementation (formerly `es_storer.go`)
+- `document.go` - ES document mapping and index building (formerly `es_doc.go`)
+- `searcher.go` - Full-text search implementation
+
 **Key Features**:
 - SearchResult with pagination metadata (total, hasMore, page info)
 - PostgreSQL uses native tsvector with ts_rank for relevance scoring
 - Factory pattern avoids import cycles while maintaining clean separation
+- Separate interfaces for search and indexing operations
+- Clean file naming without redundant prefixes
 
 ### Pipeline Architecture
 Uses a pipeline pattern for data processing with common interfaces:
@@ -99,19 +156,49 @@ Uses a pipeline pattern for data processing with common interfaces:
 
 ### HTTP API Server
 Built with Echo framework providing:
-- **Search API**: Full-text search with pagination, ranking, and filtering
+- **Search API**: Comprehensive search capabilities with multiple query types
 - **Health Checks**: Database connectivity and service health monitoring
 - **Middleware**: CORS support, request logging, and error recovery
 - **Configuration**: Environment-based config with validation
 - **Graceful Shutdown**: Proper resource cleanup on termination
 
+**Search API Endpoints**:
+
+1. **Simple Query String API** (`GET /v1/articles/search`)
+   - Simple, Google-like search experience
+   - Application determines optimal fields and weights
+   - Query parameter: `?query=climate change`
+   - Best for: End-user search boxes, simple text queries
+
+2. **Match API** (`POST /v1/articles/search/match`)
+   - Single-field search with explicit control
+   - User specifies field, operator, fuzziness, language
+   - JSON body with full parameter control
+   - Best for: Field-specific searches, advanced users
+
+3. **Multi-Match API** (`POST /v1/articles/search/multi_match`)
+   - Multi-field search with explicit field weights
+   - User controls fields, weights, operator, language
+   - JSON body with comprehensive configuration
+   - Best for: Complex queries, fine-tuned relevance
+
 **Search Features**:
 - Full-text search with relevance ranking
-- Multi-field search across title, description, and content
-- Pagination with total count and hasMore indicators
-- Input validation and error handling
-- PostgreSQL tsvector with ts_rank scoring
-- Elasticsearch multi-match with field boosting
+- Single-field and multi-field search support
+- Cursor-based pagination with total count and hasMore indicators
+- Field-level weight control for relevance tuning
+- Operator control (AND/OR) for term combination
+- Fuzziness support for typo tolerance (Elasticsearch)
+- Multi-language support (English, Serbian)
+- Input validation and comprehensive error handling
+- PostgreSQL: tsvector with ts_rank scoring
+- Elasticsearch: match/multi_match queries with BM25 scoring
+
+**API Design Pattern**:
+- **Simple API**: Application-optimized (QueryString)
+- **Explicit API**: User-controlled (Match, MultiMatch)
+- **DTO Layer**: Clean separation between API and domain
+- **Optional Interfaces**: Storage backends can optionally implement Match/MultiMatch
 
 ## Development Commands
 
@@ -188,7 +275,7 @@ The project follows Domain-Driven Design principles where valuable and appropria
 - **Idiomatic Go**: Place value objects in dedicated packages for clean namespacing
 
 **When to use Value Objects**:
-- Domain concepts with validation rules (e.g., operator.Operator, domain.SearchLanguage)
+- Domain concepts with validation rules (e.g., `operator.Operator`, `query.Language`)
 - Concepts that should be immutable once created
 - Types that benefit from type safety over primitive types (no string mistakes)
 - Concepts with behavior that belongs to the value itself
@@ -196,7 +283,8 @@ The project follows Domain-Driven Design principles where valuable and appropria
 **Package Structure for Value Objects**:
 Follow Go's idiomatic approach of using packages as namespaces:
 - `internal/domain/operator/` - Contains `operator.Operator` type
-- Usage: `operator.And`, `operator.Or` (not `OperatorAnd`, `OperatorOr`)
+- `internal/domain/query/` - Contains `query.Language` type
+- Usage: `operator.And`, `operator.Or`, `query.LanguageEnglish` (clean namespacing)
 - Mirrors Go stdlib (`time.Monday`) and popular libraries (`http.MethodGet`)
 
 **Example - Operator Value Object**:

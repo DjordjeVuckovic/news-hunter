@@ -44,7 +44,7 @@ func buildTsQuery(op operator.Operator, lang query.Language, paramNum int) strin
 // buildRankExpression constructs a ts_rank expression with custom field weights
 // The pre-computed search_vector has weights: title=A, description=B, subtitle/content=C, author=D
 // PostgreSQL's default weight values are: A=1.0, B=0.4, C=0.2, D=0.1
-// If custom FieldWeights are specified, we override these defaults via the weights array
+// If custom DefaultFieldWeights are specified, we override these defaults via the weights array
 // Returns: "ts_rank('{3.0, 2.0, 1.0, 0.1}', search_vector, query)" or default "ts_rank(search_vector, query)"
 func buildRankExpression(fields []string, weights map[string]float64, lang query.Language, op operator.Operator, paramNum int) string {
 	vectorExpr := buildSearchVector(fields, weights, lang)

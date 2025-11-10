@@ -35,29 +35,28 @@ func NewSeacher(config ClientConfig) (*Searcher, error) {
 	}, nil
 }
 
-// SearchFullText implements storage.FTSSearcher interface
-// Performs token-based full-text search using Elasticsearch's multi_match query with BM25
-func (r *Searcher) SearchFullText(ctx context.Context, query *dquery.FullText, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
-	// Extract query parameters with defaults
-	fields := query.GetFields()
-	queryOperator := query.Operator
-	if queryOperator == "" {
-		queryOperator = "or" // default to OR behavior
-	}
+// SearchQueryString implements storage.FTSSearcher interface
+// Performs simple string-based search using Elasticsearch's multi_match query with BM25
+// Application determines optimal fields and weights based on index configuration
+func (r *Searcher) SearchQueryString(ctx context.Context, query *dquery.QueryString, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
+	// Use default fields with default weights (application-determined)
+	fields := dquery.DefaultFields
+	fieldWeights := dquery.DefaultFieldWeights
+	queryOperator := query.GetDefaultOperator()
 
-	slog.Info("Executing es full-text search",
-		"query", query.Text,
+	slog.Info("Executing es query_string search",
+		"query", query.Query,
 		"language", query.GetLanguage(),
 		"fields", fields,
 		"operator", queryOperator,
 		"has_cursor", cursor != nil,
 		"size", size)
 
-	// Build field list with boosting
-	// Format: "title^3", "description^2", "content^1"
+	// Build field list with boosting from application defaults
+	// Format: "title^1.0", "description^1.0", "content^1.0"
 	fieldsWithBoost := make([]string, 0, len(fields))
 	for _, field := range fields {
-		weight := query.GetFieldWeight(field)
+		weight := fieldWeights[field]
 		if weight != 1.0 {
 			fieldsWithBoost = append(fieldsWithBoost, fmt.Sprintf("%s^%.1f", field, weight))
 		} else {
@@ -67,7 +66,7 @@ func (r *Searcher) SearchFullText(ctx context.Context, query *dquery.FullText, c
 
 	// Build multi_match query
 	multiMatch := &types.MultiMatchQuery{
-		Query:  query.Text,
+		Query:  query.Query,
 		Fields: fieldsWithBoost,
 	}
 
@@ -117,7 +116,7 @@ func (r *Searcher) SearchFullText(ctx context.Context, query *dquery.FullText, c
 
 	res, err := searchReq.Do(ctx)
 	if err != nil {
-		slog.Error("Elasticsearch query failed", "error", err, "query", query.Text, "cursor", cursor != nil)
+		slog.Error("Elasticsearch query failed", "error", err, "query", query.Query, "cursor", cursor != nil)
 		return nil, fmt.Errorf("failed to execute search: %w", err)
 	}
 

@@ -47,7 +47,7 @@ func main() {
 		return
 	}
 
-	reader, err := factory.NewReader(s.Context(), cfg.StorageConfig)
+	reader, err := factory.NewSearcher(s.Context(), cfg.StorageConfig)
 	if err != nil {
 		slog.Error("Failed to create storage reader", "error", err)
 		os.Exit(1)

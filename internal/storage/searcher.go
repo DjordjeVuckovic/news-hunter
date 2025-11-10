@@ -21,11 +21,14 @@ type SearchResult struct {
 // FTSSearcher is the base interface that ALL storage backends must implement
 // Provides full-text search capability
 type FTSSearcher interface {
-	// SearchFullText performs token-based full-text search with relevance ranking
+	// SearchQueryString performs simple string-based search with application-optimized settings
+	// The storage implementation determines optimal fields, weights, and search strategy
+	// based on index configuration and content type.
+	//
 	// cursor: optional decoded cursor from previous result (nil for first page)
 	// size: number of results to return per page
 	// Returns domain objects with domain cursor (not encoded string)
-	SearchFullText(ctx context.Context, query *query.FullText, cursor *dto.Cursor, size int) (*SearchResult, error)
+	SearchQueryString(ctx context.Context, query *query.QueryString, cursor *dto.Cursor, size int) (*SearchResult, error)
 }
 
 // MatchSearcher is an optional interface for single-field match queries

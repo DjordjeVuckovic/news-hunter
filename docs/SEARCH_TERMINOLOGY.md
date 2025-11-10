@@ -37,6 +37,9 @@ Embedding-based search that finds semantically similar documents regardless of e
 ### 6. Hybrid Search
 Combination of multiple search paradigms (typically lexical + semantic) with score fusion techniques like Reciprocal Rank Fusion (RRF).
 
+### 7. Percolation
+Reverse search paradigm where stored queries are matched against incoming documents to find relevant queries.
+
 ---
 
 ## Lexical Search (Full-Text)

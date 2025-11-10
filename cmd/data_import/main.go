@@ -68,7 +68,7 @@ func newPipeline(
 	coll collector.Collector[document.Article]) (processor.Pipeline, error) {
 	slog.Info("Creating pipeline", "storageType", cfg.StorageConfig.Type)
 
-	storer, err := factory.NewStorer(ctx, cfg.StorageConfig)
+	storer, err := factory.NewIndexer(ctx, cfg.StorageConfig)
 	if err != nil {
 		slog.Error("failed to create storer", "error", err)
 		return nil, err

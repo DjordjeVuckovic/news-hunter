@@ -10,8 +10,8 @@ import (
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage/pg"
 )
 
-// NewStorer creates a new storage.Indexer based on the storage type
-func NewStorer(ctx context.Context, cfg StorageConfig) (storage.Indexer, error) {
+// NewIndexer creates a new storage.Indexer based on the storage type
+func NewIndexer(ctx context.Context, cfg StorageConfig) (storage.Indexer, error) {
 	switch cfg.Type {
 	case storage.PG:
 		pgConfig := *cfg.Pg
@@ -39,8 +39,8 @@ func NewStorer(ctx context.Context, cfg StorageConfig) (storage.Indexer, error) 
 	}
 }
 
-// NewReader creates a new storage.FTSSearcher based on the storage type
-func NewReader(ctx context.Context, cfg StorageConfig) (storage.FTSSearcher, error) {
+// NewSearcher creates a new storage.FTSSearcher based on the storage type
+func NewSearcher(ctx context.Context, cfg StorageConfig) (storage.FTSSearcher, error) {
 	switch cfg.Type {
 	case storage.PG:
 		pgConfig := *cfg.Pg
@@ -61,7 +61,7 @@ func NewReader(ctx context.Context, cfg StorageConfig) (storage.FTSSearcher, err
 		return nil, fmt.Errorf("solr reader not yet implemented")
 
 	case storage.InMem:
-		// TODO: Implement InMem FTSSearcher when needed
+		// TODO: Implement InMem when needed
 		return nil, fmt.Errorf("inmem reader not yet implemented")
 
 	default:

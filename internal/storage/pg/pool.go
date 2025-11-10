@@ -26,3 +26,11 @@ func NewConnectionPool(ctx context.Context, cfg PoolConfig) (*ConnectionPool, er
 
 	return &ConnectionPool{conn: dbpool}, nil
 }
+
+func (p *ConnectionPool) GetConn() *pgxpool.Pool {
+	return p.conn
+}
+
+func (p *ConnectionPool) Close() {
+	p.conn.Close()
+}

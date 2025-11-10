@@ -3,6 +3,7 @@ package router
 import (
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strconv"
 
 	dquery "github.com/DjordjeVuckovic/news-hunter/internal/domain/query"
@@ -13,67 +14,74 @@ import (
 )
 
 type SearchRouter struct {
-	e       *echo.Echo
-	storage storage.FTSSearcher
+	e                  *echo.Echo
+	storage            storage.FTSSearcher
+	matchSearcher      storage.MatchSearcher
+	multiMatchSearcher storage.MultiMatchSearcher
 }
 
-func NewSearchRouter(e *echo.Echo, storage storage.FTSSearcher) *SearchRouter {
-	return &SearchRouter{
+func NewSearchRouter(e *echo.Echo, searcher storage.FTSSearcher) *SearchRouter {
+	router := &SearchRouter{
 		e:       e,
-		storage: storage,
+		storage: searcher,
 	}
+
+	// Check for optional interfaces
+	if ms, ok := searcher.(storage.MatchSearcher); ok {
+		router.matchSearcher = ms
+	}
+	if mms, ok := searcher.(storage.MultiMatchSearcher); ok {
+		router.multiMatchSearcher = mms
+	}
+
+	return router
 }
 
 func (r *SearchRouter) Bind() {
+	// Simple query_string API (application-determined fields/weights)
 	r.e.GET("/v1/articles/search", r.searchHandler)
+
+	// Unified structured search API (match/multi_match with query wrapper)
+	r.e.POST("/v1/articles/_search", r.structuredSearchHandler)
 }
 
-// FTSSearchResponse represents the API response for full-text search
-// This is a concrete type for Swagger documentation (swag doesn't support generics yet)
-type FTSSearchResponse struct {
-	NextCursor   *string                   `json:"next_cursor,omitempty"`
-	HasMore      bool                      `json:"has_more"`
-	MaxScore     float64                   `json:"max_score,omitempty"`
-	PageMaxScore float64                   `json:"page_max_score,omitempty"`
-	TotalMatches int64                     `json:"total_matches,omitempty"`
-	Hits         []dto.ArticleSearchResult `json:"hits"`
-}
-
-// searchHandler handles full-text search requests with cursor-based pagination
-// @Summary Full-text news search
-// @Description Search for news articles using full-text query with cursor-based pagination
+// searchHandler handles simple query string search (GET)
+//
+// This endpoint provides a simple, Google-like search experience.
+// The application automatically determines optimal fields and weights.
+// Results are cacheable and URLs are bookmarkable.
+//
+// @Summary Simple query string search
+// @Description Simple text search with automatic field selection and weighting. Cacheable and bookmarkable. Application determines optimal search strategy based on index configuration.
 // @Tags search
-// @Accept  json
-// @Produce  json
-// @Param query query string true "Search query"
-// @Param cursor query string false "Cursor for pagination (base64-encoded)"
-// @Param size query int false "Page size (default: 100, max: 10000)"
-// @Success 200 {object} FTSSearchResponse
-// @Failure 400 {object} map[string]string
-// @Failure 500 {object} map[string]string
+// @Accept json
+// @Produce json
+// @Param q query string true "Search query text" example("climate change")
+// @Param size query int false "Results per page (default: 100, max: 10000)" example(10)
+// @Param cursor query string false "Pagination cursor (base64-encoded from previous response)"
+// @Param lang query string false "Search language: english, serbian (default: english)" example("english")
+// @Success 200 {object} dto.SearchResponse "Search results with pagination metadata"
+// @Failure 400 {object} map[string]string "Bad request - missing or invalid parameters"
+// @Failure 500 {object} map[string]string "Internal server error"
 // @Router /v1/articles/search [get]
+// @Example Request:  GET /v1/articles/search?q=climate%20change&size=10&lang=english
+// @Example Response: {"hits": [...], "next_cursor": "eyJ...", "has_more": true, "total_matches": 1523}
 func (r *SearchRouter) searchHandler(c echo.Context) error {
-	query := c.QueryParam("query")
+	// Support both 'q' (preferred) and 'query' (legacy) parameters
+	query := c.QueryParam("q")
+	if query == "" {
+		query = c.QueryParam("query") // Backward compatibility
+	}
 	cursorStr := c.QueryParam("cursor")
 	sizeStr := c.QueryParam("size")
 
 	if query == "" {
-		return c.JSON(400, map[string]string{"error": "query parameter is required"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "q parameter is required"})
 	}
 
-	sizeInt := pagination.PageDefaultSize
-	if sizeStr != "" {
-		var err error
-		sizeInt, err = strconv.Atoi(sizeStr)
-		if err != nil || sizeInt < 1 {
-			return c.JSON(400, map[string]string{"error": "invalid size parameter"})
-		}
-		if sizeInt > pagination.PageMaxSize {
-			return c.JSON(400,
-				map[string]string{
-					"error": fmt.Sprintf("size parameter exceeds maximum of %d", pagination.PageMaxSize),
-				})
-		}
+	sizeInt, errSize, done := r.parseSize(c, sizeStr)
+	if done {
+		return errSize
 	}
 
 	var cursor *dto.Cursor
@@ -81,29 +89,189 @@ func (r *SearchRouter) searchHandler(c echo.Context) error {
 		var err error
 		cursor, err = dto.DecodeCursor(cursorStr)
 		if err != nil {
-			return c.JSON(400, map[string]string{"error": "invalid cursor parameter"})
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid cursor parameter"})
 		}
 	}
 
-	fullTextQuery := dquery.NewFullTextQuery(query)
-	searchResult, err := r.storage.SearchFullText(c.Request().Context(), fullTextQuery, cursor, sizeInt)
+	queryString := dquery.NewQueryString(query)
+	searchResult, err := r.storage.SearchQueryString(c.Request().Context(), queryString, cursor, sizeInt)
 	if err != nil {
 		slog.Error("Failed to execute full-text search", "error", err, "query", query)
-		return c.JSON(500, map[string]string{"error": "internal server error"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 	}
 
+	return r.buildResponse(c, searchResult)
+}
+
+// structuredSearchHandler handles structured search requests (POST)
+//
+// This endpoint accepts complex, structured queries with explicit control over:
+// - Which fields to search
+// - Field-level weights/boosting
+// - Operator logic (AND/OR)
+// - Language-specific analysis
+// - Fuzziness/typo tolerance
+//
+// Supports multiple query types via the query wrapper pattern.
+// Query types: match, multi_match (more coming: bool, phrase, query_string)
+//
+// @Summary Structured search API
+// @Description Execute structured search queries with explicit control over fields, weights, and operators. Supports match and multi_match query types. Follows Elasticsearch query DSL pattern.
+// @Tags search
+// @Accept json
+// @Produce json
+// @Param request body dto.SearchRequest true "Structured search request with query wrapper"
+// @Success 200 {object} dto.SearchResponse "Search results with pagination metadata"
+// @Failure 400 {object} map[string]string "Bad request - invalid query structure or parameters"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Failure 501 {object} map[string]string "Query type not supported by storage backend"
+// @Router /v1/articles/_search [post]
+// @Example Match Request:
+//
+//	{
+//	  "size": 10,
+//	  "query": {
+//	    "match": {
+//	      "field": "title",
+//	      "query": "climate change",
+//	      "operator": "and",
+//	      "fuzziness": "AUTO",
+//	      "language": "english"
+//	    }
+//	  }
+//	}
+//
+// @Example MultiMatch Request:
+//
+//	{
+//	  "size": 10,
+//	  "query": {
+//	    "multi_match": {
+//	      "query": "renewable energy",
+//	      "fields": ["title", "description", "content"],
+//	      "field_weights": {
+//	        "title": 3.0,
+//	        "description": 2.0,
+//	        "content": 1.0
+//	      },
+//	      "operator": "or",
+//	      "language": "english"
+//	    }
+//	  }
+//	}
+func (r *SearchRouter) structuredSearchHandler(c echo.Context) error {
+	var req dto.SearchRequest
+	if err := c.Bind(&req); err != nil {
+		slog.Error("Failed to bind search request", "error", err)
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+	}
+
+	sizeInt := pagination.PageDefaultSize
+	if req.Size > 0 {
+		if req.Size > pagination.PageMaxSize {
+			return c.JSON(http.StatusBadRequest,
+				map[string]string{
+					"error": fmt.Sprintf("size parameter exceeds maximum of %d", pagination.PageMaxSize),
+				})
+		}
+		sizeInt = req.Size
+	}
+
+	var cursor *dto.Cursor
+	if req.Cursor != "" {
+		var err error
+		cursor, err = dto.DecodeCursor(req.Cursor)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid cursor parameter"})
+		}
+	}
+
+	queryType := req.Query.GetQueryType()
+	switch queryType {
+	case dquery.MatchType:
+		return r.handleMatchQuery(c, req.Query.Match, cursor, sizeInt)
+	case dquery.MultiMatchType:
+		return r.handleMultiMatchQuery(c, req.Query.MultiMatch, cursor, sizeInt)
+	default:
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "query must specify one of: match, multi_match",
+		})
+	}
+}
+
+func (r *SearchRouter) handleMatchQuery(c echo.Context, params *dto.MatchParams, cursor *dto.Cursor, size int) error {
+	if r.matchSearcher == nil {
+		return c.JSON(http.StatusNotImplemented, map[string]string{
+			"error": "match search is not supported by the current storage backend",
+		})
+	}
+
+	domainQuery, err := params.ToDomain()
+	if err != nil {
+		slog.Error("Failed to convert DTO to domain", "error", err)
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+
+	searchResult, err := r.matchSearcher.SearchMatch(c.Request().Context(), domainQuery, cursor, size)
+	if err != nil {
+		slog.Error("Failed to execute match search", "error", err, "field", params.Field, "query", params.Query)
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+	}
+
+	return r.buildResponse(c, searchResult)
+}
+
+func (r *SearchRouter) handleMultiMatchQuery(c echo.Context, params *dto.MultiMatchParams, cursor *dto.Cursor, size int) error {
+	if r.multiMatchSearcher == nil {
+		return c.JSON(http.StatusNotImplemented, map[string]string{
+			"error": "multi_match search is not supported by the current storage backend",
+		})
+	}
+
+	domainQuery, err := params.ToDomain()
+	if err != nil {
+		slog.Error("Failed to convert DTO to domain", "error", err)
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+
+	searchResult, err := r.multiMatchSearcher.SearchMultiMatch(c.Request().Context(), domainQuery, cursor, size)
+	if err != nil {
+		slog.Error("Failed to execute multi_match search", "error", err, "fields", params.Fields, "query", params.Query)
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+	}
+
+	return r.buildResponse(c, searchResult)
+}
+
+func (r *SearchRouter) parseSize(c echo.Context, sizeStr string) (int, error, bool) {
+	if sizeStr == "" {
+		return pagination.PageDefaultSize, nil, false
+	}
+	sizeInt, err := strconv.Atoi(sizeStr)
+	if err != nil || sizeInt < 1 {
+		return 0, c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid size parameter"}), true
+	}
+	if sizeInt > pagination.PageMaxSize {
+		return 0, c.JSON(http.StatusBadRequest,
+			map[string]string{
+				"error": fmt.Sprintf("size parameter exceeds maximum of %d", pagination.PageMaxSize),
+			}), true
+	}
+	return sizeInt, nil, false
+}
+
+func (r *SearchRouter) buildResponse(c echo.Context, searchResult *storage.SearchResult) error {
 	var nextCursorStr *string
 	if searchResult.NextCursor != nil {
 		encoded, err := dto.EncodeCursor(searchResult.NextCursor.Score, searchResult.NextCursor.ID)
 		if err != nil {
 			slog.Error("Failed to encode cursor", "error", err)
-			return c.JSON(500, map[string]string{"error": "internal server error"})
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 		}
 		nextCursorStr = &encoded
 	}
 
-	// Create API response with encoded cursor string
-	apiResponse := FTSSearchResponse{
+	apiResponse := dto.SearchResponse{
 		Hits:         searchResult.Hits,
 		NextCursor:   nextCursorStr,
 		HasMore:      searchResult.HasMore,
@@ -112,5 +280,5 @@ func (r *SearchRouter) searchHandler(c echo.Context) error {
 		TotalMatches: searchResult.TotalMatches,
 	}
 
-	return c.JSON(200, apiResponse)
+	return c.JSON(http.StatusOK, apiResponse)
 }

@@ -4,57 +4,66 @@ import (
 	"github.com/DjordjeVuckovic/news-hunter/internal/domain/operator"
 )
 
-// QueryType represents the search paradigm to use
+// Type QueryType represents the search paradigm to use
 type Type string
 
 const (
-	// QueryTypeFullText: Token-based full-text search with relevance ranking
-	QueryTypeFullText Type = "full_text"
 
-	// QueryTypeMatch: Single-field match query (Elasticsearch terminology)
+	// QueryStringType QueryTypeQueryString: Simple text-based search query (application-optimized)
+	QueryStringType Type = "query_string"
+
+	// MatchType MatchType: Single-field match query (Elasticsearch terminology)
 	// ES: match query on single field
 	// PG: tsvector search on single field
-	QueryTypeMatch Type = "match"
+	MatchType Type = "match"
 
-	// QueryTypeMultiMatch: Multi-field match query (Elasticsearch terminology)
+	// MultiMatchType MultiMatchType: Multi-field match query (Elasticsearch terminology)
 	// ES: multi_match query with field boosting
 	// PG: weighted tsvector search across multiple fields
-	QueryTypeMultiMatch Type = "multi_match"
+	MultiMatchType Type = "multi_match"
 
-	// QueryTypeBoolean: Structured queries with logical operators (AND, OR, NOT)
-	QueryTypeBoolean Type = "boolean"
+	// BooleanType BooleanType: Structured queries with logical operators (AND, OR, NOT)
+	BooleanType Type = "boolean"
 )
 
 // SearchQuery is the top-level query container
 // Only one query field should be non-nil based on Type
 type SearchQuery struct {
-	Type       Type          `json:"type"`
-	FullText   *FullText     `json:"full_text,omitempty"`
-	Match      *Match        `json:"match,omitempty"`
-	MultiMatch *MultiMatch   `json:"multi_match,omitempty"`
-	Boolean    *BooleanQuery `json:"boolean,omitempty"`
+	Type        Type          `json:"type"`
+	QueryString *QueryString  `json:"query_string,omitempty"`
+	Match       *Match        `json:"match,omitempty"`
+	MultiMatch  *MultiMatch   `json:"multi_match,omitempty"`
+	Boolean     *BooleanQuery `json:"boolean,omitempty"`
 }
 
-// FullText: Token-based full-text search with relevance ranking
-// Analyzes and tokenizes text, performs stemming, handles stop words
-type FullText struct {
-	Text string `json:"text" validate:"required,min=1"`
+// QueryString represents a simple text-based search query
+// The application parses the query string and determines optimal search strategy
+// based on index configuration, content type, and query analysis.
+//
+// This is the primary search API for end-user queries (e.g., search box input).
+// The application handles field selection, weighting, and query optimization.
+//
+// Inspired by Elasticsearch's query_string query.
+//
+// Examples:
+//
+//	"climate change"           → Multi-field text search with default operator
+//	"renewable energy"         → Analyzed and tokenized across configured fields
+type QueryString struct {
+	// Query: The search text to query
+	Query string `json:"query" validate:"required,min=1"`
 
-	// FieldWeights: Optional field-specific boosting/weights
-	FieldWeights map[string]float64 `json:"field_weights,omitempty"`
-
-	// Language: Text search language configuration
+	// Language: Text analysis language configuration
 	Language Language `json:"language,omitempty"`
 
-	// Fields: Which fields to search
-	Fields []string `json:"fields,omitempty"`
-
-	// Operator: How to combine multiple terms (AND vs OR behavior)
+	// DefaultOperator: How to combine terms when no explicit operator specified
+	// "climate change" with OR → "climate OR change"
+	// "climate change" with AND → "climate AND change"
 	// Default: operator.Or
-	Operator operator.Operator `json:"operator,omitempty"`
+	DefaultOperator operator.Operator `json:"default_operator,omitempty"`
 }
 
-// BooleanQuery: Structured queries using logical operators
+// BooleanQuery BooleanQuery: Structured queries using logical operators
 type BooleanQuery struct {
 	// Expression: Boolean query string with operators
 	// Supported operators:
@@ -75,90 +84,71 @@ var (
 	// DefaultFields are the default fields to search when not specified
 	DefaultFields = []string{"title", "description", "content"}
 
-	// FieldWeights are the default field weights (equal weighting)
-	FieldWeights = map[string]float64{
+	// DefaultFieldWeights are the default field weights (equal weighting)
+	DefaultFieldWeights = map[string]float64{
 		"title":       1.0,
 		"description": 1.0,
 		"content":     1.0,
 	}
+
+	RecommendedFieldWeights = map[string]float64{
+		"title":       3.0,
+		"description": 2.0,
+		"content":     1.0,
+	}
 )
 
-type FullTextQueryOption func(q *FullText)
+type QueryStringOption func(q *QueryString)
 
-func NewFullTextQuery(text string, opts ...FullTextQueryOption) *FullText {
-	q := &FullText{
-		Text: text,
+// NewQueryString creates a new QueryString query with sensible defaults
+func NewQueryString(query string, opts ...QueryStringOption) *QueryString {
+	q := &QueryString{
+		Query:           query,
+		Language:        DefaultLanguage,
+		DefaultOperator: operator.Or,
 	}
-
-	qBase := q.WithDefaults()
 
 	for _, opt := range opts {
-		opt(qBase)
+		opt(q)
 	}
 
-	return qBase
+	return q
 }
 
-// WithDefaults returns a copy of FullText with default values applied
-func (q *FullText) WithDefaults() *FullText {
-	result := &FullText{
-		Text:         q.Text,
-		FieldWeights: q.FieldWeights,
-		Language:     q.Language,
-		Fields:       q.Fields,
+// WithQueryStringLanguage sets the language for QueryString
+func WithQueryStringLanguage(lang Language) QueryStringOption {
+	return func(q *QueryString) {
+		q.Language = lang
 	}
+}
 
-	if result.Language == "" {
-		result.Language = DefaultLanguage
+// WithQueryStringOperator sets the default operator for QueryString
+func WithQueryStringOperator(op operator.Operator) QueryStringOption {
+	return func(q *QueryString) {
+		q.DefaultOperator = op
 	}
-
-	if len(result.Fields) == 0 {
-		result.Fields = DefaultFields
-	}
-
-	if len(result.FieldWeights) == 0 {
-		result.FieldWeights = make(map[string]float64)
-		for _, field := range result.Fields {
-			result.FieldWeights[field] = 1.0
-		}
-	}
-
-	return result
 }
 
 // GetLanguage returns the language with default fallback
-func (q *FullText) GetLanguage() Language {
+func (q *QueryString) GetLanguage() Language {
 	if q.Language == "" {
 		return DefaultLanguage
 	}
 	return q.Language
 }
 
-// GetFields returns the fields with default fallback
-func (q *FullText) GetFields() []string {
-	if len(q.Fields) == 0 {
-		return DefaultFields
+// GetDefaultOperator returns the default operator with fallback
+func (q *QueryString) GetDefaultOperator() operator.Operator {
+	if q.DefaultOperator == "" {
+		return operator.Or
 	}
-	return q.Fields
+	return q.DefaultOperator
 }
 
-// GetFieldWeight returns the weight for a specific field, or 1.0 if not specified
-func (q *FullText) GetFieldWeight(field string) float64 {
-	if len(q.FieldWeights) == 0 {
-		return 1.0
-	}
-	if weight, ok := q.FieldWeights[field]; ok {
-		return weight
-	}
-	return 1.0
-}
-
-// Match: Single-field match query (Elasticsearch terminology)
+// Match Match: Single-field match query
 // Performs analyzed full-text search on a single field with relevance scoring
-//
 // Elasticsearch: Translates to {"match": {"field": {"query": "text"}}}
 // PostgreSQL: Uses weighted tsvector on single field
-//
 // Example:
 //
 //	{"field": "title", "query": "climate change", "operator": "and"}
@@ -216,7 +206,28 @@ func NewMatch(field, query string, opts ...MatchQueryOption) *Match {
 	return q
 }
 
-// MultiMatch: Multi-field match query (Elasticsearch terminology)
+// WithMatchLanguage sets the language for Match query
+func WithMatchLanguage(lang Language) MatchQueryOption {
+	return func(q *Match) {
+		q.Language = lang
+	}
+}
+
+// WithMatchOperator sets the operator for Match query
+func WithMatchOperator(op operator.Operator) MatchQueryOption {
+	return func(q *Match) {
+		q.Operator = op
+	}
+}
+
+// WithMatchFuzziness sets the fuzziness for Match query
+func WithMatchFuzziness(fuzziness string) MatchQueryOption {
+	return func(q *Match) {
+		q.Fuzziness = fuzziness
+	}
+}
+
+// MultiMatch MultiMatch: Multi-field match query (Elasticsearch terminology)
 // Performs analyzed full-text search across multiple fields with per-field boosting
 //
 // Elasticsearch: Translates to {"multi_match": {"query": "text", "fields": ["title^3", "content"]}}
@@ -246,11 +257,27 @@ type MultiMatch struct {
 }
 type MultiMatchQueryOption func(q *MultiMatch)
 
+// WithMultiMatchFieldWeights sets field weights for MultiMatch query
 func WithMultiMatchFieldWeights(weights map[string]float64) MultiMatchQueryOption {
 	return func(q *MultiMatch) {
 		q.FieldWeights = weights
 	}
 }
+
+// WithMultiMatchLanguage sets the language for MultiMatch query
+func WithMultiMatchLanguage(lang Language) MultiMatchQueryOption {
+	return func(q *MultiMatch) {
+		q.Language = lang
+	}
+}
+
+// WithMultiMatchOperator sets the operator for MultiMatch query
+func WithMultiMatchOperator(op operator.Operator) MultiMatchQueryOption {
+	return func(q *MultiMatch) {
+		q.Operator = op
+	}
+}
+
 func NewMultiMatchQuery(query string, fields []string, opts ...MultiMatchQueryOption) *MultiMatch {
 	q := &MultiMatch{
 		Query:        query,
