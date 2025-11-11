@@ -24,7 +24,7 @@ func NewReader(pool *ConnectionPool) (*Searcher, error) {
 // SearchQueryString implements storage.FTSSearcher interface
 // Performs simple string-based search using PostgreSQL's tsvector and plainto_tsquery
 // Application determines optimal fields and weights based on index configuration
-func (r *Searcher) SearchQueryString(ctx context.Context, query *dquery.QueryString, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
+func (r *Searcher) SearchQueryString(ctx context.Context, query *dquery.String, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
 	slog.Info("Executing pg query_string search", "query", query.Query, "has_cursor", cursor != nil, "size", size)
 
 	var globalMaxScore float64
@@ -158,11 +158,10 @@ func (r *Searcher) SearchMatch(ctx context.Context, query *dquery.Match, cursor 
 	lang := query.GetLanguage()
 	operator := query.GetOperator()
 
-	// Build query using existing helpers for single field
-	// Set weight to 1.0 for the single field
-	weights := map[string]float64{query.Field: 1.0}
-	whereClause := buildTsWhereClause([]string{query.Field}, weights, lang, operator, 1)
-	rankExpr := buildRankExpression([]string{query.Field}, weights, lang, operator, 1)
+	// Build FieldBoost for single field
+	fieldBoosts := []FieldBoost{{Field: query.Field, Boost: 1.0}}
+	whereClause := buildTsWhereClause(fieldBoosts, lang, operator, 1)
+	rankExpr := buildRankExpression(fieldBoosts, lang, operator, 1)
 
 	slog.Debug("PostgreSQL match query components",
 		"where", whereClause,
@@ -290,27 +289,34 @@ func (r *Searcher) SearchMatch(ctx context.Context, query *dquery.Match, cursor 
 // SearchMultiMatch implements storage.MultiMatchSearcher interface
 // Performs multi-field match query using PostgreSQL's weighted tsvector
 func (r *Searcher) SearchMultiMatch(ctx context.Context, query *dquery.MultiMatch, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
+	lang := query.GetLanguage()
+	operator := query.GetOperator()
+
+	// Convert Fields (MultiMatchField) to FieldBoost
+	var fieldBoosts []FieldBoost
+	for _, f := range query.Fields {
+		fieldBoosts = append(fieldBoosts, FieldBoost{
+			Field: f.Name,
+			Boost: f.Weight,
+		})
+	}
+
 	slog.Info("Executing pg multi_match search",
 		"query", query.Query,
 		"fields", query.Fields,
-		"operator", query.GetOperator(),
-		"language", query.GetLanguage(),
+		"operator", operator,
+		"language", lang,
 		"has_cursor", cursor != nil,
 		"size", size)
 
-	lang := query.GetLanguage()
-	fields := query.GetFields()
-	weights := query.FieldWeights
-	operator := query.GetOperator()
-
-	// Use existing helper functions from fts_helpers.go
-	whereClause := buildTsWhereClause(fields, weights, lang, operator, 1)
-	rankExpr := buildRankExpression(fields, weights, lang, operator, 1)
+	// Use helper functions with FieldBoost
+	whereClause := buildTsWhereClause(fieldBoosts, lang, operator, 1)
+	rankExpr := buildRankExpression(fieldBoosts, lang, operator, 1)
 
 	slog.Debug("PostgreSQL multi_match query components",
 		"where", whereClause,
 		"rank", rankExpr,
-		"weights", weights)
+		"field_boosts", fieldBoosts)
 
 	// Get global max score and total count
 	var globalMaxScore float64

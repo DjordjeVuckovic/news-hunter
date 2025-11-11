@@ -28,7 +28,7 @@ type FTSSearcher interface {
 	// cursor: optional decoded cursor from previous result (nil for first page)
 	// size: number of results to return per page
 	// Returns domain objects with domain cursor (not encoded string)
-	SearchQueryString(ctx context.Context, query *query.QueryString, cursor *dto.Cursor, size int) (*SearchResult, error)
+	SearchQueryString(ctx context.Context, query *query.String, cursor *dto.Cursor, size int) (*SearchResult, error)
 }
 
 // MatchSearcher is an optional interface for single-field match queries

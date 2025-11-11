@@ -2,93 +2,171 @@ package pg
 
 import (
 	"fmt"
+	"math"
+	"strconv"
+	"strings"
 
 	"github.com/DjordjeVuckovic/news-hunter/internal/domain/operator"
 	"github.com/DjordjeVuckovic/news-hunter/internal/domain/query"
 )
 
-// buildSearchVector returns the tsvector expression for full-text search
-// Always uses the pre-computed 'search_vector' column which has weights:
-//   - title: 'A' (weight 1.0)
-//   - description: 'B' (weight 0.4)
-//   - subtitle/content: 'C' (weight 0.2)
-//   - author: 'D' (weight 0.1)
+// Field to PostgreSQL weight label mapping
+// Weight labels determine which document sections are searched
+var fieldToLabel = map[string]string{
+	"title":       "A",
+	"description": "B",
+	"content":     "C",
+	"subtitle":    "D",
+	"author":      "D",
+}
+
+// Label to ts_rank weight array position mapping
+// PostgreSQL weights array format: {D, C, B, A} (reverse order!)
+var labelToPosition = map[string]int{
+	"A": 3, // Title - position 3 in {D, C, B, A}
+	"B": 2, // Description - position 2
+	"C": 1, // Content - position 1
+	"D": 0, // Subtitle/Author - position 0
+}
+
+// FieldBoost represents a field with its boost value for ES-style notation
+type FieldBoost struct {
+	Field string
+	Boost float64
+}
+
+// parseFieldBoost parses Elasticsearch-style "field^boost" notation
+// Examples:
 //
-// The pre-computed column is GIN-indexed for fast searches.
-func buildSearchVector(fields []string, weights map[string]float64, lang query.Language) string {
-	// Always use pre-computed weighted search_vector
-	// It's pre-indexed and has field weights baked in
-	// Custom field weights are applied via ts_rank weights array instead
-	return "search_vector"
+//	"title^3.0"     → FieldBoost{Field: "title", Boost: 3.0}
+//	"description"   → FieldBoost{Field: "description", Boost: 1.0}
+func parseFieldBoost(fieldStr string) FieldBoost {
+	parts := strings.Split(fieldStr, "^")
+	if len(parts) == 2 {
+		boost, err := strconv.ParseFloat(parts[1], 64)
+		if err == nil {
+			return FieldBoost{Field: parts[0], Boost: boost}
+		}
+	}
+	return FieldBoost{Field: fieldStr, Boost: 1.0} // Default boost
+}
+
+// buildWeightLabels converts field names to PostgreSQL weight label string
+// Examples:
+//
+//	["title", "description"] → "AB"
+//	["title", "content"]     → "AC"
+//	["title"]                → "A"
+//	[]                       → "" (empty means search all fields)
+func buildWeightLabels(fields []string) string {
+	if len(fields) == 0 {
+		return "" // Empty = search all fields
+	}
+
+	labels := make(map[string]bool)
+	for _, field := range fields {
+		if label, ok := fieldToLabel[field]; ok {
+			labels[label] = true
+		}
+	}
+
+	// Build sorted string (ABCD order for consistency)
+	result := ""
+	for _, label := range []string{"A", "B", "C", "D"} {
+		if labels[label] {
+			result += label
+		}
+	}
+
+	return result
+}
+
+// buildWeightsArray creates ts_rank weights array from field boosts
+// PostgreSQL array format: {D-weight, C-weight, B-weight, A-weight} (reverse order!)
+// Examples:
+//
+//	[]FieldBoost{{"title", 3.0}, {"description", 1.5}}
+//	→ "{0.00, 0.00, 1.50, 3.00}"
+func buildWeightsArray(fieldBoosts []FieldBoost) string {
+	weights := [4]float64{0.0, 0.0, 0.0, 0.0} // {D, C, B, A}
+
+	for _, fb := range fieldBoosts {
+		if label, ok := fieldToLabel[fb.Field]; ok {
+			position := labelToPosition[label]
+
+			// For D (subtitle/author), take max boost if multiple fields map to D
+			if position == 0 {
+				weights[position] = math.Max(weights[position], fb.Boost)
+			} else {
+				weights[position] = fb.Boost
+			}
+		}
+	}
+
+	return fmt.Sprintf("{%.2f, %.2f, %.2f, %.2f}",
+		weights[0], weights[1], weights[2], weights[3])
 }
 
 // buildTsQuery constructs a PostgreSQL tsquery expression based on operator
 // paramNum: The parameter number to use ($1, $2, etc.)
 // Returns: "plainto_tsquery('english'::regconfig, $1)" or "websearch_to_tsquery(...)"
 func buildTsQuery(op operator.Operator, lang query.Language, paramNum int) string {
-	if lang == "" {
-		lang = query.LanguageEnglish
-	}
 
 	if op.IsOr() {
-		// websearch_to_tsquery treats space-separated terms as AND
-		// "climate change" -> "climate & change"
+		// websearch_to_tsquery supports OR operator via "term1 OR term2" syntax
+		// Also supports phrase search ("quoted text"), NOT operator (-)
 		return fmt.Sprintf("websearch_to_tsquery('%s'::regconfig, $%d)", lang, paramNum)
 	}
 
-	// plainto_tsquery uses AND by default
-	// "climate change" -> "climate | change"
+	// plainto_tsquery uses AND by default for simple searches
+	// "climate change" -> "climat & chang"
 	return fmt.Sprintf("plainto_tsquery('%s'::regconfig, $%d)", lang, paramNum)
 }
 
 // buildRankExpression constructs a ts_rank expression with custom field weights
-// The pre-computed search_vector has weights: title=A, description=B, subtitle/content=C, author=D
-// PostgreSQL's default weight values are: A=1.0, B=0.4, C=0.2, D=0.1
-// If custom DefaultFieldWeights are specified, we override these defaults via the weights array
-// Returns: "ts_rank('{3.0, 2.0, 1.0, 0.1}', search_vector, query)" or default "ts_rank(search_vector, query)"
-func buildRankExpression(fields []string, weights map[string]float64, lang query.Language, op operator.Operator, paramNum int) string {
-	vectorExpr := buildSearchVector(fields, weights, lang)
+// The pre-computed search_vector has weights: title=A, description=B, content=C, subtitle/author=D
+// PostgreSQL's default weight values are: {0.1, 0.2, 0.4, 1.0} for {D, C, B, A}
+// Weight array format: {D-weight, C-weight, B-weight, A-weight} (REVERSE ORDER!)
+// Returns: "ts_rank('{0.0, 1.0, 1.5, 3.0}', search_vector, query)" or "ts_rank(search_vector, query)"
+func buildRankExpression(fieldBoosts []FieldBoost, lang query.Language, op operator.Operator, paramNum int) string {
+	vectorExpr := "search_vector"
 	queryExpr := buildTsQuery(op, lang, paramNum)
 
-	// Map field names to PostgreSQL weight labels (A, B, C, D)
-	//   title → A (weights[0])
-	//   description → B (weights[1])
-	//   subtitle/content → C (weights[2])
-	//   author → D (weights[3])
-	fieldToLabel := map[string]int{
-		"title":       0, // A
-		"description": 1, // B
-		"subtitle":    2, // C
-		"content":     2, // C
-		"author":      3, // D
+	// If custom boosts specified, use them
+	if len(fieldBoosts) > 0 {
+		weightsArray := buildWeightsArray(fieldBoosts)
+		return fmt.Sprintf("ts_rank('%s', %s, %s)", weightsArray, vectorExpr, queryExpr)
 	}
 
-	// Default PostgreSQL weights for A, B, C, D
-	weightArray := []float64{1.0, 0.4, 0.2, 0.1}
-
-	// Apply custom weights if specified
-	if len(weights) > 0 {
-		for field, weight := range weights {
-			if labelIdx, ok := fieldToLabel[field]; ok {
-				weightArray[labelIdx] = weight
-			}
-		}
-
-		// Use custom weights array in ts_rank
-		return fmt.Sprintf("ts_rank('{%.2f, %.2f, %.2f, %.2f}', %s, %s)",
-			weightArray[0], weightArray[1], weightArray[2], weightArray[3],
-			vectorExpr, queryExpr)
-	}
-
-	// Use default weights (let PostgreSQL use its defaults)
+	// Use default PostgreSQL weights
 	return fmt.Sprintf("ts_rank(%s, %s)", vectorExpr, queryExpr)
 }
 
-// buildTsWhereClause constructs the WHERE clause for full-text search
-// Always uses the pre-computed weighted search_vector with GIN index
-func buildTsWhereClause(fields []string, weights map[string]float64, lang query.Language, op operator.Operator, paramNum int) string {
-	vectorExpr := buildSearchVector(fields, weights, lang) // Returns "search_vector"
+// buildTsWhereClause constructs the WHERE clause for full-text search with weight label filtering
+// Weight labels filter which fields are searched: A=title, B=description, C=content, D=subtitle/author
+// Examples:
+//
+//	fieldBoosts=[{title,3.0}]                       → search_vector @@ (query::text || ':A')::tsquery
+//	fieldBoosts=[{title,3.0},{description,1.5}]     → search_vector @@ (query::text || ':AB')::tsquery
+//	fieldBoosts=[]                                   → search_vector @@ query (all fields)
+func buildTsWhereClause(fieldBoosts []FieldBoost, lang query.Language, op operator.Operator, paramNum int) string {
+	vectorExpr := "search_vector"
 	queryExpr := buildTsQuery(op, lang, paramNum)
 
+	// Extract field names from FieldBoost
+	var fields []string
+	for _, fb := range fieldBoosts {
+		fields = append(fields, fb.Field)
+	}
+
+	// Build weight labels from field names
+	labels := buildWeightLabels(fields)
+
+	// If specific fields requested, use weight label filtering
+	if labels != "" {
+		return fmt.Sprintf("%s @@ (%s::text || ':%s')::tsquery", vectorExpr, queryExpr, labels)
+	}
+
+	// No field filtering - search all fields
 	return fmt.Sprintf("%s @@ %s", vectorExpr, queryExpr)
 }

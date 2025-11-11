@@ -32,12 +32,10 @@ func (s *Indexer) Save(ctx context.Context, article document.Article) (uuid.UUID
 		article.CreatedAt = time.Now()
 	}
 
-	// Set ImportedAt if not already set
 	if article.Metadata.ImportedAt.IsZero() {
 		article.Metadata.ImportedAt = time.Now()
 	}
 
-	// Marshal metadata to JSON
 	metadataJSON, err := json.Marshal(article.Metadata)
 	if err != nil {
 		return uuid.UUID{}, fmt.Errorf("failed to marshal metadata: %w", err)

@@ -8,6 +8,7 @@
 go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
 ```
 - Run migrations
+- - Example
 ```bash
 migrate -path db/migrations -database "postgres://username:password@localhost:5432/news_db?sslmode=disable" up
 ```

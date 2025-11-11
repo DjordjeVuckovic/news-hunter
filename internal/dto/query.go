@@ -121,18 +121,8 @@ func (p *MatchParams) ToDomain() (*query.Match, error) {
 }
 
 func (p *MultiMatchParams) ToDomain() (*query.MultiMatch, error) {
-	if p.Query == "" {
-		return nil, fmt.Errorf("query is required")
-	}
-	if len(p.Fields) == 0 {
-		return nil, fmt.Errorf("fields are required")
-	}
 
 	var opts []query.MultiMatchQueryOption
-
-	if len(p.FieldWeights) > 0 {
-		opts = append(opts, query.WithMultiMatchFieldWeights(p.FieldWeights))
-	}
 
 	if p.Operator != "" {
 		op, err := operator.Parse(p.Operator)
@@ -150,7 +140,12 @@ func (p *MultiMatchParams) ToDomain() (*query.MultiMatch, error) {
 		opts = append(opts, query.WithMultiMatchLanguage(lang))
 	}
 
-	return query.NewMultiMatchQuery(p.Query, p.Fields, opts...), nil
+	newQuery, err := query.NewMultiMatchQuery(p.Query, p.Fields, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("invalid input: %w", err)
+	}
+
+	return newQuery, nil
 }
 
 // GetQueryType returns the type of query in the wrapper

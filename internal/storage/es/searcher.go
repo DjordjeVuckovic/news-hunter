@@ -38,7 +38,7 @@ func NewSeacher(config ClientConfig) (*Searcher, error) {
 // SearchQueryString implements storage.FTSSearcher interface
 // Performs simple string-based search using Elasticsearch's multi_match query with BM25
 // Application determines optimal fields and weights based on index configuration
-func (r *Searcher) SearchQueryString(ctx context.Context, query *dquery.QueryString, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
+func (r *Searcher) SearchQueryString(ctx context.Context, query *dquery.String, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
 	// Use default fields with default weights (application-determined)
 	fields := dquery.DefaultFields
 	fieldWeights := dquery.DefaultFieldWeights
@@ -347,11 +347,10 @@ func (r *Searcher) SearchMultiMatch(ctx context.Context, query *dquery.MultiMatc
 	// Build field list with boosting
 	fieldsWithBoost := make([]string, 0, len(fields))
 	for _, field := range fields {
-		weight := query.GetFieldWeight(field)
-		if weight != 1.0 {
-			fieldsWithBoost = append(fieldsWithBoost, fmt.Sprintf("%s^%.1f", field, weight))
+		if field.Weight != 1.0 {
+			fieldsWithBoost = append(fieldsWithBoost, fmt.Sprintf("%s^%.1f", field, field.Weight))
 		} else {
-			fieldsWithBoost = append(fieldsWithBoost, field)
+			fieldsWithBoost = append(fieldsWithBoost, field.Name)
 		}
 	}
 
