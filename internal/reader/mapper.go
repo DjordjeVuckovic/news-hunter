@@ -1,7 +1,7 @@
 package reader
 
 import (
-	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
+	"github.com/DjordjeVuckovic/news-hunter/internal/domain/document"
 	"github.com/DjordjeVuckovic/news-hunter/pkg/apis/datamapping"
 )
 
@@ -10,7 +10,7 @@ type MappingOptions struct {
 }
 
 type Mapper interface {
-	Map(map[string]string, *MappingOptions) (domain.Article, error)
+	Map(map[string]string, *MappingOptions) (document.Article, error)
 }
 
 type MappingLoader interface {

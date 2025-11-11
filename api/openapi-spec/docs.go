@@ -23,9 +23,9 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/v1/articles/search": {
-            "get": {
-                "description": "Search for news articles using full-text query with cursor-based pagination",
+        "/v1/articles/_search": {
+            "post": {
+                "description": "Execute structured search queries with explicit control over fields, weights, and operators. Supports match and multi_match query types. Follows Elasticsearch query DSL pattern.",
                 "consumes": [
                     "application/json"
                 ],
@@ -35,37 +35,27 @@ const docTemplate = `{
                 "tags": [
                     "search"
                 ],
-                "summary": "Full-text news search",
+                "summary": "Structured search API",
                 "parameters": [
                     {
-                        "type": "string",
-                        "description": "Search query",
-                        "name": "query",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Cursor for pagination (base64-encoded)",
-                        "name": "cursor",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Page size (default: 100, max: 10000)",
-                        "name": "size",
-                        "in": "query"
+                        "description": "Structured search request with query wrapper",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.SearchRequest"
+                        }
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Search results with pagination metadata",
                         "schema": {
-                            "$ref": "#/definitions/router.FTSSearchResponse"
+                            "$ref": "#/definitions/dto.SearchResponse"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Bad request - invalid query structure or parameters",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -74,7 +64,87 @@ const docTemplate = `{
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "501": {
+                        "description": "Query type not supported by storage backend",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/articles/search": {
+            "get": {
+                "description": "Simple text search with automatic field selection and weighting. Cacheable and bookmarkable. Application determines optimal search strategy based on index configuration.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "search"
+                ],
+                "summary": "Simple query string search",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "\"climate change\"",
+                        "description": "Search query text",
+                        "name": "q",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "example": 10,
+                        "description": "Results per page (default: 100, max: 10000)",
+                        "name": "size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Pagination cursor (base64-encoded from previous response)",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "example": "\"english\"",
+                        "description": "Search language: english, serbian (default: english)",
+                        "name": "lang",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Search results with pagination metadata",
+                        "schema": {
+                            "$ref": "#/definitions/dto.SearchResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - missing or invalid parameters",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -157,26 +227,111 @@ const docTemplate = `{
                         }
                     ]
                 },
-                "rank": {
-                    "description": "Score based on search relevance",
+                "score": {
+                    "description": "Score rank between 0 and 1",
+                    "type": "number"
+                },
+                "score_normalized": {
+                    "description": "ScoreNormalized is the normalized(between 0-1) score",
                     "type": "number"
                 }
             }
         },
-        "router.FTSSearchResponse": {
+        "dto.MatchParams": {
+            "type": "object",
+            "properties": {
+                "field": {
+                    "type": "string"
+                },
+                "fuzziness": {
+                    "type": "string"
+                },
+                "language": {
+                    "type": "string"
+                },
+                "operator": {
+                    "type": "string"
+                },
+                "query": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.MultiMatchParams": {
+            "type": "object",
+            "properties": {
+                "field_weights": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "number",
+                        "format": "float64"
+                    }
+                },
+                "fields": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "language": {
+                    "type": "string"
+                },
+                "operator": {
+                    "type": "string"
+                },
+                "query": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.QueryWrapper": {
+            "type": "object",
+            "properties": {
+                "match": {
+                    "$ref": "#/definitions/dto.MatchParams"
+                },
+                "multi_match": {
+                    "$ref": "#/definitions/dto.MultiMatchParams"
+                }
+            }
+        },
+        "dto.SearchRequest": {
+            "type": "object",
+            "properties": {
+                "cursor": {
+                    "type": "string"
+                },
+                "query": {
+                    "$ref": "#/definitions/dto.QueryWrapper"
+                },
+                "size": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.SearchResponse": {
             "type": "object",
             "properties": {
                 "has_more": {
                     "type": "boolean"
                 },
-                "items": {
+                "hits": {
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/dto.ArticleSearchResult"
                     }
                 },
+                "max_score": {
+                    "type": "number"
+                },
                 "next_cursor": {
                     "type": "string"
+                },
+                "page_max_score": {
+                    "type": "number"
+                },
+                "total_matches": {
+                    "type": "integer"
                 }
             }
         }

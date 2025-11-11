@@ -2,26 +2,24 @@ package pg
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type HealthChecker struct {
-	pg *pgxpool.Conn
+	pool *ConnectionPool
 }
 
-func NewHealthChecker(pg *pgxpool.Conn) *HealthChecker {
+func NewHealthChecker(pool *ConnectionPool) *HealthChecker {
 	return &HealthChecker{
-		pg: pg,
+		pool: pool,
 	}
 }
 
 func (hc *HealthChecker) Healthy(ctx context.Context) bool {
-	if hc.pg == nil {
+	if hc.pool == nil {
 		return false
 	}
 
-	err := hc.pg.Ping(ctx)
+	err := hc.pool.Ping(ctx)
 	if err != nil {
 		return false
 	}

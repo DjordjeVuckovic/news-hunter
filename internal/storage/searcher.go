@@ -1,0 +1,59 @@
+package storage
+
+import (
+	"context"
+
+	"github.com/DjordjeVuckovic/news-hunter/internal/domain/query"
+	"github.com/DjordjeVuckovic/news-hunter/internal/dto"
+)
+
+// SearchResult represents search results with cursor-based pagination
+// Contains domain objects - no encoding/decoding at this layer
+type SearchResult struct {
+	Hits         []dto.ArticleSearchResult `json:"hits"`
+	NextCursor   *dto.Cursor               `json:"-"`
+	HasMore      bool                      `json:"has_more"`
+	MaxScore     float64                   `json:"max_score"`
+	PageMaxScore float64                   `json:"page_max_score,omitempty"`
+	TotalMatches int64                     `json:"total_matches,omitempty"`
+}
+
+// FTSSearcher is the base interface that ALL storage backends must implement
+// Provides full-text search capability
+type FTSSearcher interface {
+	// SearchQueryString performs simple string-based search with application-optimized settings
+	// The storage implementation determines optimal fields, weights, and search strategy
+	// based on index configuration and content type.
+	//
+	// cursor: optional decoded cursor from previous result (nil for first page)
+	// size: number of results to return per page
+	// Returns domain objects with domain cursor (not encoded string)
+	SearchQueryString(ctx context.Context, query *query.String, cursor *dto.Cursor, size int) (*SearchResult, error)
+}
+
+// MatchSearcher is an optional interface for single-field match queries
+// Storage backends that support ES-style match queries should implement this
+type MatchSearcher interface {
+	// SearchMatch performs single-field match query with relevance scoring
+	// Elasticsearch: Uses match query on specified field
+	// PostgreSQL: Uses weighted tsvector on specified field
+	SearchMatch(ctx context.Context, query *query.Match, cursor *dto.Cursor, size int) (*SearchResult, error)
+}
+
+// MultiMatchSearcher is an optional interface for multi-field match queries
+// Storage backends that support ES-style multi_match queries should implement this
+type MultiMatchSearcher interface {
+	// SearchMultiMatch performs multi-field match query with per-field boosting
+	// Elasticsearch: Uses multi_match query with field weights
+	// PostgreSQL: Uses weighted tsvector across multiple fields
+	SearchMultiMatch(ctx context.Context, query *query.MultiMatch, cursor *dto.Cursor, size int) (*SearchResult, error)
+}
+
+// BooleanSearcher is an optional interface for boolean search capabilities
+// Storage backends that support structured queries with AND, OR, NOT operators should implement this
+type BooleanSearcher interface {
+	// SearchBoolean performs boolean search with logical operators
+	// Supports AND, OR, NOT operators with grouping via parentheses
+	// Example: "climate AND (change OR warming) AND NOT politics"
+	SearchBoolean(ctx context.Context, query *query.BooleanQuery, cursor *dto.Cursor, size int) (*SearchResult, error)
+}

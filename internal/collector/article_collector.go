@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
+	"github.com/DjordjeVuckovic/news-hunter/internal/domain/document"
 	"github.com/DjordjeVuckovic/news-hunter/internal/reader"
 )
 
@@ -24,7 +24,7 @@ func NewArticleCollector(r reader.RawParallelReader, mapper reader.Mapper) *Arti
 
 const defaultWorkers = 10
 
-func (ac *ArticleCollector) Collect(ctx context.Context) (<-chan Result[domain.Article], error) {
+func (ac *ArticleCollector) Collect(ctx context.Context) (<-chan Result[document.Article], error) {
 
 	result, err := ac.Reader.ReadParallel(ctx, ac.workers)
 	if err != nil {
@@ -32,7 +32,7 @@ func (ac *ArticleCollector) Collect(ctx context.Context) (<-chan Result[domain.A
 	}
 
 	// Create a channel to send the results
-	collectionResult := make(chan Result[domain.Article])
+	collectionResult := make(chan Result[document.Article])
 	go func() {
 		defer close(collectionResult)
 
@@ -46,19 +46,19 @@ func (ac *ArticleCollector) Collect(ctx context.Context) (<-chan Result[domain.A
 					return
 				}
 				if res.Err != nil {
-					collectionResult <- Result[domain.Article]{Err: res.Err}
+					collectionResult <- Result[document.Article]{Err: res.Err}
 				}
 
 				// Map the record to an Article
 				article, err := ac.Mapper.Map(res.Record, nil)
 				if err != nil {
-					collectionResult <- Result[domain.Article]{Err: err}
+					collectionResult <- Result[document.Article]{Err: err}
 					slog.Error("failed to map record to article", "error", err)
 					continue
 				}
 
 				// Send the mapped article to the channel
-				collectionResult <- Result[domain.Article]{Result: article}
+				collectionResult <- Result[document.Article]{Result: article}
 
 			}
 		}

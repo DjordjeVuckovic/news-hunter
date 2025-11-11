@@ -15,6 +15,7 @@ $$
             language      VARCHAR(10)                      DEFAULT 'english',
             description   text                             DEFAULT ''
         );
-        CREATE INDEX IF NOT EXISTS idx_articles_search_vector ON articles USING gin (search_vector);
+        CREATE INDEX IF NOT EXISTS idx_articles_search_vector ON articles
+            USING gin (search_vector);
     END
 $$

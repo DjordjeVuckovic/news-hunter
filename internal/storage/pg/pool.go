@@ -26,3 +26,20 @@ func NewConnectionPool(ctx context.Context, cfg PoolConfig) (*ConnectionPool, er
 
 	return &ConnectionPool{conn: dbpool}, nil
 }
+
+func (p *ConnectionPool) GetConn() *pgxpool.Pool {
+	return p.conn
+}
+
+func (p *ConnectionPool) Close() {
+	p.conn.Close()
+}
+
+func (p *ConnectionPool) Ping(ctx context.Context) error {
+	c, err := p.conn.Acquire(ctx)
+	if err != nil {
+		return err
+	}
+	defer c.Release()
+	return c.Ping(ctx)
+}

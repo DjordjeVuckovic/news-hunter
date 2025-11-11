@@ -5,22 +5,22 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
+	"github.com/DjordjeVuckovic/news-hunter/internal/domain/document"
 	"github.com/google/uuid"
 )
 
-type InMemStorer struct {
+type InMemIndexer struct {
 	storageLock sync.RWMutex
-	storage     map[uuid.UUID]domain.Article
+	storage     map[uuid.UUID]document.Article
 }
 
-func NewInMemStorer() *InMemStorer {
-	return &InMemStorer{
-		storage: make(map[uuid.UUID]domain.Article),
+func NewInMemIndexer() *InMemIndexer {
+	return &InMemIndexer{
+		storage: make(map[uuid.UUID]document.Article),
 	}
 }
 
-func (s *InMemStorer) Save(_ context.Context, article domain.Article) (uuid.UUID, error) {
+func (s *InMemIndexer) Save(_ context.Context, article document.Article) (uuid.UUID, error) {
 	// Implement the logic to save the article to a JSON file
 	// This is a placeholder implementation
 	// You would typically use encoding/json to marshal the article and write it to the file
@@ -32,7 +32,7 @@ func (s *InMemStorer) Save(_ context.Context, article domain.Article) (uuid.UUID
 	return uuid.New(), nil
 }
 
-func (s *InMemStorer) SaveBulk(ctx context.Context, articles []domain.Article) error {
+func (s *InMemIndexer) SaveBulk(ctx context.Context, articles []document.Article) error {
 	s.storageLock.Lock()
 	defer s.storageLock.Unlock()
 

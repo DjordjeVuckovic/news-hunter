@@ -3,13 +3,13 @@ package storage
 import (
 	"context"
 
-	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
+	"github.com/DjordjeVuckovic/news-hunter/internal/domain/document"
 	"github.com/google/uuid"
 )
 
-type Storer interface {
-	Save(ctx context.Context, article domain.Article) (uuid.UUID, error)
-	SaveBulk(ctx context.Context, articles []domain.Article) error
+type Indexer interface {
+	Save(ctx context.Context, article document.Article) (uuid.UUID, error)
+	SaveBulk(ctx context.Context, articles []document.Article) error
 }
 
 type Type string

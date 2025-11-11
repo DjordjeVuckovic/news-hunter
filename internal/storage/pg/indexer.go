@@ -6,38 +6,36 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/DjordjeVuckovic/news-hunter/internal/domain"
+	"github.com/DjordjeVuckovic/news-hunter/internal/domain/document"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type Storer struct {
+type Indexer struct {
 	db *pgxpool.Pool
 }
 
-func NewStorer(pool *ConnectionPool) (*Storer, error) {
+func NewIndexer(pool *ConnectionPool) (*Indexer, error) {
 
-	return &Storer{db: pool.conn}, nil
+	return &Indexer{db: pool.conn}, nil
 }
 
-func (s *Storer) Save(ctx context.Context, article domain.Article) (uuid.UUID, error) {
+func (s *Indexer) Save(ctx context.Context, article document.Article) (uuid.UUID, error) {
 	if article.ID == uuid.Nil {
 		article.ID = uuid.New()
 	}
 	if article.Language == "" {
-		article.Language = domain.ArticleDefaultLanguage
+		article.Language = document.ArticleDefaultLanguage
 	}
 	if article.CreatedAt.IsZero() {
 		article.CreatedAt = time.Now()
 	}
 
-	// Set ImportedAt if not already set
 	if article.Metadata.ImportedAt.IsZero() {
 		article.Metadata.ImportedAt = time.Now()
 	}
 
-	// Marshal metadata to JSON
 	metadataJSON, err := json.Marshal(article.Metadata)
 	if err != nil {
 		return uuid.UUID{}, fmt.Errorf("failed to marshal metadata: %w", err)
@@ -70,7 +68,7 @@ func (s *Storer) Save(ctx context.Context, article domain.Article) (uuid.UUID, e
 	return id, nil
 }
 
-func (s *Storer) SaveBulk(ctx context.Context, articles []domain.Article) error {
+func (s *Indexer) SaveBulk(ctx context.Context, articles []document.Article) error {
 	rows := make([][]interface{}, len(articles))
 	now := time.Now()
 
@@ -79,7 +77,7 @@ func (s *Storer) SaveBulk(ctx context.Context, articles []domain.Article) error 
 			a.ID = uuid.New()
 		}
 		if a.Language == "" {
-			a.Language = domain.ArticleDefaultLanguage
+			a.Language = document.ArticleDefaultLanguage
 		}
 		if a.CreatedAt.IsZero() {
 			a.CreatedAt = now

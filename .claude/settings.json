@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go test:*)",
+      "Bash(go build:*)",
+      "Bash(go fmt:*)",
+      "Bash(go mod tidy)",
+      "Bash(go vet :*)",
+      "Read(~/.zshrc)"
+    ],
+    "deny": [
+      "Bash(curl:*)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./secrets/**)"
+    ]
+  },
+  "env": {
+  },
+  "PostToolUse": [
+    {
+      "matcher": "Write(*.go)",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "go "
+        }
+      ]
+    }
+  ]
+}
