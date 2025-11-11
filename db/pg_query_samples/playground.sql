@@ -288,6 +288,41 @@ LIMIT 10 OFFSET 0;
 
 
 -- ====================================================================
+-- TEST 12: Debug Boost Behavior (Different weights, same results?)
+-- ====================================================================
+
+-- Test 1: Without custom boosts (default 1.0 for both fields)
+SELECT COUNT(*) as count_no_custom_boost
+FROM articles
+WHERE search_vector @@ (plainto_tsquery('english', 'trump')::text || ':AB')::tsquery;
+
+-- Test 2: With custom boosts (title=3.0, description=1.5)
+SELECT COUNT(*) as count_with_custom_boost
+FROM articles
+WHERE search_vector @@ (plainto_tsquery('english', 'trump')::text || ':AB')::tsquery;
+-- Should return SAME count as Test 1!
+
+-- Test 3: Check if ts_rank affects counts (it shouldn't!)
+SELECT
+    COUNT(*) as total,
+    COUNT(*) FILTER (WHERE ts_rank('{0.0, 0.0, 1.0, 1.0}', search_vector, plainto_tsquery('english', 'trump')) > 0) as with_default_weights,
+    COUNT(*) FILTER (WHERE ts_rank('{0.0, 0.0, 1.5, 3.0}', search_vector, plainto_tsquery('english', 'trump')) > 0) as with_custom_weights
+FROM articles
+WHERE search_vector @@ (plainto_tsquery('english', 'trump')::text || ':AB')::tsquery;
+
+-- Test 4: Compare scores with different weights (same docs, different scores)
+SELECT
+    id,
+    title,
+    ts_rank('{0.0, 0.0, 1.0, 1.0}', search_vector, plainto_tsquery('english', 'trump')) as score_default,
+    ts_rank('{0.0, 0.0, 1.5, 3.0}', search_vector, plainto_tsquery('english', 'trump')) as score_custom
+FROM articles
+WHERE search_vector @@ (plainto_tsquery('english', 'trump')::text || ':AB')::tsquery
+ORDER BY score_custom DESC
+LIMIT 10;
+
+
+-- ====================================================================
 -- SUMMARY: Count Comparison
 -- ====================================================================
 

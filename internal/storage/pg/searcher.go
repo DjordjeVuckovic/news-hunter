@@ -25,7 +25,7 @@ func NewReader(pool *ConnectionPool) (*Searcher, error) {
 // Performs simple string-based search using PostgreSQL's tsvector and plainto_tsquery
 // Application determines optimal fields and weights based on index configuration
 func (r *Searcher) SearchQueryString(ctx context.Context, query *dquery.String, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
-	slog.Info("Executing pg query_string search", "query", query.Query, "has_cursor", cursor != nil, "size", size)
+	slog.Info("Executing pool query_string search", "query", query.Query, "has_cursor", cursor != nil, "size", size)
 
 	var globalMaxScore float64
 	var count int64
@@ -147,7 +147,7 @@ func (r *Searcher) SearchQueryString(ctx context.Context, query *dquery.String, 
 // SearchMatch implements storage.MatchSearcher interface
 // Performs single-field match query using PostgreSQL's tsvector
 func (r *Searcher) SearchMatch(ctx context.Context, query *dquery.Match, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
-	slog.Info("Executing pg match search",
+	slog.Info("Executing pool match search",
 		"query", query.Query,
 		"field", query.Field,
 		"operator", query.GetOperator(),
@@ -301,7 +301,7 @@ func (r *Searcher) SearchMultiMatch(ctx context.Context, query *dquery.MultiMatc
 		})
 	}
 
-	slog.Info("Executing pg multi_match search",
+	slog.Info("Executing pool multi_match search",
 		"query", query.Query,
 		"fields", query.Fields,
 		"operator", operator,
@@ -313,10 +313,11 @@ func (r *Searcher) SearchMultiMatch(ctx context.Context, query *dquery.MultiMatc
 	whereClause := buildTsWhereClause(fieldBoosts, lang, operator, 1)
 	rankExpr := buildRankExpression(fieldBoosts, lang, operator, 1)
 
-	slog.Debug("PostgreSQL multi_match query components",
-		"where", whereClause,
-		"rank", rankExpr,
-		"field_boosts", fieldBoosts)
+	slog.Info("PostgreSQL multi_match query components",
+		"where_clause", whereClause,
+		"rank_expression", rankExpr,
+		"field_boosts", fieldBoosts,
+		"num_fields", len(fieldBoosts))
 
 	// Get global max score and total count
 	var globalMaxScore float64
@@ -440,7 +441,7 @@ func (r *Searcher) SearchMultiMatch(ctx context.Context, query *dquery.MultiMatc
 // SearchBoolean implements storage.BooleanSearcher interface
 // Performs boolean search using PostgreSQL's tsquery with AND (&), OR (|), NOT (!) operators
 func (r *Searcher) SearchBoolean(ctx context.Context, query *dquery.BooleanQuery, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
-	slog.Info("Executing pg boolean search", "expression", query.Expression, "has_cursor", cursor != nil, "size", size)
+	slog.Info("Executing pool boolean search", "expression", query.Expression, "has_cursor", cursor != nil, "size", size)
 
 	// TODO: Implement boolean query parser
 	// Parse query.Expression: "climate AND (change OR warming) AND NOT politics"

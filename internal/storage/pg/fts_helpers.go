@@ -2,6 +2,7 @@ package pg
 
 import (
 	"fmt"
+	"log/slog"
 	"math"
 	"strconv"
 	"strings"
@@ -86,8 +87,9 @@ func buildWeightLabels(fields []string) string {
 // Examples:
 //
 //	[]FieldBoost{{"title", 3.0}, {"description", 1.5}}
-//	→ "{0.00, 0.00, 1.50, 3.00}"
+//	→ "{0.00, 0.00, 1.50, 3.00}"  (D=0.0, C=0.0, B=1.5, A=3.0)
 func buildWeightsArray(fieldBoosts []FieldBoost) string {
+	// Initialize with zeros - only specified fields will have non-zero weights
 	weights := [4]float64{0.0, 0.0, 0.0, 0.0} // {D, C, B, A}
 
 	for _, fb := range fieldBoosts {
@@ -103,8 +105,19 @@ func buildWeightsArray(fieldBoosts []FieldBoost) string {
 		}
 	}
 
-	return fmt.Sprintf("{%.2f, %.2f, %.2f, %.2f}",
+	result := fmt.Sprintf("{%.2f, %.2f, %.2f, %.2f}",
 		weights[0], weights[1], weights[2], weights[3])
+
+	// Log for debugging
+	slog.Debug("Built weights array",
+		"weights_dcba", result,
+		"D", weights[0],
+		"C", weights[1],
+		"B", weights[2],
+		"A", weights[3],
+		"field_boosts", fieldBoosts)
+
+	return result
 }
 
 // buildTsQuery constructs a PostgreSQL tsquery expression based on operator
@@ -114,7 +127,6 @@ func buildTsQuery(op operator.Operator, lang query.Language, paramNum int) strin
 
 	if op.IsOr() {
 		// websearch_to_tsquery supports OR operator via "term1 OR term2" syntax
-		// Also supports phrase search ("quoted text"), NOT operator (-)
 		return fmt.Sprintf("websearch_to_tsquery('%s'::regconfig, $%d)", lang, paramNum)
 	}
 
@@ -162,11 +174,20 @@ func buildTsWhereClause(fieldBoosts []FieldBoost, lang query.Language, op operat
 	// Build weight labels from field names
 	labels := buildWeightLabels(fields)
 
+	var result string
 	// If specific fields requested, use weight label filtering
 	if labels != "" {
-		return fmt.Sprintf("%s @@ (%s::text || ':%s')::tsquery", vectorExpr, queryExpr, labels)
+		result = fmt.Sprintf("%s @@ (%s::text || ':%s')::tsquery", vectorExpr, queryExpr, labels)
+		slog.Debug("Built WHERE clause with label filtering",
+			"labels", labels,
+			"fields", fields,
+			"where_clause", result)
+	} else {
+		// No field filtering - search all fields
+		result = fmt.Sprintf("%s @@ %s", vectorExpr, queryExpr)
+		slog.Debug("Built WHERE clause without filtering",
+			"where_clause", result)
 	}
 
-	// No field filtering - search all fields
-	return fmt.Sprintf("%s @@ %s", vectorExpr, queryExpr)
+	return result
 }

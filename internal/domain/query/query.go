@@ -68,7 +68,7 @@ type String struct {
 	DefaultOperator operator.Operator `json:"default_operator,omitempty"`
 }
 
-// BooleanQuery BooleanQuery: Structured queries using logical operators
+// BooleanQuery: Structured queries using logical operators
 type BooleanQuery struct {
 	// Expression: Boolean query string with operators
 	// Supported operators:
