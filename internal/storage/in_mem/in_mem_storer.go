@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/DjordjeVuckovic/news-hunter/internal/domain/document"
+	"github.com/DjordjeVuckovic/news-hunter/internal/types/document"
 	"github.com/google/uuid"
 )
 

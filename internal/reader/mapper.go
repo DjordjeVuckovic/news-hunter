@@ -1,7 +1,7 @@
 package reader
 
 import (
-	"github.com/DjordjeVuckovic/news-hunter/internal/domain/document"
+	"github.com/DjordjeVuckovic/news-hunter/internal/types/document"
 	"github.com/DjordjeVuckovic/news-hunter/pkg/apis/datamapping"
 )
 

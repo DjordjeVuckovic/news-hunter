@@ -100,8 +100,8 @@ func (s *Server) SetupMiddlewares() *Server {
 	return s
 }
 
-func (s *Server) SetupHealthChecks() *Server {
-	s.Echo.GET("/health", s.handleHealthCheck)
+func (s *Server) SetupHealthChecks(path string) *Server {
+	s.Echo.GET(path, s.handleHealthCheck)
 
 	return s
 }
@@ -114,10 +114,10 @@ func (s *Server) handleHealthCheck(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"status": "healthy"})
 }
 
-func (s *Server) SetupOpenApi() *Server {
+func (s *Server) SetupOpenApi(path string) *Server {
 	openapi.SwaggerInfo.Host = fmt.Sprintf("localhost:%s", s.cfg.Port)
 
-	s.Echo.GET("/swagger/*", echoSwagger.WrapHandler)
+	s.Echo.GET(path, echoSwagger.WrapHandler)
 
 	return s
 }

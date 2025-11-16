@@ -31,6 +31,7 @@ func defaultOpt() middleware.RequestLoggerConfig {
 				slog.LogAttrs(context.Background(), slog.LevelInfo, "REQUEST",
 					slog.String("uri", v.URI),
 					slog.Int("status", v.Status),
+					slog.Duration("latency", v.Latency),
 				)
 			} else {
 				slog.LogAttrs(context.Background(), slog.LevelError, "REQUEST_ERROR",

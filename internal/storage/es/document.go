@@ -3,7 +3,7 @@ package es
 import (
 	"time"
 
-	"github.com/DjordjeVuckovic/news-hunter/internal/domain/document"
+	"github.com/DjordjeVuckovic/news-hunter/internal/types/document"
 	"github.com/elastic/go-elasticsearch/v8/typedapi/types"
 	"github.com/google/uuid"
 )

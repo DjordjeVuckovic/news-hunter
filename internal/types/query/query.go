@@ -6,39 +6,39 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/DjordjeVuckovic/news-hunter/internal/domain/operator"
+	"github.com/DjordjeVuckovic/news-hunter/internal/types/operator"
 )
 
-// Type QueryType represents the search paradigm to use
-type Type string
+// Kind QueryType represents the search paradigm to use
+type Kind string
 
 const (
 
 	// QueryStringType QueryTypeQueryString: Simple text-based search query (application-optimized)
-	QueryStringType Type = "query_string"
+	QueryStringType Kind = "query_string"
 
 	// MatchType: Single-field match query (Elasticsearch terminology)
 	// ES: match query on single field
 	// PG: tsvector search on single field
-	MatchType Type = "match"
+	MatchType Kind = "match"
 
 	// MultiMatchType: Multi-field match query (Elasticsearch terminology)
 	// ES: multi_match query with field boosting
 	// PG: weighted tsvector search across multiple fields
-	MultiMatchType Type = "multi_match"
+	MultiMatchType Kind = "multi_match"
 
 	// BooleanType: Structured queries with logical operators (AND, OR, NOT)
-	BooleanType Type = "boolean"
+	BooleanType Kind = "boolean"
 )
 
 // SearchQuery is the top-level query container
-// Only one query field should be non-nil based on Type
+// Only one query field should be non-nil based on Kind
 type SearchQuery struct {
-	Type        Type          `json:"type"`
-	QueryString *String       `json:"query_string,omitempty"`
-	Match       *Match        `json:"match,omitempty"`
-	MultiMatch  *MultiMatch   `json:"multi_match,omitempty"`
-	Boolean     *BooleanQuery `json:"boolean,omitempty"`
+	Kind        Kind        `json:"kind"`
+	QueryString *String     `json:"query_string,omitempty"`
+	Match       *Match      `json:"match,omitempty"`
+	MultiMatch  *MultiMatch `json:"multi_match,omitempty"`
+	Boolean     *Boolean    `json:"boolean,omitempty"`
 }
 
 // String represents a simple text-based search query
@@ -68,8 +68,8 @@ type String struct {
 	DefaultOperator operator.Operator `json:"default_operator,omitempty"`
 }
 
-// BooleanQuery: Structured queries using logical operators
-type BooleanQuery struct {
+// Boolean: Structured queries using logical operators
+type Boolean struct {
 	// Expression: Boolean query string with operators
 	// Supported operators:
 	//   - AND (&): All terms must be present
@@ -83,6 +83,21 @@ type BooleanQuery struct {
 	//   "Trump AND NOT biden"
 	//   "(climate OR weather) AND (change OR warming)"
 	Expression string `json:"expression" validate:"required,min=1"`
+}
+
+type Phrase struct {
+	// Query: The exact phrase to search for
+	Query string `json:"query" validate:"required,min=1"`
+
+	// Fields: Fields to search in (supports multiple like multi_match)
+	Fields []string `json:"fields" validate:"required,min=1"`
+
+	// Slop: Maximum positions allowed between matching tokens
+	// 0 = exact phrase, 1 = one word between, etc.
+	Slop int `json:"slop,omitempty"`
+
+	// Language: Text analysis language
+	Language Language `json:"language,omitempty"`
 }
 
 var (
@@ -150,7 +165,7 @@ func (q *String) GetDefaultOperator() operator.Operator {
 	return q.DefaultOperator
 }
 
-// Match Match: Single-field match query
+// Match: Single-field match query
 // Performs analyzed full-text search on a single field with relevance scoring
 // Elasticsearch: Translates to {"match": {"field": {"query": "text"}}}
 // PostgreSQL: Uses weighted tsvector on single field
@@ -244,10 +259,10 @@ func NewMultiMatchField(name string) MultiMatchField {
 	}
 }
 
-func NewMultiMatchBoostedField(name string, boost float64) MultiMatchField {
+func NewMultiMatchBoostedField(name string, weight float64) MultiMatchField {
 	return MultiMatchField{
 		Name:   name,
-		Weight: boost,
+		Weight: weight,
 	}
 }
 
@@ -259,7 +274,7 @@ const (
 	MultiMatchBestFields MultiMatchStrategy = "best_fields"
 )
 
-// MultiMatch MultiMatch: Multi-field match query (Elasticsearch terminology)
+// MultiMatch: Multi-field match query (Elasticsearch terminology)
 // Performs analyzed full-text search across multiple fields with per-field boosting
 //
 // Elasticsearch: Translates to {"multi_match": {"query": "text", "fields": ["title^3", "content"]}}

@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"log/slog"
 
-	dquery "github.com/DjordjeVuckovic/news-hunter/internal/domain/query"
 	"github.com/DjordjeVuckovic/news-hunter/internal/dto"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
+	dquery "github.com/DjordjeVuckovic/news-hunter/internal/types/query"
 	"github.com/DjordjeVuckovic/news-hunter/pkg/utils"
 	"github.com/elastic/go-elasticsearch/v8"
 	"github.com/elastic/go-elasticsearch/v8/typedapi/types"
@@ -22,7 +22,7 @@ type Searcher struct {
 	indexName string
 }
 
-func NewSeacher(config ClientConfig) (*Searcher, error) {
+func NewSearcher(config ClientConfig) (*Searcher, error) {
 	client, err := newClient(config)
 
 	if err != nil {
@@ -35,11 +35,12 @@ func NewSeacher(config ClientConfig) (*Searcher, error) {
 	}, nil
 }
 
-// SearchQueryString implements storage.FTSSearcher interface
+// SearchQueryString implements storage.Searcher interface
 // Performs simple string-based search using Elasticsearch's multi_match query with BM25
 // Application determines optimal fields and weights based on index configuration
-func (r *Searcher) SearchQueryString(ctx context.Context, query *dquery.String, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
+func (r *Searcher) Search(ctx context.Context, query *dquery.String, baseOpts *dquery.BaseOptions) (*storage.SearchResult, error) {
 	// Use default fields with default weights (application-determined)
+	cursor, size := baseOpts.Cursor, baseOpts.Size
 	fields := dquery.DefaultFields
 	fieldWeights := dquery.DefaultFieldWeights
 	queryOperator := query.GetDefaultOperator()
@@ -124,7 +125,7 @@ func (r *Searcher) SearchQueryString(ctx context.Context, query *dquery.String, 
 
 	articles, rawScores, err := r.mapToResult(res.Hits.Hits, maxScore)
 	if err != nil {
-		return nil, fmt.Errorf("failed to map search results to domain: %w", err)
+		return nil, fmt.Errorf("failed to map search results to types: %w", err)
 	}
 
 	slog.Info("Es search results fetched",
@@ -139,9 +140,9 @@ func (r *Searcher) SearchQueryString(ctx context.Context, query *dquery.String, 
 		rawScores = rawScores[:size]
 	}
 
-	var nextCursor *dto.Cursor
+	var nextCursor *dquery.Cursor
 	if hasMore && len(articles) > 0 {
-		nextCursor = &dto.Cursor{
+		nextCursor = &dquery.Cursor{
 			Score: rawScores[len(rawScores)-1],
 			ID:    articles[len(articles)-1].Article.ID,
 		}
@@ -208,7 +209,7 @@ func (r *Searcher) mapToResult(hits []types.Hit, maxScore float64) ([]dto.Articl
 
 // SearchBoolean implements storage.BooleanSearcher interface
 // Performs boolean search using Elasticsearch's bool query with must, should, must_not clauses
-func (r *Searcher) SearchBoolean(ctx context.Context, query *dquery.BooleanQuery, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
+func (r *Searcher) SearchBoolean(ctx context.Context, query *dquery.Boolean, cursor *dquery.Cursor, size int) (*storage.SearchResult, error) {
 	slog.Info("Executing es boolean search", "expression", query.Expression, "has_cursor", cursor != nil, "size", size)
 
 	// TODO: Implement boolean query parser
@@ -218,9 +219,10 @@ func (r *Searcher) SearchBoolean(ctx context.Context, query *dquery.BooleanQuery
 	return nil, fmt.Errorf("boolean search not yet implemented for Elasticsearch")
 }
 
-// SearchMatch implements storage.MatchSearcher interface
+// SearchMatch implements storage.SingleMatchSearcher interface
 // Performs single-field match query using Elasticsearch's match query
-func (r *Searcher) SearchMatch(ctx context.Context, query *dquery.Match, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
+func (r *Searcher) SearchField(ctx context.Context, query *dquery.Match, baseOpts *dquery.BaseOptions) (*storage.SearchResult, error) {
+	cursor, size := baseOpts.Cursor, baseOpts.Size
 	slog.Info("Executing es match search",
 		"query", query.Query,
 		"field", query.Field,
@@ -297,7 +299,7 @@ func (r *Searcher) SearchMatch(ctx context.Context, query *dquery.Match, cursor 
 
 	articles, rawScores, err := r.mapToResult(res.Hits.Hits, maxScore)
 	if err != nil {
-		return nil, fmt.Errorf("failed to map search results to domain: %w", err)
+		return nil, fmt.Errorf("failed to map search results to types: %w", err)
 	}
 
 	slog.Info("ES match search results fetched",
@@ -312,9 +314,9 @@ func (r *Searcher) SearchMatch(ctx context.Context, query *dquery.Match, cursor 
 		rawScores = rawScores[:size]
 	}
 
-	var nextCursor *dto.Cursor
+	var nextCursor *dquery.Cursor
 	if hasMore && len(articles) > 0 {
-		nextCursor = &dto.Cursor{
+		nextCursor = &dquery.Cursor{
 			Score: rawScores[len(rawScores)-1],
 			ID:    articles[len(articles)-1].Article.ID,
 		}
@@ -332,7 +334,8 @@ func (r *Searcher) SearchMatch(ctx context.Context, query *dquery.Match, cursor 
 
 // SearchMultiMatch implements storage.MultiMatchSearcher interface
 // Performs multi-field match query using Elasticsearch's multi_match query
-func (r *Searcher) SearchMultiMatch(ctx context.Context, query *dquery.MultiMatch, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
+func (r *Searcher) SearchFields(ctx context.Context, query *dquery.MultiMatch, baseOpts *dquery.BaseOptions) (*storage.SearchResult, error) {
+	cursor, size := baseOpts.Cursor, baseOpts.Size
 	slog.Info("Executing es multi_match search",
 		"query", query.Query,
 		"fields", query.Fields,
@@ -345,19 +348,19 @@ func (r *Searcher) SearchMultiMatch(ctx context.Context, query *dquery.MultiMatc
 	queryOperator := query.GetOperator()
 
 	// Build field list with boosting
-	fieldsWithBoost := make([]string, 0, len(fields))
+	fieldsWithWeight := make([]string, 0, len(fields))
 	for _, field := range fields {
 		if field.Weight != 1.0 {
-			fieldsWithBoost = append(fieldsWithBoost, fmt.Sprintf("%s^%.1f", field, field.Weight))
+			fieldsWithWeight = append(fieldsWithWeight, fmt.Sprintf("%s^%.1f", field, field.Weight))
 		} else {
-			fieldsWithBoost = append(fieldsWithBoost, field.Name)
+			fieldsWithWeight = append(fieldsWithWeight, field.Name)
 		}
 	}
 
 	// Build multi_match query
 	multiMatch := &types.MultiMatchQuery{
 		Query:  query.Query,
-		Fields: fieldsWithBoost,
+		Fields: fieldsWithWeight,
 	}
 
 	// Set operator using value object
@@ -411,7 +414,7 @@ func (r *Searcher) SearchMultiMatch(ctx context.Context, query *dquery.MultiMatc
 
 	articles, rawScores, err := r.mapToResult(res.Hits.Hits, maxScore)
 	if err != nil {
-		return nil, fmt.Errorf("failed to map search results to domain: %w", err)
+		return nil, fmt.Errorf("failed to map search results to types: %w", err)
 	}
 
 	slog.Info("ES multi_match search results fetched",
@@ -426,9 +429,9 @@ func (r *Searcher) SearchMultiMatch(ctx context.Context, query *dquery.MultiMatc
 		rawScores = rawScores[:size]
 	}
 
-	var nextCursor *dto.Cursor
+	var nextCursor *dquery.Cursor
 	if hasMore && len(articles) > 0 {
-		nextCursor = &dto.Cursor{
+		nextCursor = &dquery.Cursor{
 			Score: rawScores[len(rawScores)-1],
 			ID:    articles[len(articles)-1].Article.ID,
 		}
@@ -445,7 +448,4 @@ func (r *Searcher) SearchMultiMatch(ctx context.Context, query *dquery.MultiMatc
 }
 
 // Compile-time interface assertions
-var _ storage.FTSSearcher = (*Searcher)(nil)
-var _ storage.BooleanSearcher = (*Searcher)(nil)
-var _ storage.MatchSearcher = (*Searcher)(nil)
-var _ storage.MultiMatchSearcher = (*Searcher)(nil)
+var _ storage.Searcher = (*Searcher)(nil)

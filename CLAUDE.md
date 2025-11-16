@@ -290,7 +290,7 @@ Follow Go's idiomatic approach of using packages as namespaces:
 **Example - Operator Value Object**:
 ```go
 // ✅ Good: Dedicated package with clean namespacing
-// File: internal/domain/operator/operator.go
+// File: internal/types/operator/operator.go
 package operator
 
 type Operator string
@@ -314,11 +314,11 @@ func New(op string) (Operator, error) {
 func (o Operator) IsAnd() bool { return o == And }
 func (o Operator) IsOr() bool { return o == Or }
 
-// Usage in domain types:
+// Usage in types types:
 query.Operator = operator.And  // ✅ Clean and idiomatic
 
-// ❌ Bad: All in domain package with redundant prefixes
-const OperatorAnd = "and"  // Would be domain.OperatorAnd - redundant!
+// ❌ Bad: All in types package with redundant prefixes
+const OperatorAnd = "and"  // Would be types.OperatorAnd - redundant!
 ```
 
 **Ubiquitous Language**:

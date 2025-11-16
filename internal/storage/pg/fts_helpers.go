@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/DjordjeVuckovic/news-hunter/internal/domain/operator"
-	"github.com/DjordjeVuckovic/news-hunter/internal/domain/query"
+	"github.com/DjordjeVuckovic/news-hunter/internal/types/operator"
+	"github.com/DjordjeVuckovic/news-hunter/internal/types/query"
 )
 
 // Field to PostgreSQL weight label mapping
@@ -30,26 +30,26 @@ var labelToPosition = map[string]int{
 	"D": 0, // Subtitle/Author - position 0
 }
 
-// FieldBoost represents a field with its boost value for ES-style notation
-type FieldBoost struct {
-	Field string
-	Boost float64
+// FieldWeight represents a field with its boost value for ES-style notation
+type FieldWeight struct {
+	Field  string
+	Weight float64
 }
 
 // parseFieldBoost parses Elasticsearch-style "field^boost" notation
 // Examples:
 //
-//	"title^3.0"     → FieldBoost{Field: "title", Boost: 3.0}
-//	"description"   → FieldBoost{Field: "description", Boost: 1.0}
-func parseFieldBoost(fieldStr string) FieldBoost {
+//	"title^3.0"     → FieldWeight{Field: "title", Weight: 3.0}
+//	"description"   → FieldWeight{Field: "description", Weight: 1.0}
+func parseFieldBoost(fieldStr string) FieldWeight {
 	parts := strings.Split(fieldStr, "^")
 	if len(parts) == 2 {
-		boost, err := strconv.ParseFloat(parts[1], 64)
+		w, err := strconv.ParseFloat(parts[1], 64)
 		if err == nil {
-			return FieldBoost{Field: parts[0], Boost: boost}
+			return FieldWeight{Field: parts[0], Weight: w}
 		}
 	}
-	return FieldBoost{Field: fieldStr, Boost: 1.0} // Default boost
+	return FieldWeight{Field: fieldStr, Weight: 1.0} // Default boost
 }
 
 // buildWeightLabels converts field names to PostgreSQL weight label string
@@ -86,9 +86,9 @@ func buildWeightLabels(fields []string) string {
 // PostgreSQL array format: {D-weight, C-weight, B-weight, A-weight} (reverse order!)
 // Examples:
 //
-//	[]FieldBoost{{"title", 3.0}, {"description", 1.5}}
+//	[]FieldWeight{{"title", 3.0}, {"description", 1.5}}
 //	→ "{0.00, 0.00, 1.50, 3.00}"  (D=0.0, C=0.0, B=1.5, A=3.0)
-func buildWeightsArray(fieldBoosts []FieldBoost) string {
+func buildWeightsArray(fieldBoosts []FieldWeight) string {
 	// Initialize with zeros - only specified fields will have non-zero weights
 	weights := [4]float64{0.0, 0.0, 0.0, 0.0} // {D, C, B, A}
 
@@ -98,9 +98,9 @@ func buildWeightsArray(fieldBoosts []FieldBoost) string {
 
 			// For D (subtitle/author), take max boost if multiple fields map to D
 			if position == 0 {
-				weights[position] = math.Max(weights[position], fb.Boost)
+				weights[position] = math.Max(weights[position], fb.Weight)
 			} else {
-				weights[position] = fb.Boost
+				weights[position] = fb.Weight
 			}
 		}
 	}
@@ -140,7 +140,7 @@ func buildTsQuery(op operator.Operator, lang query.Language, paramNum int) strin
 // PostgreSQL's default weight values are: {0.1, 0.2, 0.4, 1.0} for {D, C, B, A}
 // Weight array format: {D-weight, C-weight, B-weight, A-weight} (REVERSE ORDER!)
 // Returns: "ts_rank('{0.0, 1.0, 1.5, 3.0}', search_vector, query)" or "ts_rank(search_vector, query)"
-func buildRankExpression(fieldBoosts []FieldBoost, lang query.Language, op operator.Operator, paramNum int) string {
+func buildRankExpression(fieldBoosts []FieldWeight, lang query.Language, op operator.Operator, paramNum int) string {
 	vectorExpr := "search_vector"
 	queryExpr := buildTsQuery(op, lang, paramNum)
 
@@ -161,11 +161,11 @@ func buildRankExpression(fieldBoosts []FieldBoost, lang query.Language, op opera
 //	fieldBoosts=[{title,3.0}]                       → search_vector @@ (query::text || ':A')::tsquery
 //	fieldBoosts=[{title,3.0},{description,1.5}]     → search_vector @@ (query::text || ':AB')::tsquery
 //	fieldBoosts=[]                                   → search_vector @@ query (all fields)
-func buildTsWhereClause(fieldBoosts []FieldBoost, lang query.Language, op operator.Operator, paramNum int) string {
+func buildTsWhereClause(fieldBoosts []FieldWeight, lang query.Language, op operator.Operator, paramNum int) string {
 	vectorExpr := "search_vector"
 	queryExpr := buildTsQuery(op, lang, paramNum)
 
-	// Extract field names from FieldBoost
+	// Extract field names from FieldWeight
 	var fields []string
 	for _, fb := range fieldBoosts {
 		fields = append(fields, fb.Field)

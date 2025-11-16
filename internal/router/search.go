@@ -6,32 +6,22 @@ import (
 	"net/http"
 	"strconv"
 
-	dquery "github.com/DjordjeVuckovic/news-hunter/internal/domain/query"
 	"github.com/DjordjeVuckovic/news-hunter/internal/dto"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
+	dquery "github.com/DjordjeVuckovic/news-hunter/internal/types/query"
 	"github.com/DjordjeVuckovic/news-hunter/pkg/pagination"
 	"github.com/labstack/echo/v4"
 )
 
 type SearchRouter struct {
-	e                  *echo.Echo
-	storage            storage.FTSSearcher
-	matchSearcher      storage.MatchSearcher
-	multiMatchSearcher storage.MultiMatchSearcher
+	e        *echo.Echo
+	searcher storage.Searcher
 }
 
-func NewSearchRouter(e *echo.Echo, searcher storage.FTSSearcher) *SearchRouter {
+func NewSearchRouter(e *echo.Echo, searcher storage.Searcher) *SearchRouter {
 	router := &SearchRouter{
-		e:       e,
-		storage: searcher,
-	}
-
-	// Check for optional interfaces
-	if ms, ok := searcher.(storage.MatchSearcher); ok {
-		router.matchSearcher = ms
-	}
-	if mms, ok := searcher.(storage.MultiMatchSearcher); ok {
-		router.multiMatchSearcher = mms
+		e:        e,
+		searcher: searcher,
 	}
 
 	return router
@@ -84,17 +74,20 @@ func (r *SearchRouter) searchHandler(c echo.Context) error {
 		return errSize
 	}
 
-	var cursor *dto.Cursor
+	var cursor *dquery.Cursor
 	if cursorStr != "" {
 		var err error
-		cursor, err = dto.DecodeCursor(cursorStr)
+		cursor, err = dquery.DecodeCursor(cursorStr)
 		if err != nil {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid cursor parameter"})
 		}
 	}
 
 	queryString := dquery.NewQueryString(query)
-	searchResult, err := r.storage.SearchQueryString(c.Request().Context(), queryString, cursor, sizeInt)
+	searchResult, err := r.searcher.Search(c.Request().Context(), queryString, &dquery.BaseOptions{
+		Cursor: cursor,
+		Size:   sizeInt,
+	})
 	if err != nil {
 		slog.Error("Failed to execute full-text search", "error", err, "query", query)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal server error"})
@@ -124,8 +117,8 @@ func (r *SearchRouter) searchHandler(c echo.Context) error {
 // @Success 200 {object} dto.SearchResponse "Search results with pagination metadata"
 // @Failure 400 {object} map[string]string "Bad request - invalid query structure or parameters"
 // @Failure 500 {object} map[string]string "Internal server error"
-// @Failure 501 {object} map[string]string "Query type not supported by storage backend"
-// @Router /v1/articles/_search [post]
+// @Failure 501 {object} map[string]string "Query type not supported by searcher backend"
+// @Router /v1/articles/structured [post]
 // @Example Match Request:
 //
 //	{
@@ -177,21 +170,26 @@ func (r *SearchRouter) structuredSearchHandler(c echo.Context) error {
 		sizeInt = req.Size
 	}
 
-	var cursor *dto.Cursor
+	var cursor *dquery.Cursor
 	if req.Cursor != "" {
 		var err error
-		cursor, err = dto.DecodeCursor(req.Cursor)
+		cursor, err = dquery.DecodeCursor(req.Cursor)
 		if err != nil {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid cursor parameter"})
 		}
 	}
 
+	opts := &dquery.BaseOptions{
+		Cursor: cursor,
+		Size:   sizeInt,
+	}
+
 	queryType := req.Query.GetQueryType()
 	switch queryType {
 	case dquery.MatchType:
-		return r.handleMatchQuery(c, req.Query.Match, cursor, sizeInt)
+		return r.handleMatchQuery(c, req.Query.Match, opts)
 	case dquery.MultiMatchType:
-		return r.handleMultiMatchQuery(c, req.Query.MultiMatch, cursor, sizeInt)
+		return r.handleMultiMatchQuery(c, req.Query.MultiMatch, opts)
 	default:
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "query must specify one of: match, multi_match",
@@ -199,20 +197,14 @@ func (r *SearchRouter) structuredSearchHandler(c echo.Context) error {
 	}
 }
 
-func (r *SearchRouter) handleMatchQuery(c echo.Context, params *dto.MatchParams, cursor *dto.Cursor, size int) error {
-	if r.matchSearcher == nil {
-		return c.JSON(http.StatusNotImplemented, map[string]string{
-			"error": "match search is not supported by the current storage backend",
-		})
-	}
-
+func (r *SearchRouter) handleMatchQuery(c echo.Context, params *dto.MatchParams, options *dquery.BaseOptions) error {
 	domainQuery, err := params.ToDomain()
 	if err != nil {
-		slog.Error("Failed to convert DTO to domain", "error", err)
+		slog.Error("Failed to convert DTO to types", "error", err)
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 
-	searchResult, err := r.matchSearcher.SearchMatch(c.Request().Context(), domainQuery, cursor, size)
+	searchResult, err := r.searcher.SearchField(c.Request().Context(), domainQuery, options)
 	if err != nil {
 		slog.Error("Failed to execute match search", "error", err, "field", params.Field, "query", params.Query)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal server error"})
@@ -221,20 +213,15 @@ func (r *SearchRouter) handleMatchQuery(c echo.Context, params *dto.MatchParams,
 	return r.buildResponse(c, searchResult)
 }
 
-func (r *SearchRouter) handleMultiMatchQuery(c echo.Context, params *dto.MultiMatchParams, cursor *dto.Cursor, size int) error {
-	if r.multiMatchSearcher == nil {
-		return c.JSON(http.StatusNotImplemented, map[string]string{
-			"error": "multi_match search is not supported by the current storage backend",
-		})
-	}
+func (r *SearchRouter) handleMultiMatchQuery(c echo.Context, params *dto.MultiMatchParams, options *dquery.BaseOptions) error {
 
 	domainQuery, err := params.ToDomain()
 	if err != nil {
-		slog.Error("Failed to convert DTO to domain", "error", err)
+		slog.Error("Failed to convert DTO to types", "error", err)
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 
-	searchResult, err := r.multiMatchSearcher.SearchMultiMatch(c.Request().Context(), domainQuery, cursor, size)
+	searchResult, err := r.searcher.SearchFields(c.Request().Context(), domainQuery, options)
 	if err != nil {
 		slog.Error("Failed to execute multi_match search", "error", err, "fields", params.Fields, "query", params.Query)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal server error"})
@@ -263,7 +250,7 @@ func (r *SearchRouter) parseSize(c echo.Context, sizeStr string) (int, error, bo
 func (r *SearchRouter) buildResponse(c echo.Context, searchResult *storage.SearchResult) error {
 	var nextCursorStr *string
 	if searchResult.NextCursor != nil {
-		encoded, err := dto.EncodeCursor(searchResult.NextCursor.Score, searchResult.NextCursor.ID)
+		encoded, err := dquery.EncodeCursor(searchResult.NextCursor.Score, searchResult.NextCursor.ID)
 		if err != nil {
 			slog.Error("Failed to encode cursor", "error", err)
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal server error"})

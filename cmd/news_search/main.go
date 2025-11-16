@@ -32,8 +32,8 @@ func main() {
 
 	s := server.New(sCfg, heathChecker).
 		SetupMiddlewares().
-		SetupHealthChecks().
-		SetupOpenApi()
+		SetupHealthChecks("/health").
+		SetupOpenApi("/swagger/*")
 
 	s.Echo.GET("/", func(c echo.Context) error {
 		return c.String(200, "News Hunter API is running")
