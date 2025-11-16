@@ -17,7 +17,7 @@ This file provides guidance for AI agents working with the News Hunter codebase.
   - `schemagen/`: Schema generation utilities
 
 - **internal/**: Business logic
-  - `domain/`: Core entities (Article, Query, Score)
+  - `types/`: Core type definitions (Article, Query, Score, Operator)
   - `storage/`: Storage abstractions with pg/es/in_mem implementations
   - `reader/`: CSV/YAML data processing pipeline
   - `collector/`: Data collection orchestration
@@ -102,7 +102,7 @@ make migrate-up       # Run database migrations
 - Error handling with explicit error returns
 
 ### Project-Specific
-- Domain entities in `internal/domain/`
+- Type definitions in `internal/types/`
 - Storage implementations in `storage/` subpackages
 - Configuration via environment variables
 - YAML-based data mapping configurations
@@ -110,10 +110,11 @@ make migrate-up       # Run database migrations
 
 ## Key Files to Understand
 
-### Core Domain
-- `internal/domain/article.go`: Article entity definition
-- `internal/domain/query.go`: Search query structures
-- `internal/domain/score.go`: Relevance scoring
+### Core Types
+- `internal/types/document/article.go`: Article entity definition
+- `internal/types/query/query.go`: Search query structures
+- `internal/types/query/score.go`: Relevance scoring
+- `internal/types/operator/operator.go`: Boolean operators
 
 ### Storage Layer
 - `storage/reader.go`: Reader interface

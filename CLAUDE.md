@@ -42,9 +42,9 @@ The project follows a layered architecture pattern:
   - `schemagen/`: Schema generation utilities
 
 - **internal/**: Core business logic organized by domain
-  - `domain/`: Core domain layer organized by bounded contexts
-    - `document/`: Document domain (Article, ArticleMetadata, WeightedDocument)
-    - `query/`: Query domain (search query types, language, scoring)
+  - `types/`: Core type definitions organized by bounded contexts
+    - `document/`: Document types (Article, ArticleMetadata, WeightedDocument)
+    - `query/`: Query types (search query types, language, scoring, cursor)
     - `operator/`: Operator value object (AND/OR logic)
   - `reader/`: CSV reading and YAML configuration mapping
   - `collector/`: Article collection orchestration
@@ -77,21 +77,22 @@ The project follows a layered architecture pattern:
 
 ## Key Components
 
-### Domain Layer Organization
+### Type System Organization
 
-The domain layer is organized into bounded contexts, each with its own package:
+The type system is organized into bounded contexts, each with its own package:
 
-**Document Context** (`internal/domain/document/`):
+**Document Context** (`internal/types/document/`):
 - `Article`: Core article entity with metadata
 - `ArticleMetadata`: Article metadata (source, publication date, category)
 - `WeightedDocument`: Interface for documents with field weights
 - Responsible for: Document structure, validation, and field access
 
-**Query Context** (`internal/domain/query/`):
+**Query Context** (`internal/types/query/`):
 - Query types: `QueryString`, `Match`, `MultiMatch`, `BooleanQuery`
 - `Language`: Search language configuration (English, Serbian, etc.)
 - `Score`: Relevance scoring utilities
-- Responsible for: Search query modeling, language configuration, scoring logic
+- `Cursor`: Pagination cursor for search results
+- Responsible for: Search query modeling, language configuration, scoring logic, pagination
 
 **Query Type Design**:
 - **`QueryString`**: Simple application-level API - user provides text, application determines fields/weights
@@ -106,15 +107,15 @@ The domain layer is organized into bounded contexts, each with its own package:
 - `QueryType` → `Type`
 - `SearchLanguage` → `Language`
 
-**Operator Context** (`internal/domain/operator/`):
+**Operator Context** (`internal/types/operator/`):
 - `Operator`: AND/OR logical operators for search queries
 - Responsible for: Boolean logic validation and behavior
 
 **Benefits of this organization**:
-- Clear separation of concerns between document and query domains
+- Clear separation of concerns between document and query types
 - Reduced import cycles through proper package boundaries
 - Clean namespacing (e.g., `query.QueryString`, `document.Article`)
-- Easier to understand and navigate domain concepts
+- Easier to understand and navigate type definitions
 - Follows DDD bounded context principles
 - Query API design follows industry standards (Elasticsearch `query_string` terminology)
 
@@ -282,8 +283,8 @@ The project follows Domain-Driven Design principles where valuable and appropria
 
 **Package Structure for Value Objects**:
 Follow Go's idiomatic approach of using packages as namespaces:
-- `internal/domain/operator/` - Contains `operator.Operator` type
-- `internal/domain/query/` - Contains `query.Language` type
+- `internal/types/operator/` - Contains `operator.Operator` type
+- `internal/types/query/` - Contains `query.Language` type
 - Usage: `operator.And`, `operator.Or`, `query.LanguageEnglish` (clean namespacing)
 - Mirrors Go stdlib (`time.Monday`) and popular libraries (`http.MethodGet`)
 
@@ -314,7 +315,7 @@ func New(op string) (Operator, error) {
 func (o Operator) IsAnd() bool { return o == And }
 func (o Operator) IsOr() bool { return o == Or }
 
-// Usage in types types:
+// Usage in query types:
 query.Operator = operator.And  // ✅ Clean and idiomatic
 
 // ❌ Bad: All in types package with redundant prefixes
@@ -328,12 +329,12 @@ const OperatorAnd = "and"  // Would be types.OperatorAnd - redundant!
 - Document engine-specific limitations (e.g., "PostgreSQL: Ignored", "Elasticsearch: Full support")
 
 **Engine Neutrality**:
-- Avoid exposing engine-specific features in domain layer when they don't translate
-- Example: Removed `tie_breaker` (ES-only) from MultiMatchQuery domain model
+- Avoid exposing engine-specific features in type definitions when they don't translate
+- Example: Removed `tie_breaker` (ES-only) from MultiMatchQuery type
 - Keep general concepts like `fuzziness` with documentation of engine support
 - Let storage implementations handle engine-specific optimizations
 
-**Domain Layer Purity**:
-- Domain types should represent search concepts, not implementation details
-- Storage layer translates domain queries to engine-specific queries
-- Domain validation ensures type safety before reaching storage layer
+**Type System Purity**:
+- Type definitions should represent search concepts, not implementation details
+- Storage layer translates query types to engine-specific queries
+- Type validation ensures type safety before reaching storage layer

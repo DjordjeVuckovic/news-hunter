@@ -76,7 +76,7 @@ Clear separation enables:
 
 ## Query Type Definitions
 
-Located in `internal/domain/query.go`:
+Located in `internal/types/query/query.go`:
 
 ```go
 type QueryType string
@@ -178,29 +178,29 @@ Located in `internal/storage/reader.go`:
 ```go
 // Reader: Base interface - ALL storage backends must implement
 type Reader interface {
-    SearchFullText(ctx context.Context, query *domain.FullTextQuery, cursor *dto.Cursor, size int) (*SearchResult, error)
+    SearchFullText(ctx context.Context, query *query.FullTextQuery, cursor *query.Cursor, size int) (*SearchResult, error)
 }
 
 // Optional capability interfaces
 
 type BooleanSearcher interface {
-    SearchBoolean(ctx context.Context, query *domain.BooleanQuery, cursor *dto.Cursor, size int) (*SearchResult, error)
+    SearchBoolean(ctx context.Context, query *query.BooleanQuery, cursor *query.Cursor, size int) (*SearchResult, error)
 }
 
 type FieldLevelSearcher interface {
-    SearchFieldLevel(ctx context.Context, query *domain.FieldLevelQuery, cursor *dto.Cursor, size int) (*SearchResult, error)
+    SearchFieldLevel(ctx context.Context, query *query.FieldLevelQuery, cursor *query.Cursor, size int) (*SearchResult, error)
 }
 
 type FuzzySearcher interface {
-    SearchFuzzy(ctx context.Context, query *domain.FuzzyQuery, cursor *dto.Cursor, size int) (*SearchResult, error)
+    SearchFuzzy(ctx context.Context, query *query.FuzzyQuery, cursor *query.Cursor, size int) (*SearchResult, error)
 }
 
 type VectorSearcher interface {
-    SearchVector(ctx context.Context, query *domain.VectorQuery, cursor *dto.Cursor, size int) (*SearchResult, error)
+    SearchVector(ctx context.Context, query *query.VectorQuery, cursor *query.Cursor, size int) (*SearchResult, error)
 }
 
 type HybridSearcher interface {
-    SearchHybrid(ctx context.Context, query *domain.HybridQuery, cursor *dto.Cursor, size int) (*SearchResult, error)
+    SearchHybrid(ctx context.Context, query *query.HybridQuery, cursor *query.Cursor, size int) (*SearchResult, error)
 }
 ```
 
@@ -244,8 +244,8 @@ type Reader struct {
 // Required: Base lexical search
 func (r *Reader) SearchFullText(
     ctx context.Context,
-    query *domain.FullTextQuery,
-    cursor *dto.Cursor,
+    query *query.FullTextQuery,
+    cursor *query.Cursor,
     size int,
 ) (*storage.SearchResult, error) {
     // Use plainto_tsquery + ts_rank
@@ -255,8 +255,8 @@ func (r *Reader) SearchFullText(
 // Optional: Boolean search
 func (r *Reader) SearchBoolean(
     ctx context.Context,
-    query *domain.BooleanQuery,
-    cursor *dto.Cursor,
+    query *query.BooleanQuery,
+    cursor *query.Cursor,
     size int,
 ) (*storage.SearchResult, error) {
     // Parse boolean expression to PostgreSQL tsquery syntax
@@ -267,8 +267,8 @@ func (r *Reader) SearchBoolean(
 // Optional: Field-level search
 func (r *Reader) SearchFieldLevel(
     ctx context.Context,
-    query *domain.FieldLevelQuery,
-    cursor *dto.Cursor,
+    query *query.FieldLevelQuery,
+    cursor *query.Cursor,
     size int,
 ) (*storage.SearchResult, error) {
     // Option 1: Use separate tsvector columns
@@ -282,8 +282,8 @@ func (r *Reader) SearchFieldLevel(
 // Optional: Fuzzy search
 func (r *Reader) SearchFuzzy(
     ctx context.Context,
-    query *domain.FuzzyQuery,
-    cursor *dto.Cursor,
+    query *query.FuzzyQuery,
+    cursor *query.Cursor,
     size int,
 ) (*storage.SearchResult, error) {
     // Use pg_trgm extension
@@ -294,8 +294,8 @@ func (r *Reader) SearchFuzzy(
 // Optional: Vector search
 func (r *Reader) SearchVector(
     ctx context.Context,
-    query *domain.VectorQuery,
-    cursor *dto.Cursor,
+    query *query.VectorQuery,
+    cursor *query.Cursor,
     size int,
 ) (*storage.SearchResult, error) {
     // Use pgvector extension
@@ -306,8 +306,8 @@ func (r *Reader) SearchVector(
 // Optional: Hybrid search
 func (r *Reader) SearchHybrid(
     ctx context.Context,
-    query *domain.HybridQuery,
-    cursor *dto.Cursor,
+    query *query.HybridQuery,
+    cursor *query.Cursor,
     size int,
 ) (*storage.SearchResult, error) {
     // Implement RRF (Reciprocal Rank Fusion) in SQL
@@ -530,7 +530,7 @@ Returns which query types are supported by the current storage backend.
 
 func (r *SearchRouter) searchHandler(c echo.Context) error {
     var req struct {
-        Type   domain.QueryType    `json:"type"`
+        Type   query.QueryType    `json:"type"`
         Query  json.RawMessage     `json:"query"`
         Cursor *string             `json:"cursor,omitempty"`
         Size   int                 `json:"size,omitempty"`
@@ -541,9 +541,9 @@ func (r *SearchRouter) searchHandler(c echo.Context) error {
     }
 
     // Parse cursor
-    var cursor *dto.Cursor
+    var cursor *query.Cursor
     if req.Cursor != nil {
-        cursor, err = dto.DecodeCursor(*req.Cursor)
+        cursor, err = query.DecodeCursor(*req.Cursor)
         if err != nil {
             return c.JSON(400, map[string]string{"error": "invalid cursor"})
         }
@@ -559,14 +559,14 @@ func (r *SearchRouter) searchHandler(c echo.Context) error {
     var err error
 
     switch req.Type {
-    case domain.QueryTypeFullText:
-        var fullTextQuery domain.FullTextQuery
+    case query.QueryTypeFullText:
+        var fullTextQuery query.FullTextQuery
         if err := json.Unmarshal(req.Query, &fullTextQuery); err != nil {
             return c.JSON(400, map[string]string{"error": "invalid full-text query"})
         }
         result, err = r.storage.SearchFullText(ctx, &fullTextQuery, cursor, size)
 
-    case domain.QueryTypeBoolean:
+    case query.QueryTypeBoolean:
         bs, ok := r.storage.(storage.BooleanSearcher)
         if !ok {
             return c.JSON(400, map[string]string{
@@ -574,13 +574,13 @@ func (r *SearchRouter) searchHandler(c echo.Context) error {
                 "backend": getBackendType(r.storage),
             })
         }
-        var boolQuery domain.BooleanQuery
+        var boolQuery query.BooleanQuery
         if err := json.Unmarshal(req.Query, &boolQuery); err != nil {
             return c.JSON(400, map[string]string{"error": "invalid boolean query"})
         }
         result, err = bs.SearchBoolean(ctx, &boolQuery, cursor, size)
 
-    case domain.QueryTypeVector:
+    case query.QueryTypeVector:
         vs, ok := r.storage.(storage.VectorSearcher)
         if !ok {
             return c.JSON(400, map[string]string{
@@ -588,7 +588,7 @@ func (r *SearchRouter) searchHandler(c echo.Context) error {
                 "backend": getBackendType(r.storage),
             })
         }
-        var vecQuery domain.VectorQuery
+        var vecQuery query.VectorQuery
         if err := json.Unmarshal(req.Query, &vecQuery); err != nil {
             return c.JSON(400, map[string]string{"error": "invalid vector query"})
         }
@@ -612,22 +612,22 @@ func (r *SearchRouter) searchHandler(c echo.Context) error {
 }
 
 func (r *SearchRouter) capabilitiesHandler(c echo.Context) error {
-    caps := []string{string(domain.QueryTypeFullText)} // always supported
+    caps := []string{string(query.QueryTypeFullText)} // always supported
 
     if _, ok := r.storage.(storage.BooleanSearcher); ok {
-        caps = append(caps, string(domain.QueryTypeBoolean))
+        caps = append(caps, string(query.QueryTypeBoolean))
     }
     if _, ok := r.storage.(storage.VectorSearcher); ok {
-        caps = append(caps, string(domain.QueryTypeVector))
+        caps = append(caps, string(query.QueryTypeVector))
     }
     if _, ok := r.storage.(storage.FuzzySearcher); ok {
-        caps = append(caps, string(domain.QueryTypeFuzzy))
+        caps = append(caps, string(query.QueryTypeFuzzy))
     }
     if _, ok := r.storage.(storage.FieldLevelSearcher); ok {
-        caps = append(caps, string(domain.QueryTypeFieldLevel))
+        caps = append(caps, string(query.QueryTypeFieldLevel))
     }
     if _, ok := r.storage.(storage.HybridSearcher); ok {
-        caps = append(caps, string(domain.QueryTypeHybrid))
+        caps = append(caps, string(query.QueryTypeHybrid))
     }
 
     return c.JSON(200, map[string]interface{}{
@@ -720,7 +720,7 @@ func TestE2E_Capabilities(t *testing.T) {
 ## Migration Path
 
 ### Phase 1: Refactor Existing Code ✅
-- [x] Create `internal/domain/query.go` with `FullTextQuery` and `BooleanQuery`
+- [x] Create `internal/types/query/query.go` with `FullTextQuery` and `BooleanQuery`
 - [x] Rename `SearchLexical` → `SearchFullText` in PG and ES readers
 - [x] Update router to handle `QueryTypeFullText`
 
