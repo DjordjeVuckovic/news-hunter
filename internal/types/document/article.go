@@ -2,6 +2,7 @@ package document
 
 import (
 	"net/url"
+	"reflect"
 	"time"
 
 	"github.com/google/uuid"
@@ -33,4 +34,10 @@ type ArticleMetadata struct {
 
 	// System metadata
 	ImportedAt time.Time `json:"importedAt,omitempty"`
+}
+
+func (ar *Article) ContainsField(field string) bool {
+	reflectType := reflect.TypeOf(*ar)
+	_, found := reflectType.FieldByName(field)
+	return found
 }

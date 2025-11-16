@@ -1,12 +1,12 @@
 package document
 
-type WeightedDocument interface {
-	ContainField(field string) bool
+type Document interface {
+	ContainsField(field string) bool
 }
 
-func ContainFields[D WeightedDocument](doc D, fields []string) bool {
+func ContainsFields[D Document](doc D, fields []string) bool {
 	for _, field := range fields {
-		if !doc.ContainField(field) {
+		if !doc.ContainsField(field) {
 			return false
 		}
 	}

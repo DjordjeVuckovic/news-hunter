@@ -21,10 +21,11 @@ func NewReader(pool *ConnectionPool) (*Searcher, error) {
 	return &Searcher{db: pool.conn}, nil
 }
 
-// SearchQueryString implements storage.Searcher interface
+// Search implements storage.Searcher interface
 // Performs simple string-based search using PostgreSQL's tsvector and plainto_tsquery
 // Application determines optimal fields and weights based on index configuration
-func (r *Searcher) SearchQueryString(ctx context.Context, query *dquery.String, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
+func (r *Searcher) Search(ctx context.Context, query *dquery.String, baseOpts *dquery.BaseOptions) (*storage.SearchResult, error) {
+	cursor, size := baseOpts.Cursor, baseOpts.Size
 	slog.Info("Executing pool query_string search", "query", query.Query, "has_cursor", cursor != nil, "size", size)
 
 	var globalMaxScore float64
@@ -126,9 +127,9 @@ func (r *Searcher) SearchQueryString(ctx context.Context, query *dquery.String, 
 		rawScores = rawScores[:size]
 	}
 
-	var nextCursor *dto.Cursor
+	var nextCursor *dquery.Cursor
 	if hasMore && len(articles) > 0 {
-		nextCursor = &dto.Cursor{
+		nextCursor = &dquery.Cursor{
 			Score: rawScores[len(rawScores)-1],
 			ID:    articles[len(articles)-1].Article.ID,
 		}
@@ -144,9 +145,10 @@ func (r *Searcher) SearchQueryString(ctx context.Context, query *dquery.String, 
 	}, nil
 }
 
-// SearchMatch implements storage.SingleMatchSearcher interface
+// SearchField implements storage.SingleMatchSearcher interface
 // Performs single-field match query using PostgreSQL's tsvector
-func (r *Searcher) SearchMatch(ctx context.Context, query *dquery.Match, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
+func (r *Searcher) SearchField(ctx context.Context, query *dquery.Match, baseOpts *dquery.BaseOptions) (*storage.SearchResult, error) {
+	cursor, size := baseOpts.Cursor, baseOpts.Size
 	slog.Info("Executing pool match search",
 		"query", query.Query,
 		"field", query.Field,
@@ -268,9 +270,9 @@ func (r *Searcher) SearchMatch(ctx context.Context, query *dquery.Match, cursor 
 		rawScores = rawScores[:size]
 	}
 
-	var nextCursor *dto.Cursor
+	var nextCursor *dquery.Cursor
 	if hasMore && len(articles) > 0 {
-		nextCursor = &dto.Cursor{
+		nextCursor = &dquery.Cursor{
 			Score: rawScores[len(rawScores)-1],
 			ID:    articles[len(articles)-1].Article.ID,
 		}
@@ -286,9 +288,10 @@ func (r *Searcher) SearchMatch(ctx context.Context, query *dquery.Match, cursor 
 	}, nil
 }
 
-// SearchMultiMatch implements storage.MultiMatchSearcher interface
+// SearchFields implements storage.MultiMatchSearcher interface
 // Performs multi-field match query using PostgreSQL's weighted tsvector
-func (r *Searcher) SearchMultiMatch(ctx context.Context, query *dquery.MultiMatch, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
+func (r *Searcher) SearchFields(ctx context.Context, query *dquery.MultiMatch, baseOpts *dquery.BaseOptions) (*storage.SearchResult, error) {
+	cursor, size := baseOpts.Cursor, baseOpts.Size
 	lang := query.GetLanguage()
 	operator := query.GetOperator()
 
@@ -420,9 +423,9 @@ func (r *Searcher) SearchMultiMatch(ctx context.Context, query *dquery.MultiMatc
 		rawScores = rawScores[:size]
 	}
 
-	var nextCursor *dto.Cursor
+	var nextCursor *dquery.Cursor
 	if hasMore && len(articles) > 0 {
-		nextCursor = &dto.Cursor{
+		nextCursor = &dquery.Cursor{
 			Score: rawScores[len(rawScores)-1],
 			ID:    articles[len(articles)-1].Article.ID,
 		}
@@ -440,7 +443,7 @@ func (r *Searcher) SearchMultiMatch(ctx context.Context, query *dquery.MultiMatc
 
 // SearchBoolean implements storage.BooleanSearcher interface
 // Performs boolean search using PostgreSQL's tsquery with AND (&), OR (|), NOT (!) operators
-func (r *Searcher) SearchBoolean(ctx context.Context, query *dquery.Boolean, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
+func (r *Searcher) SearchBoolean(ctx context.Context, query *dquery.Boolean, cursor *dquery.Cursor, size int) (*storage.SearchResult, error) {
 	slog.Info("Executing pool boolean search", "expression", query.Expression, "has_cursor", cursor != nil, "size", size)
 
 	// TODO: Implement boolean query parser
