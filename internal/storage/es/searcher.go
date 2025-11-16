@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"log/slog"
 
-	dquery "github.com/DjordjeVuckovic/news-hunter/internal/domain/query"
 	"github.com/DjordjeVuckovic/news-hunter/internal/dto"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
+	dquery "github.com/DjordjeVuckovic/news-hunter/internal/types/query"
 	"github.com/DjordjeVuckovic/news-hunter/pkg/utils"
 	"github.com/elastic/go-elasticsearch/v8"
 	"github.com/elastic/go-elasticsearch/v8/typedapi/types"
@@ -124,7 +124,7 @@ func (r *Searcher) SearchQueryString(ctx context.Context, query *dquery.String, 
 
 	articles, rawScores, err := r.mapToResult(res.Hits.Hits, maxScore)
 	if err != nil {
-		return nil, fmt.Errorf("failed to map search results to domain: %w", err)
+		return nil, fmt.Errorf("failed to map search results to types: %w", err)
 	}
 
 	slog.Info("Es search results fetched",
@@ -297,7 +297,7 @@ func (r *Searcher) SearchMatch(ctx context.Context, query *dquery.Match, cursor 
 
 	articles, rawScores, err := r.mapToResult(res.Hits.Hits, maxScore)
 	if err != nil {
-		return nil, fmt.Errorf("failed to map search results to domain: %w", err)
+		return nil, fmt.Errorf("failed to map search results to types: %w", err)
 	}
 
 	slog.Info("ES match search results fetched",
@@ -411,7 +411,7 @@ func (r *Searcher) SearchMultiMatch(ctx context.Context, query *dquery.MultiMatc
 
 	articles, rawScores, err := r.mapToResult(res.Hits.Hits, maxScore)
 	if err != nil {
-		return nil, fmt.Errorf("failed to map search results to domain: %w", err)
+		return nil, fmt.Errorf("failed to map search results to types: %w", err)
 	}
 
 	slog.Info("ES multi_match search results fetched",

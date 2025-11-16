@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/DjordjeVuckovic/news-hunter/internal/collector"
-	"github.com/DjordjeVuckovic/news-hunter/internal/domain/document"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
+	"github.com/DjordjeVuckovic/news-hunter/internal/types/document"
 )
 
 const defaultBatchSize = 1_000

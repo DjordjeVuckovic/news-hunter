@@ -3,12 +3,12 @@ package storage
 import (
 	"context"
 
-	"github.com/DjordjeVuckovic/news-hunter/internal/domain/query"
 	"github.com/DjordjeVuckovic/news-hunter/internal/dto"
+	"github.com/DjordjeVuckovic/news-hunter/internal/types/query"
 )
 
 // SearchResult represents search results with cursor-based pagination
-// Contains domain objects - no encoding/decoding at this layer
+// Contains types objects - no encoding/decoding at this layer
 type SearchResult struct {
 	Hits         []dto.ArticleSearchResult `json:"hits"`
 	NextCursor   *dto.Cursor               `json:"-"`
@@ -27,7 +27,7 @@ type Searcher interface {
 	//
 	// cursor: optional decoded cursor from previous result (nil for first page)
 	// size: number of results to return per page
-	// Returns domain objects with domain cursor (not encoded string)
+	// Returns types objects with types cursor (not encoded string)
 	SearchQueryString(ctx context.Context, query *query.String, cursor *dto.Cursor, size int) (*SearchResult, error)
 	// SearchMatch performs single-field match query with relevance scoring
 	SearchMatch(ctx context.Context, query *query.Match, cursor *dto.Cursor, size int) (*SearchResult, error)

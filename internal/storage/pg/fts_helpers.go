@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/DjordjeVuckovic/news-hunter/internal/domain/operator"
-	"github.com/DjordjeVuckovic/news-hunter/internal/domain/query"
+	"github.com/DjordjeVuckovic/news-hunter/internal/types/operator"
+	"github.com/DjordjeVuckovic/news-hunter/internal/types/query"
 )
 
 // Field to PostgreSQL weight label mapping

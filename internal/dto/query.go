@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/DjordjeVuckovic/news-hunter/internal/domain/operator"
-	"github.com/DjordjeVuckovic/news-hunter/internal/domain/query"
+	"github.com/DjordjeVuckovic/news-hunter/internal/types/operator"
+	"github.com/DjordjeVuckovic/news-hunter/internal/types/query"
 )
 
 // SearchRequest represents the base search request with unified structure
@@ -69,7 +69,7 @@ type QueryWrapper struct {
 	MultiMatch *MultiMatchParams `json:"multi_match,omitempty"`
 }
 
-// MatchParams represents match query parameters (maps directly to domain)
+// MatchParams represents match query parameters (maps directly to types)
 type MatchParams struct {
 	Query     string `json:"query"`
 	Field     string `json:"field"`
@@ -78,7 +78,7 @@ type MatchParams struct {
 	Language  string `json:"language,omitempty"`
 }
 
-// MultiMatchParams represents multi_match query parameters (maps directly to domain)
+// MultiMatchParams represents multi_match query parameters (maps directly to types)
 type MultiMatchParams struct {
 	Query        string             `json:"query"`
 	Fields       []string           `json:"fields"`

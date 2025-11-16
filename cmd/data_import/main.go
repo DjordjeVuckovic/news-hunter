@@ -6,10 +6,10 @@ import (
 	"os"
 
 	"github.com/DjordjeVuckovic/news-hunter/internal/collector"
-	"github.com/DjordjeVuckovic/news-hunter/internal/domain/document"
 	"github.com/DjordjeVuckovic/news-hunter/internal/processor"
 	"github.com/DjordjeVuckovic/news-hunter/internal/reader"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage/factory"
+	"github.com/DjordjeVuckovic/news-hunter/internal/types/document"
 )
 
 func main() {

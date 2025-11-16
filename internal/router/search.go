@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"strconv"
 
-	dquery "github.com/DjordjeVuckovic/news-hunter/internal/domain/query"
 	"github.com/DjordjeVuckovic/news-hunter/internal/dto"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
+	dquery "github.com/DjordjeVuckovic/news-hunter/internal/types/query"
 	"github.com/DjordjeVuckovic/news-hunter/pkg/pagination"
 	"github.com/labstack/echo/v4"
 )
@@ -193,7 +193,7 @@ func (r *SearchRouter) handleMatchQuery(c echo.Context, params *dto.MatchParams,
 
 	domainQuery, err := params.ToDomain()
 	if err != nil {
-		slog.Error("Failed to convert DTO to domain", "error", err)
+		slog.Error("Failed to convert DTO to types", "error", err)
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 
@@ -210,7 +210,7 @@ func (r *SearchRouter) handleMultiMatchQuery(c echo.Context, params *dto.MultiMa
 
 	domainQuery, err := params.ToDomain()
 	if err != nil {
-		slog.Error("Failed to convert DTO to domain", "error", err)
+		slog.Error("Failed to convert DTO to types", "error", err)
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 

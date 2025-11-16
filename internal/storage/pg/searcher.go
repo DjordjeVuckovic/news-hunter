@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"log/slog"
 
-	dquery "github.com/DjordjeVuckovic/news-hunter/internal/domain/query"
 	"github.com/DjordjeVuckovic/news-hunter/internal/dto"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
+	dquery "github.com/DjordjeVuckovic/news-hunter/internal/types/query"
 	"github.com/DjordjeVuckovic/news-hunter/pkg/utils"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
