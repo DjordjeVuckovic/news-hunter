@@ -21,7 +21,7 @@ func NewReader(pool *ConnectionPool) (*Searcher, error) {
 	return &Searcher{db: pool.conn}, nil
 }
 
-// SearchQueryString implements storage.FTSSearcher interface
+// SearchQueryString implements storage.Searcher interface
 // Performs simple string-based search using PostgreSQL's tsvector and plainto_tsquery
 // Application determines optimal fields and weights based on index configuration
 func (r *Searcher) SearchQueryString(ctx context.Context, query *dquery.String, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
@@ -144,7 +144,7 @@ func (r *Searcher) SearchQueryString(ctx context.Context, query *dquery.String, 
 	}, nil
 }
 
-// SearchMatch implements storage.MatchSearcher interface
+// SearchMatch implements storage.SingleMatchSearcher interface
 // Performs single-field match query using PostgreSQL's tsvector
 func (r *Searcher) SearchMatch(ctx context.Context, query *dquery.Match, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
 	slog.Info("Executing pool match search",
@@ -158,8 +158,8 @@ func (r *Searcher) SearchMatch(ctx context.Context, query *dquery.Match, cursor 
 	lang := query.GetLanguage()
 	operator := query.GetOperator()
 
-	// Build FieldBoost for single field
-	fieldBoosts := []FieldBoost{{Field: query.Field, Boost: 1.0}}
+	// Build FieldWeight for single field
+	fieldBoosts := []FieldWeight{{Field: query.Field, Weight: 1.0}}
 	whereClause := buildTsWhereClause(fieldBoosts, lang, operator, 1)
 	rankExpr := buildRankExpression(fieldBoosts, lang, operator, 1)
 
@@ -292,12 +292,12 @@ func (r *Searcher) SearchMultiMatch(ctx context.Context, query *dquery.MultiMatc
 	lang := query.GetLanguage()
 	operator := query.GetOperator()
 
-	// Convert Fields (MultiMatchField) to FieldBoost
-	var fieldBoosts []FieldBoost
+	// Convert Fields (MultiMatchField) to FieldWeight
+	var fieldBoosts []FieldWeight
 	for _, f := range query.Fields {
-		fieldBoosts = append(fieldBoosts, FieldBoost{
-			Field: f.Name,
-			Boost: f.Weight,
+		fieldBoosts = append(fieldBoosts, FieldWeight{
+			Field:  f.Name,
+			Weight: f.Weight,
 		})
 	}
 
@@ -309,7 +309,7 @@ func (r *Searcher) SearchMultiMatch(ctx context.Context, query *dquery.MultiMatc
 		"has_cursor", cursor != nil,
 		"size", size)
 
-	// Use helper functions with FieldBoost
+	// Use helper functions with FieldWeight
 	whereClause := buildTsWhereClause(fieldBoosts, lang, operator, 1)
 	rankExpr := buildRankExpression(fieldBoosts, lang, operator, 1)
 
@@ -440,7 +440,7 @@ func (r *Searcher) SearchMultiMatch(ctx context.Context, query *dquery.MultiMatc
 
 // SearchBoolean implements storage.BooleanSearcher interface
 // Performs boolean search using PostgreSQL's tsquery with AND (&), OR (|), NOT (!) operators
-func (r *Searcher) SearchBoolean(ctx context.Context, query *dquery.BooleanQuery, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
+func (r *Searcher) SearchBoolean(ctx context.Context, query *dquery.Boolean, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
 	slog.Info("Executing pool boolean search", "expression", query.Expression, "has_cursor", cursor != nil, "size", size)
 
 	// TODO: Implement boolean query parser
@@ -452,7 +452,4 @@ func (r *Searcher) SearchBoolean(ctx context.Context, query *dquery.BooleanQuery
 }
 
 // Compile-time interface assertions
-var _ storage.FTSSearcher = (*Searcher)(nil)
-var _ storage.BooleanSearcher = (*Searcher)(nil)
-var _ storage.MatchSearcher = (*Searcher)(nil)
-var _ storage.MultiMatchSearcher = (*Searcher)(nil)
+var _ storage.Searcher = (*Searcher)(nil)

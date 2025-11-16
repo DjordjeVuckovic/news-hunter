@@ -39,8 +39,8 @@ func NewIndexer(ctx context.Context, cfg StorageConfig) (storage.Indexer, error)
 	}
 }
 
-// NewSearcher creates a new storage.FTSSearcher based on the storage type
-func NewSearcher(ctx context.Context, cfg StorageConfig) (storage.FTSSearcher, error) {
+// NewSearcher creates a new storage.Searcher based on the storage type
+func NewSearcher(ctx context.Context, cfg StorageConfig) (storage.Searcher, error) {
 	switch cfg.Type {
 	case storage.PG:
 		pgConfig := *cfg.Pg
@@ -55,7 +55,7 @@ func NewSearcher(ctx context.Context, cfg StorageConfig) (storage.FTSSearcher, e
 	case storage.ES:
 		esConfig := *cfg.Es
 
-		return es.NewSeacher(esConfig)
+		return es.NewSearcher(esConfig)
 
 	case storage.Solr:
 		return nil, fmt.Errorf("solr reader not yet implemented")

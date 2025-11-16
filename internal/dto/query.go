@@ -149,7 +149,7 @@ func (p *MultiMatchParams) ToDomain() (*query.MultiMatch, error) {
 }
 
 // GetQueryType returns the type of query in the wrapper
-func (q *QueryWrapper) GetQueryType() query.Type {
+func (q *QueryWrapper) GetQueryType() query.Kind {
 	if q.Match != nil {
 		return query.MatchType
 	}

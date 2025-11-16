@@ -18,9 +18,9 @@ type SearchResult struct {
 	TotalMatches int64                     `json:"total_matches,omitempty"`
 }
 
-// FTSSearcher is the base interface that ALL storage backends must implement
+// Searcher is the base interface that ALL storage backends must implement
 // Provides full-text search capability
-type FTSSearcher interface {
+type Searcher interface {
 	// SearchQueryString performs simple string-based search with application-optimized settings
 	// The storage implementation determines optimal fields, weights, and search strategy
 	// based on index configuration and content type.
@@ -29,31 +29,16 @@ type FTSSearcher interface {
 	// size: number of results to return per page
 	// Returns domain objects with domain cursor (not encoded string)
 	SearchQueryString(ctx context.Context, query *query.String, cursor *dto.Cursor, size int) (*SearchResult, error)
-}
-
-// MatchSearcher is an optional interface for single-field match queries
-// Storage backends that support ES-style match queries should implement this
-type MatchSearcher interface {
 	// SearchMatch performs single-field match query with relevance scoring
-	// Elasticsearch: Uses match query on specified field
-	// PostgreSQL: Uses weighted tsvector on specified field
 	SearchMatch(ctx context.Context, query *query.Match, cursor *dto.Cursor, size int) (*SearchResult, error)
-}
-
-// MultiMatchSearcher is an optional interface for multi-field match queries
-// Storage backends that support ES-style multi_match queries should implement this
-type MultiMatchSearcher interface {
-	// SearchMultiMatch performs multi-field match query with per-field boosting
-	// Elasticsearch: Uses multi_match query with field weights
-	// PostgreSQL: Uses weighted tsvector across multiple fields
+	// SearchMultiMatch performs multi-field match query with per-field weighting
 	SearchMultiMatch(ctx context.Context, query *query.MultiMatch, cursor *dto.Cursor, size int) (*SearchResult, error)
 }
 
-// BooleanSearcher is an optional interface for boolean search capabilities
-// Storage backends that support structured queries with AND, OR, NOT operators should implement this
-type BooleanSearcher interface {
-	// SearchBoolean performs boolean search with logical operators
-	// Supports AND, OR, NOT operators with grouping via parentheses
-	// Example: "climate AND (change OR warming) AND NOT politics"
-	SearchBoolean(ctx context.Context, query *query.BooleanQuery, cursor *dto.Cursor, size int) (*SearchResult, error)
+type PhraseSearcher interface {
+	// SearchPhrase performs phrase search on specified field with slop support
+	// Elasticsearch: Uses match_phrase query with slop parameter
+	// PostgreSQL: Uses phraseto_tsquery with positional matching
+	SearchPhrase(ctx context.Context, query *query.Phrase, cursor *dto.Cursor, size int) (*SearchResult, error)
+	SearchBoolean(ctx context.Context, query *query.Boolean, cursor *dto.Cursor, size int) (*SearchResult, error)
 }

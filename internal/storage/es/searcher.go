@@ -22,7 +22,7 @@ type Searcher struct {
 	indexName string
 }
 
-func NewSeacher(config ClientConfig) (*Searcher, error) {
+func NewSearcher(config ClientConfig) (*Searcher, error) {
 	client, err := newClient(config)
 
 	if err != nil {
@@ -35,7 +35,7 @@ func NewSeacher(config ClientConfig) (*Searcher, error) {
 	}, nil
 }
 
-// SearchQueryString implements storage.FTSSearcher interface
+// SearchQueryString implements storage.Searcher interface
 // Performs simple string-based search using Elasticsearch's multi_match query with BM25
 // Application determines optimal fields and weights based on index configuration
 func (r *Searcher) SearchQueryString(ctx context.Context, query *dquery.String, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
@@ -208,7 +208,7 @@ func (r *Searcher) mapToResult(hits []types.Hit, maxScore float64) ([]dto.Articl
 
 // SearchBoolean implements storage.BooleanSearcher interface
 // Performs boolean search using Elasticsearch's bool query with must, should, must_not clauses
-func (r *Searcher) SearchBoolean(ctx context.Context, query *dquery.BooleanQuery, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
+func (r *Searcher) SearchBoolean(ctx context.Context, query *dquery.Boolean, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
 	slog.Info("Executing es boolean search", "expression", query.Expression, "has_cursor", cursor != nil, "size", size)
 
 	// TODO: Implement boolean query parser
@@ -218,7 +218,7 @@ func (r *Searcher) SearchBoolean(ctx context.Context, query *dquery.BooleanQuery
 	return nil, fmt.Errorf("boolean search not yet implemented for Elasticsearch")
 }
 
-// SearchMatch implements storage.MatchSearcher interface
+// SearchMatch implements storage.SingleMatchSearcher interface
 // Performs single-field match query using Elasticsearch's match query
 func (r *Searcher) SearchMatch(ctx context.Context, query *dquery.Match, cursor *dto.Cursor, size int) (*storage.SearchResult, error) {
 	slog.Info("Executing es match search",
@@ -345,19 +345,19 @@ func (r *Searcher) SearchMultiMatch(ctx context.Context, query *dquery.MultiMatc
 	queryOperator := query.GetOperator()
 
 	// Build field list with boosting
-	fieldsWithBoost := make([]string, 0, len(fields))
+	fieldsWithWeight := make([]string, 0, len(fields))
 	for _, field := range fields {
 		if field.Weight != 1.0 {
-			fieldsWithBoost = append(fieldsWithBoost, fmt.Sprintf("%s^%.1f", field, field.Weight))
+			fieldsWithWeight = append(fieldsWithWeight, fmt.Sprintf("%s^%.1f", field, field.Weight))
 		} else {
-			fieldsWithBoost = append(fieldsWithBoost, field.Name)
+			fieldsWithWeight = append(fieldsWithWeight, field.Name)
 		}
 	}
 
 	// Build multi_match query
 	multiMatch := &types.MultiMatchQuery{
 		Query:  query.Query,
-		Fields: fieldsWithBoost,
+		Fields: fieldsWithWeight,
 	}
 
 	// Set operator using value object
@@ -445,7 +445,4 @@ func (r *Searcher) SearchMultiMatch(ctx context.Context, query *dquery.MultiMatc
 }
 
 // Compile-time interface assertions
-var _ storage.FTSSearcher = (*Searcher)(nil)
-var _ storage.BooleanSearcher = (*Searcher)(nil)
-var _ storage.MatchSearcher = (*Searcher)(nil)
-var _ storage.MultiMatchSearcher = (*Searcher)(nil)
+var _ storage.Searcher = (*Searcher)(nil)

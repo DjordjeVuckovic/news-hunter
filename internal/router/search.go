@@ -14,24 +14,14 @@ import (
 )
 
 type SearchRouter struct {
-	e                  *echo.Echo
-	storage            storage.FTSSearcher
-	matchSearcher      storage.MatchSearcher
-	multiMatchSearcher storage.MultiMatchSearcher
+	e        *echo.Echo
+	searcher storage.Searcher
 }
 
-func NewSearchRouter(e *echo.Echo, searcher storage.FTSSearcher) *SearchRouter {
+func NewSearchRouter(e *echo.Echo, searcher storage.Searcher) *SearchRouter {
 	router := &SearchRouter{
-		e:       e,
-		storage: searcher,
-	}
-
-	// Check for optional interfaces
-	if ms, ok := searcher.(storage.MatchSearcher); ok {
-		router.matchSearcher = ms
-	}
-	if mms, ok := searcher.(storage.MultiMatchSearcher); ok {
-		router.multiMatchSearcher = mms
+		e:        e,
+		searcher: searcher,
 	}
 
 	return router
@@ -42,7 +32,7 @@ func (r *SearchRouter) Bind() {
 	r.e.GET("/v1/articles/search", r.searchHandler)
 
 	// Unified structured search API (match/multi_match with query wrapper)
-	r.e.POST("/v1/articles/_search", r.structuredSearchHandler)
+	r.e.POST("/v1/articles/structured", r.structuredSearchHandler)
 }
 
 // searchHandler handles simple query string search (GET)
@@ -94,7 +84,7 @@ func (r *SearchRouter) searchHandler(c echo.Context) error {
 	}
 
 	queryString := dquery.NewQueryString(query)
-	searchResult, err := r.storage.SearchQueryString(c.Request().Context(), queryString, cursor, sizeInt)
+	searchResult, err := r.searcher.SearchQueryString(c.Request().Context(), queryString, cursor, sizeInt)
 	if err != nil {
 		slog.Error("Failed to execute full-text search", "error", err, "query", query)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal server error"})
@@ -124,8 +114,8 @@ func (r *SearchRouter) searchHandler(c echo.Context) error {
 // @Success 200 {object} dto.SearchResponse "Search results with pagination metadata"
 // @Failure 400 {object} map[string]string "Bad request - invalid query structure or parameters"
 // @Failure 500 {object} map[string]string "Internal server error"
-// @Failure 501 {object} map[string]string "Query type not supported by storage backend"
-// @Router /v1/articles/_search [post]
+// @Failure 501 {object} map[string]string "Query type not supported by searcher backend"
+// @Router /v1/articles/structured [post]
 // @Example Match Request:
 //
 //	{
@@ -200,11 +190,6 @@ func (r *SearchRouter) structuredSearchHandler(c echo.Context) error {
 }
 
 func (r *SearchRouter) handleMatchQuery(c echo.Context, params *dto.MatchParams, cursor *dto.Cursor, size int) error {
-	if r.matchSearcher == nil {
-		return c.JSON(http.StatusNotImplemented, map[string]string{
-			"error": "match search is not supported by the current storage backend",
-		})
-	}
 
 	domainQuery, err := params.ToDomain()
 	if err != nil {
@@ -212,7 +197,7 @@ func (r *SearchRouter) handleMatchQuery(c echo.Context, params *dto.MatchParams,
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 
-	searchResult, err := r.matchSearcher.SearchMatch(c.Request().Context(), domainQuery, cursor, size)
+	searchResult, err := r.searcher.SearchMatch(c.Request().Context(), domainQuery, cursor, size)
 	if err != nil {
 		slog.Error("Failed to execute match search", "error", err, "field", params.Field, "query", params.Query)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal server error"})
@@ -222,11 +207,6 @@ func (r *SearchRouter) handleMatchQuery(c echo.Context, params *dto.MatchParams,
 }
 
 func (r *SearchRouter) handleMultiMatchQuery(c echo.Context, params *dto.MultiMatchParams, cursor *dto.Cursor, size int) error {
-	if r.multiMatchSearcher == nil {
-		return c.JSON(http.StatusNotImplemented, map[string]string{
-			"error": "multi_match search is not supported by the current storage backend",
-		})
-	}
 
 	domainQuery, err := params.ToDomain()
 	if err != nil {
@@ -234,7 +214,7 @@ func (r *SearchRouter) handleMultiMatchQuery(c echo.Context, params *dto.MultiMa
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 
-	searchResult, err := r.multiMatchSearcher.SearchMultiMatch(c.Request().Context(), domainQuery, cursor, size)
+	searchResult, err := r.searcher.SearchMultiMatch(c.Request().Context(), domainQuery, cursor, size)
 	if err != nil {
 		slog.Error("Failed to execute multi_match search", "error", err, "fields", params.Fields, "query", params.Query)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal server error"})
