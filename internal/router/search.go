@@ -190,9 +190,11 @@ func (r *SearchRouter) structuredSearchHandler(c echo.Context) error {
 		return r.handleMatchQuery(c, req.Query.Match, opts)
 	case dquery.MultiMatchType:
 		return r.handleMultiMatchQuery(c, req.Query.MultiMatch, opts)
+	case dquery.PhraseType:
+		return r.handlePhraseQuery(c, req.Query.Phrase, opts)
 	default:
 		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "query must specify one of: match, multi_match",
+			"error": "query must specify one of: match, multi_match, phrase",
 		})
 	}
 }
@@ -224,6 +226,22 @@ func (r *SearchRouter) handleMultiMatchQuery(c echo.Context, params *dto.MultiMa
 	searchResult, err := r.searcher.SearchFields(c.Request().Context(), domainQuery, options)
 	if err != nil {
 		slog.Error("Failed to execute multi_match search", "error", err, "fields", params.Fields, "query", params.Query)
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+	}
+
+	return r.buildResponse(c, searchResult)
+}
+
+func (r *SearchRouter) handlePhraseQuery(c echo.Context, params *dto.PhraseParams, options *dquery.BaseOptions) error {
+	domainQuery, err := params.ToDomain()
+	if err != nil {
+		slog.Error("Failed to convert DTO to types", "error", err)
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+
+	searchResult, err := r.searcher.SearchPhrase(c.Request().Context(), domainQuery, options)
+	if err != nil {
+		slog.Error("Failed to execute phrase search", "error", err, "fields", params.Fields, "query", params.Query, "slop", params.Slop)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 	}
 

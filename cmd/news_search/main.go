@@ -24,7 +24,7 @@ import (
 func main() {
 	sCfg, err := server.LoadConfig()
 	if err != nil {
-		slog.Error("Failed to load config: %v", err)
+		slog.Error("Failed to load config", "error", err)
 		os.Exit(1)
 	}
 

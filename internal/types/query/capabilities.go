@@ -1,8 +1,8 @@
 package query
 
 type Capabilities struct {
-	SupportsMatch      bool
-	SupportsMultiMatch bool
-	SupportsPhrase     bool
-	SupportsFuzzy      bool
+	Match      bool
+	MultiMatch bool
+	Phrase     bool
+	Fuzzy      bool
 }

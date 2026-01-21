@@ -67,6 +67,7 @@ type SearchResponse struct {
 type QueryWrapper struct {
 	Match      *MatchParams      `json:"match,omitempty"`
 	MultiMatch *MultiMatchParams `json:"multi_match,omitempty"`
+	Phrase     *PhraseParams     `json:"phrase,omitempty"`
 }
 
 // MatchParams represents match query parameters (maps directly to types)
@@ -85,6 +86,22 @@ type MultiMatchParams struct {
 	FieldWeights map[string]float64 `json:"field_weights,omitempty"`
 	Operator     string             `json:"operator,omitempty"`
 	Language     string             `json:"language,omitempty"`
+}
+
+// PhraseParams represents phrase query parameters (maps directly to types)
+// Example:
+//
+//	{
+//	  "query": "climate change",
+//	  "fields": ["title", "description"],
+//	  "slop": 2,
+//	  "language": "english"
+//	}
+type PhraseParams struct {
+	Query    string   `json:"query"`
+	Fields   []string `json:"fields"`
+	Slop     int      `json:"slop,omitempty"`
+	Language string   `json:"language,omitempty"`
 }
 
 func (p *MatchParams) ToDomain() (*query.Match, error) {
@@ -148,6 +165,36 @@ func (p *MultiMatchParams) ToDomain() (*query.MultiMatch, error) {
 	return newQuery, nil
 }
 
+func (p *PhraseParams) ToDomain() (*query.Phrase, error) {
+	if p.Query == "" {
+		return nil, fmt.Errorf("query is required")
+	}
+	if len(p.Fields) == 0 {
+		return nil, fmt.Errorf("fields are required (at least one field)")
+	}
+
+	var opts []query.PhraseOption
+
+	if p.Slop > 0 {
+		opts = append(opts, query.WithPhraseSlop(p.Slop))
+	}
+
+	if p.Language != "" {
+		lang := query.Language(p.Language)
+		if !query.SupportedLanguages[lang] {
+			return nil, fmt.Errorf("unsupported language: %s", p.Language)
+		}
+		opts = append(opts, query.WithPhraseLanguage(lang))
+	}
+
+	newQuery, err := query.NewPhrase(p.Query, p.Fields, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("invalid phrase query: %w", err)
+	}
+
+	return newQuery, nil
+}
+
 // GetQueryType returns the type of query in the wrapper
 func (q *QueryWrapper) GetQueryType() query.Kind {
 	if q.Match != nil {
@@ -155,6 +202,9 @@ func (q *QueryWrapper) GetQueryType() query.Kind {
 	}
 	if q.MultiMatch != nil {
 		return query.MultiMatchType
+	}
+	if q.Phrase != nil {
+		return query.PhraseType
 	}
 	return ""
 }
@@ -180,9 +230,12 @@ func (q *QueryWrapper) UnmarshalJSON(data []byte) error {
 	if q.MultiMatch != nil {
 		count++
 	}
+	if q.Phrase != nil {
+		count++
+	}
 
 	if count == 0 {
-		return fmt.Errorf("query must specify one of: match, multi_match")
+		return fmt.Errorf("query must specify one of: match, multi_match, phrase")
 	}
 	if count > 1 {
 		return fmt.Errorf("query must specify only one query type")

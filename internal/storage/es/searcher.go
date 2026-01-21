@@ -351,7 +351,7 @@ func (r *Searcher) SearchFields(ctx context.Context, query *dquery.MultiMatch, b
 	fieldsWithWeight := make([]string, 0, len(fields))
 	for _, field := range fields {
 		if field.Weight != 1.0 {
-			fieldsWithWeight = append(fieldsWithWeight, fmt.Sprintf("%s^%.1f", field, field.Weight))
+			fieldsWithWeight = append(fieldsWithWeight, fmt.Sprintf("%s^%.1f", field.Name, field.Weight))
 		} else {
 			fieldsWithWeight = append(fieldsWithWeight, field.Name)
 		}
@@ -445,6 +445,12 @@ func (r *Searcher) SearchFields(ctx context.Context, query *dquery.MultiMatch, b
 		PageMaxScore: utils.RoundFloat64(rawScores[0], dquery.ScoreDecimalPlaces),
 		TotalMatches: res.Hits.Total.Value,
 	}, nil
+}
+
+// SearchPhrase implements storage.Searcher interface
+// TODO: Implement phrase search for Elasticsearch using match_phrase query
+func (r *Searcher) SearchPhrase(ctx context.Context, query *dquery.Phrase, baseOpts *dquery.BaseOptions) (*storage.SearchResult, error) {
+	return nil, fmt.Errorf("phrase search not yet implemented for Elasticsearch")
 }
 
 // Compile-time interface assertions

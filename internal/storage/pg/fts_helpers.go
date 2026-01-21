@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
-	"strconv"
 	"strings"
 
 	"github.com/DjordjeVuckovic/news-hunter/internal/types/operator"
@@ -34,22 +33,6 @@ var labelToPosition = map[string]int{
 type FieldWeight struct {
 	Field  string
 	Weight float64
-}
-
-// parseFieldBoost parses Elasticsearch-style "field^boost" notation
-// Examples:
-//
-//	"title^3.0"     → FieldWeight{Field: "title", Weight: 3.0}
-//	"description"   → FieldWeight{Field: "description", Weight: 1.0}
-func parseFieldBoost(fieldStr string) FieldWeight {
-	parts := strings.Split(fieldStr, "^")
-	if len(parts) == 2 {
-		w, err := strconv.ParseFloat(parts[1], 64)
-		if err == nil {
-			return FieldWeight{Field: parts[0], Weight: w}
-		}
-	}
-	return FieldWeight{Field: fieldStr, Weight: 1.0} // Default boost
 }
 
 // buildWeightLabels converts field names to PostgreSQL weight label string
@@ -190,4 +173,174 @@ func buildTsWhereClause(fieldBoosts []FieldWeight, lang query.Language, op opera
 	}
 
 	return result
+}
+
+// buildPhraseQuery constructs a PostgreSQL phrase tsquery expression
+// For slop=0: Uses phraseto_tsquery for exact phrase matching
+// For slop>0: Uses to_tsquery with distance operators (<N>) and OR logic
+//
+// Examples:
+//
+//	slop=0: phraseto_tsquery('english', 'climate change')
+//	        → 'climat <-> chang' (exact adjacent positions)
+//	slop=1: to_tsquery('english', 'climat <-> chang | climat <2> chang')
+//	        → matches "climate change" OR "climate X change"
+//	slop=2: to_tsquery('english', 'climat <-> chang | climat <2> chang | climat <3> chang')
+//	        → matches exact phrase OR 1 word apart OR 2 words apart
+func buildPhraseQuery(lang query.Language, slop int, paramNum int) string {
+	if slop == 0 {
+		// Exact phrase matching - simplest and most efficient
+		return fmt.Sprintf("phraseto_tsquery('%s'::regconfig, $%d)", lang, paramNum)
+	}
+
+	// For slop > 0, we need to construct OR query with distance operators
+	// PostgreSQL <N> operator expects exact distance, so we need to generate:
+	// term1 <-> term2 | term1 <2> term2 | term1 <3> term2 | ... up to slop+1
+	//
+	// Note: We'll construct this dynamically in the query by splitting the phrase
+	// and building the distance query. For now, return a helper expression.
+	//
+	// The actual query will be built in the SearchPhrase method by:
+	// 1. Splitting the phrase into tokens
+	// 2. Building OR query with distance operators
+	// 3. Using to_tsquery with the constructed expression
+
+	// For slop>0, we'll use a custom query builder that generates the OR expressions
+	// This is a placeholder - the actual query building happens in SearchPhrase
+	return fmt.Sprintf("phraseto_tsquery('%s'::regconfig, $%d)", lang, paramNum)
+}
+
+// buildPhraseSlopQuery constructs a phrase query with slop support
+// This generates an OR query with multiple distance operators
+//
+// Example for "climate change" with slop=2:
+//
+//	Input: ["climat", "chang"], slop=2
+//	Output: "climat <-> chang | climat <2> chang | climat <3> chang"
+//
+// PostgreSQL distance operator <N> means exactly N-1 lexemes apart:
+//   - <-> means adjacent (0 words between)
+//   - <2> means 1 word between
+//   - <3> means 2 words between
+func buildPhraseSlopQuery(tokens []string, slop int) string {
+	if len(tokens) < 2 {
+		// Single token - just return it
+		if len(tokens) == 1 {
+			return tokens[0]
+		}
+		return ""
+	}
+
+	var orParts []string
+
+	// Generate OR expressions for each distance from 0 to slop
+	// distance 0: term1 <-> term2 (adjacent)
+	// distance 1: term1 <2> term2 (one word apart)
+	// distance 2: term1 <3> term2 (two words apart)
+	for distance := 0; distance <= slop; distance++ {
+		var parts []string
+		for i := 0; i < len(tokens)-1; i++ {
+			if distance == 0 {
+				parts = append(parts, fmt.Sprintf("%s <-> %s", tokens[i], tokens[i+1]))
+			} else {
+				// distance+1 because <2> means 1 word between, <3> means 2 words between
+				parts = append(parts, fmt.Sprintf("%s <%d> %s", tokens[i], distance+1, tokens[i+1]))
+			}
+		}
+
+		// Join consecutive token pairs with &
+		if len(parts) > 0 {
+			orParts = append(orParts, strings.Join(parts, " & "))
+		}
+	}
+
+	// Join all distance variants with OR
+	return strings.Join(orParts, " | ")
+}
+
+// buildPhraseWhereClause constructs the WHERE clause for phrase search with field filtering
+// Uses same weight label filtering as regular FTS queries
+//
+// Examples:
+//
+//	fields=["title"]                    → search_vector @@ (query::text || ':A')::tsquery
+//	fields=["title", "description"]     → search_vector @@ (query::text || ':AB')::tsquery
+//	fields=[]                           → search_vector @@ query (all fields)
+func buildPhraseWhereClause(fields []string, lang query.Language, slop int, paramNum int) string {
+	vectorExpr := "search_vector"
+	queryExpr := buildPhraseQuery(lang, slop, paramNum)
+
+	// Build weight labels from field names
+	labels := buildWeightLabels(fields)
+
+	var result string
+	// If specific fields requested, use weight label filtering
+	if labels != "" {
+		result = fmt.Sprintf("%s @@ (%s::text || ':%s')::tsquery", vectorExpr, queryExpr, labels)
+		slog.Debug("Built phrase WHERE clause with label filtering",
+			"labels", labels,
+			"fields", fields,
+			"slop", slop,
+			"where_clause", result)
+	} else {
+		// No field filtering - search all fields
+		result = fmt.Sprintf("%s @@ %s", vectorExpr, queryExpr)
+		slog.Debug("Built phrase WHERE clause without filtering",
+			"slop", slop,
+			"where_clause", result)
+	}
+
+	return result
+}
+
+// buildPhraseRankExpression constructs a ts_rank expression for phrase queries
+// For phrase queries, we can optionally boost specific fields
+//
+// Returns: "ts_rank('{0.0, 1.0, 1.5, 3.0}', search_vector, query)" or "ts_rank(search_vector, query)"
+func buildPhraseRankExpression(fields []string, weights map[string]float64, lang query.Language, slop int, paramNum int) string {
+	vectorExpr := "search_vector"
+	queryExpr := buildPhraseQuery(lang, slop, paramNum)
+
+	// If custom weights specified, build field boosts
+	if len(weights) > 0 {
+		fieldBoosts := make([]FieldWeight, 0, len(fields))
+		for _, field := range fields {
+			weight := weights[field]
+			if weight == 0 {
+				weight = 1.0 // Default weight
+			}
+			fieldBoosts = append(fieldBoosts, FieldWeight{Field: field, Weight: weight})
+		}
+
+		weightsArray := buildWeightsArray(fieldBoosts)
+		return fmt.Sprintf("ts_rank('%s', %s, %s)", weightsArray, vectorExpr, queryExpr)
+	}
+
+	// Use default PostgreSQL weights
+	return fmt.Sprintf("ts_rank(%s, %s)", vectorExpr, queryExpr)
+}
+
+// extractLexemesFromTsquery extracts lexemes from a tsquery string
+// Example: "'climat' & 'chang'" -> ["climat", "chang"]
+// Example: "'renew' & 'energi'" -> ["renew", "energi"]
+func extractLexemesFromTsquery(tsqueryStr string) []string {
+	var lexemes []string
+
+	// Replace operators with spaces to make splitting easier
+	cleaned := strings.ReplaceAll(tsqueryStr, "&", " ")
+	cleaned = strings.ReplaceAll(cleaned, "|", " ")
+	cleaned = strings.ReplaceAll(cleaned, "!", " ")
+
+	// Split by whitespace
+	parts := strings.Fields(cleaned)
+
+	for _, part := range parts {
+		// Remove single quotes around lexemes
+		trimmed := strings.Trim(part, "'")
+		if trimmed != "" && trimmed != "(" && trimmed != ")" {
+			lexemes = append(lexemes, trimmed)
+		}
+	}
+
+	return lexemes
 }

@@ -13,7 +13,6 @@ import (
 type Kind string
 
 const (
-
 	// QueryStringType QueryTypeQueryString: Simple text-based search query (application-optimized)
 	QueryStringType Kind = "query_string"
 
@@ -29,16 +28,22 @@ const (
 
 	// BooleanType: Structured queries with logical operators (AND, OR, NOT)
 	BooleanType Kind = "boolean"
+
+	// PhraseType: Phrase match query with optional slop
+	// ES: match_phrase query with slop parameter
+	// PG: phraseto_tsquery (slop=0) or to_tsquery with <N> operators (slop>0)
+	PhraseType Kind = "phrase"
 )
 
-// SearchQuery is the top-level query container
+// Base is the top-level query container
 // Only one query field should be non-nil based on Kind
-type SearchQuery struct {
+type Base struct {
 	Kind        Kind        `json:"kind"`
 	QueryString *String     `json:"query_string,omitempty"`
 	Match       *Match      `json:"match,omitempty"`
 	MultiMatch  *MultiMatch `json:"multi_match,omitempty"`
 	Boolean     *Boolean    `json:"boolean,omitempty"`
+	Phrase      *Phrase     `json:"phrase,omitempty"`
 }
 
 // String represents a simple text-based search query
@@ -85,6 +90,15 @@ type Boolean struct {
 	Expression string `json:"expression" validate:"required,min=1"`
 }
 
+// Phrase: Phrase match query with optional slop
+// Searches for an exact phrase with optional positional flexibility
+//
+// Elasticsearch: Translates to {"match_phrase": {"field": {"query": "text", "slop": N}}}
+// PostgreSQL: Uses phraseto_tsquery (slop=0) or to_tsquery with <N> operators (slop>0)
+
+// Example:
+//
+//	{"query": "climate change", "fields": ["title", "content"], "slop": 2}
 type Phrase struct {
 	// Query: The exact phrase to search for
 	Query string `json:"query" validate:"required,min=1"`
@@ -94,10 +108,77 @@ type Phrase struct {
 
 	// Slop: Maximum positions allowed between matching tokens
 	// 0 = exact phrase, 1 = one word between, etc.
-	Slop int `json:"slop,omitempty"`
+	// Maximum value: 3 (to limit PostgreSQL OR clause complexity)
+	// Default: 0 (exact phrase)
+	Slop int `json:"slop,omitempty" validate:"min=0,max=3"`
 
 	// Language: Text analysis language
 	Language Language `json:"language,omitempty"`
+}
+
+const MaxPhraseSlop = 3
+
+type PhraseOption func(q *Phrase)
+
+// NewPhrase creates a new Phrase query with sensible defaults
+func NewPhrase(query string, fields []string, opts ...PhraseOption) (*Phrase, error) {
+	if query == "" {
+		return nil, fmt.Errorf("query is required")
+	}
+	if len(fields) == 0 {
+		return nil, fmt.Errorf("fields are required")
+	}
+
+	q := &Phrase{
+		Query:    query,
+		Fields:   fields,
+		Language: DefaultLanguage,
+		Slop:     0, // Default to exact phrase
+	}
+
+	for _, opt := range opts {
+		opt(q)
+	}
+
+	// Validate slop range
+	if q.Slop < 0 || q.Slop > MaxPhraseSlop {
+		return nil, fmt.Errorf("slop must be between 0 and %d, got %d", MaxPhraseSlop, q.Slop)
+	}
+
+	return q, nil
+}
+
+// WithPhraseSlop sets the slop (positional flexibility) for Phrase query
+func WithPhraseSlop(slop int) PhraseOption {
+	return func(q *Phrase) {
+		q.Slop = slop
+	}
+}
+
+// WithPhraseLanguage sets the language for Phrase query
+func WithPhraseLanguage(lang Language) PhraseOption {
+	return func(q *Phrase) {
+		q.Language = lang
+	}
+}
+
+// GetLanguage returns the language with default fallback
+func (q *Phrase) GetLanguage() Language {
+	if q.Language == "" {
+		return DefaultLanguage
+	}
+	return q.Language
+}
+
+// GetSlop returns the slop value (default 0)
+func (q *Phrase) GetSlop() int {
+	if q.Slop < 0 {
+		return 0
+	}
+	if q.Slop > MaxPhraseSlop {
+		return MaxPhraseSlop
+	}
+	return q.Slop
 }
 
 var (

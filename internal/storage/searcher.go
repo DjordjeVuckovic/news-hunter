@@ -31,11 +31,8 @@ type Searcher interface {
 	SearchField(ctx context.Context, query *query.Match, baseOpts *query.BaseOptions) (*SearchResult, error)
 	// SearchFields performs multi-field match query with per-field weighting
 	SearchFields(ctx context.Context, query *query.MultiMatch, baseOpts *query.BaseOptions) (*SearchResult, error)
-}
-
-type PhraseSearcher interface {
-	// SearchPhrase performs phrase search on specified field with slop support
+	// SearchPhrase performs phrase search on specified fields with slop support
 	// Elasticsearch: Uses match_phrase query with slop parameter
-	// PostgreSQL: Uses phraseto_tsquery with positional matching
-	SearchPhrase(ctx context.Context, query *query.Phrase, cursor *query.Cursor, size int) (*SearchResult, error)
+	// PostgreSQL: Uses phraseto_tsquery (slop=0) or to_tsquery with distance operators (slop>0)
+	SearchPhrase(ctx context.Context, query *query.Phrase, baseOpts *query.BaseOptions) (*SearchResult, error)
 }
