@@ -21,12 +21,12 @@ type SearchResult struct {
 // Searcher is the structured API interface
 // Provides full-text search capability
 type Searcher interface {
-	// Search performs simple string-based search with application-optimized settings
+	// SearchQuery performs simple string-based search with application-optimized settings
 	// The storage implementation determines optimal fields, weights, and search strategy
 	// based on index configuration and content type.
 	// size: number of results to return per page
 	// Returns types objects with types cursor (not encoded string)
-	Search(ctx context.Context, query *query.String, baseOpts *query.BaseOptions) (*SearchResult, error)
+	SearchQuery(ctx context.Context, query *query.String, baseOpts *query.BaseOptions) (*SearchResult, error)
 	// SearchField performs single-field match query with relevance scoring
 	SearchField(ctx context.Context, query *query.Match, baseOpts *query.BaseOptions) (*SearchResult, error)
 	// SearchFields performs multi-field match query with per-field weighting

@@ -16,10 +16,13 @@ type Operator string
 
 const (
 	// And requires all search terms to match (higher precision, lower recall)
-	And Operator = "and"
+	And Operator = "AND"
 
 	// Or requires any search term to match (lower precision, higher recall)
-	Or Operator = "or"
+	Or Operator = "OR"
+
+	// Not excludes terms from matching (used for negation)
+	Not Operator = "NOT"
 )
 
 // Default is the default operator when not specified

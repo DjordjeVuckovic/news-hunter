@@ -24,7 +24,7 @@ func NewReader(pool *ConnectionPool) (*Searcher, error) {
 // Search implements storage.Searcher interface
 // Performs simple string-based search using PostgreSQL's tsvector and plainto_tsquery
 // Application determines optimal fields and weights based on index configuration
-func (r *Searcher) Search(ctx context.Context, query *dquery.String, baseOpts *dquery.BaseOptions) (*storage.SearchResult, error) {
+func (r *Searcher) SearchQuery(ctx context.Context, query *dquery.String, baseOpts *dquery.BaseOptions) (*storage.SearchResult, error) {
 	cursor, size := baseOpts.Cursor, baseOpts.Size
 	slog.Info("Executing pool query_string search", "query", query.Query, "has_cursor", cursor != nil, "size", size)
 
@@ -669,7 +669,7 @@ func (r *Searcher) SearchPhrase(ctx context.Context, query *dquery.Phrase, baseO
 	}, nil
 }
 
-// SearchBoolean implements storage.BooleanSearcher interface
+// SearchBoolean bool expression search
 // Performs boolean search using PostgreSQL's tsquery with AND (&), OR (|), NOT (!) operators
 func (r *Searcher) SearchBoolean(ctx context.Context, query *dquery.Boolean, cursor *dquery.Cursor, size int) (*storage.SearchResult, error) {
 	slog.Info("Executing pool boolean search", "expression", query.Expression, "has_cursor", cursor != nil, "size", size)

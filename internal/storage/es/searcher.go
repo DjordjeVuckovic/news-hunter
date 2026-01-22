@@ -38,7 +38,7 @@ func NewSearcher(config ClientConfig) (*Searcher, error) {
 // SearchQueryString implements storage.Searcher interface
 // Performs simple string-based search using Elasticsearch's multi_match query with BM25
 // Application determines optimal fields and weights based on index configuration
-func (r *Searcher) Search(ctx context.Context, query *dquery.String, baseOpts *dquery.BaseOptions) (*storage.SearchResult, error) {
+func (r *Searcher) SearchQuery(ctx context.Context, query *dquery.String, baseOpts *dquery.BaseOptions) (*storage.SearchResult, error) {
 	// Use default fields with default weights (application-determined)
 	cursor, size := baseOpts.Cursor, baseOpts.Size
 	fields := dquery.DefaultFields

@@ -46,11 +46,11 @@ func (r *SearchRouter) Bind() {
 // @Tags search
 // @Accept json
 // @Produce json
-// @Param q query string true "Search query text" example("climate change")
+// @Param q query string true "SearchQuery query text" example("climate change")
 // @Param size query int false "Results per page (default: 100, max: 10000)" example(10)
 // @Param cursor query string false "Pagination cursor (base64-encoded from previous response)"
-// @Param lang query string false "Search language: english, serbian (default: english)" example("english")
-// @Success 200 {object} dto.SearchResponse "Search results with pagination metadata"
+// @Param lang query string false "SearchQuery language: english, serbian (default: english)" example("english")
+// @Success 200 {object} dto.SearchResponse "SearchQuery results with pagination metadata"
 // @Failure 400 {object} map[string]string "Bad request - missing or invalid parameters"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Router /v1/articles/search [get]
@@ -84,7 +84,7 @@ func (r *SearchRouter) searchHandler(c echo.Context) error {
 	}
 
 	queryString := dquery.NewQueryString(query)
-	searchResult, err := r.searcher.Search(c.Request().Context(), queryString, &dquery.BaseOptions{
+	searchResult, err := r.searcher.SearchQuery(c.Request().Context(), queryString, &dquery.BaseOptions{
 		Cursor: cursor,
 		Size:   sizeInt,
 	})
@@ -114,7 +114,7 @@ func (r *SearchRouter) searchHandler(c echo.Context) error {
 // @Accept json
 // @Produce json
 // @Param request body dto.SearchRequest true "Structured search request with query wrapper"
-// @Success 200 {object} dto.SearchResponse "Search results with pagination metadata"
+// @Success 200 {object} dto.SearchResponse "SearchQuery results with pagination metadata"
 // @Failure 400 {object} map[string]string "Bad request - invalid query structure or parameters"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Failure 501 {object} map[string]string "Query type not supported by searcher backend"

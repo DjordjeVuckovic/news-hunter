@@ -49,7 +49,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Search results with pagination metadata",
+                        "description": "SearchQuery results with pagination metadata",
                         "schema": {
                             "$ref": "#/definitions/dto.SearchResponse"
                         }
@@ -101,7 +101,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "example": "\"climate change\"",
-                        "description": "Search query text",
+                        "description": "SearchQuery query text",
                         "name": "q",
                         "in": "query",
                         "required": true
@@ -122,14 +122,14 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "example": "\"english\"",
-                        "description": "Search language: english, serbian (default: english)",
+                        "description": "SearchQuery language: english, serbian (default: english)",
                         "name": "lang",
                         "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "Search results with pagination metadata",
+                        "description": "SearchQuery results with pagination metadata",
                         "schema": {
                             "$ref": "#/definitions/dto.SearchResponse"
                         }
