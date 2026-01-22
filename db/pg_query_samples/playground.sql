@@ -241,10 +241,6 @@ SELECT COUNT(*) FROM articles
 WHERE to_tsvector('english', title) @@ plainto_tsquery('english', 'trump');
 
 
--- ====================================================================
--- TEST 10: Verify Weight Labels in search_vector
--- ====================================================================
-
 -- Check that search_vector contains proper weight labels
 SELECT
     id,
@@ -258,11 +254,6 @@ SELECT
 FROM articles
 WHERE search_vector @@ plainto_tsquery('english', 'trump')
 LIMIT 5;
-
-
--- ====================================================================
--- TEST 11: Pagination with Total Count
--- ====================================================================
 
 -- Get total count and page of results
 WITH ranked AS (
@@ -285,11 +276,6 @@ SELECT
 FROM ranked
 ORDER BY score DESC
 LIMIT 10 OFFSET 0;
-
-
--- ====================================================================
--- TEST 12: Debug Boost Behavior (Different weights, same results?)
--- ====================================================================
 
 -- Test 1: Without custom boosts (default 1.0 for both fields)
 SELECT COUNT(*) as count_no_custom_boost
@@ -322,10 +308,7 @@ ORDER BY score_custom DESC
 LIMIT 10;
 
 
--- ====================================================================
--- SUMMARY: Count Comparison
--- ====================================================================
-
+-- validate field weighting by counting matches per field
 SELECT
     'Title Only' as field,
     (SELECT COUNT(*) FROM articles
@@ -356,3 +339,14 @@ SELECT
     (SELECT COUNT(*) FROM articles
      WHERE search_vector @@ plainto_tsquery('english', 'trump')) as count
 ORDER BY count DESC;
+
+-- highlighting example
+SELECT
+    ts_headline(
+            'english',
+            content,
+            plainto_tsquery('english', 'trump'),
+            'StartSel=<b>, StopSel=</b>, MaxWords=35, MinWords=15, MaxFragments=3'
+    ) as highlighted_content
+FROM articles
+WHERE search_vector @@ plainto_tsquery('english', 'trump')

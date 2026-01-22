@@ -35,4 +35,6 @@ type FtsSearcher interface {
 	// Elasticsearch: Uses match_phrase query with slop parameter
 	// PostgreSQL: Uses phraseto_tsquery (slop=0) or to_tsquery with distance operators (slop>0)
 	SearchPhrase(ctx context.Context, query *query.Phrase, baseOpts *query.BaseOptions) (*SearchResult, error)
+	// SearchBoolean performs complex boolean queries combining multiple conditions
+	SearchBoolean(ctx context.Context, query *query.Boolean, baseOpts *query.BaseOptions) (*SearchResult, error)
 }

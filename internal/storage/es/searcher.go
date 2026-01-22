@@ -207,18 +207,6 @@ func (r *Searcher) mapToResult(hits []types.Hit, maxScore float64) ([]dto.Articl
 	return articles, rawScores, nil
 }
 
-// SearchBoolean implements storage.BooleanSearcher interface
-// Performs boolean search using Elasticsearch's bool query with must, should, must_not clauses
-func (r *Searcher) SearchBoolean(ctx context.Context, query *dquery.Boolean, cursor *dquery.Cursor, size int) (*storage.SearchResult, error) {
-	slog.Info("Executing es boolean search", "expression", query.Expression, "has_cursor", cursor != nil, "size", size)
-
-	// TODO: Implement boolean query parser
-	// Parse query.Expression: "climate AND (change OR warming) AND NOT politics"
-	// Convert to Elasticsearch bool query with must, should, must_not clauses
-
-	return nil, fmt.Errorf("boolean search not yet implemented for Elasticsearch")
-}
-
 // SearchMatch implements storage.SingleMatchSearcher interface
 // Performs single-field match query using Elasticsearch's match query
 func (r *Searcher) SearchField(ctx context.Context, query *dquery.Match, baseOpts *dquery.BaseOptions) (*storage.SearchResult, error) {
@@ -448,9 +436,138 @@ func (r *Searcher) SearchFields(ctx context.Context, query *dquery.MultiMatch, b
 }
 
 // SearchPhrase implements storage.FtsSearcher interface
-// TODO: Implement phrase search for Elasticsearch using match_phrase query
+// Performs phrase search using Elasticsearch's match_phrase query with slop support
 func (r *Searcher) SearchPhrase(ctx context.Context, query *dquery.Phrase, baseOpts *dquery.BaseOptions) (*storage.SearchResult, error) {
-	return nil, fmt.Errorf("phrase search not yet implemented for Elasticsearch")
+	cursor, size := baseOpts.Cursor, baseOpts.Size
+	slop := query.GetSlop()
+
+	slog.Info("Executing es phrase search",
+		"query", query.Query,
+		"fields", query.Fields,
+		"slop", slop,
+		"language", query.GetLanguage(),
+		"has_cursor", cursor != nil,
+		"size", size)
+
+	// Build bool query with should clauses for each field
+	// Each field gets a match_phrase query with the same slop
+	shouldClauses := make([]types.Query, 0, len(query.Fields))
+	for _, field := range query.Fields {
+		matchPhraseQuery := types.MatchPhraseQuery{
+			Query: query.Query,
+		}
+		if slop > 0 {
+			matchPhraseQuery.Slop = &slop
+		}
+
+		shouldClauses = append(shouldClauses, types.Query{
+			MatchPhrase: map[string]types.MatchPhraseQuery{
+				field: matchPhraseQuery,
+			},
+		})
+	}
+
+	// Build bool query - at least one field should match
+	boolQuery := &types.BoolQuery{
+		Should:             shouldClauses,
+		MinimumShouldMatch: "1",
+	}
+
+	slog.Debug("Elasticsearch phrase query",
+		"fields", query.Fields,
+		"slop", slop,
+		"num_should_clauses", len(shouldClauses))
+
+	// Build search request
+	searchReq := r.client.Search().
+		Index(r.indexName).
+		Query(&types.Query{
+			Bool: boolQuery,
+		}).
+		Size(size + 1).
+		TrackScores(true)
+
+	// Add cursor support
+	if cursor != nil {
+		searchReq = searchReq.SearchAfter(
+			types.FieldValue(cursor.Score),
+			types.FieldValue(cursor.ID.String()),
+		)
+	}
+
+	// Add sorting
+	sortOrderDesc := sortorder.Desc
+	searchReq = searchReq.Sort(
+		&types.SortOptions{
+			SortOptions: map[string]types.FieldSort{
+				"_score": {Order: &sortOrderDesc},
+			},
+		},
+		&types.SortOptions{
+			SortOptions: map[string]types.FieldSort{
+				"id": {Order: &sortOrderDesc},
+			},
+		},
+	)
+
+	// Execute query
+	res, err := searchReq.Do(ctx)
+	if err != nil {
+		slog.Error("Elasticsearch phrase query failed", "error", err, "query", query.Query, "fields", query.Fields)
+		return nil, fmt.Errorf("failed to execute phrase search: %w", err)
+	}
+
+	maxScore := dquery.CalcSafeScore((*float64)(res.Hits.MaxScore))
+
+	articles, rawScores, err := r.mapToResult(res.Hits.Hits, maxScore)
+	if err != nil {
+		return nil, fmt.Errorf("failed to map search results to types: %w", err)
+	}
+
+	slog.Info("ES phrase search results fetched",
+		"total_matches", res.Hits.Total.Value,
+		"returned_count", len(articles),
+		"max_score", res.Hits.MaxScore,
+		"normalized_max", maxScore)
+
+	hasMore := len(articles) > size
+	if hasMore {
+		articles = articles[:size]
+		rawScores = rawScores[:size]
+	}
+
+	var nextCursor *dquery.Cursor
+	if hasMore && len(articles) > 0 {
+		nextCursor = &dquery.Cursor{
+			Score: rawScores[len(rawScores)-1],
+			ID:    articles[len(articles)-1].Article.ID,
+		}
+	}
+
+	// Handle case where no results found
+	var maxScoreValue float64
+	var pageMaxScore float64
+	if res.Hits.MaxScore != nil {
+		maxScoreValue = utils.RoundFloat64(float64(*res.Hits.MaxScore), dquery.ScoreDecimalPlaces)
+	}
+	if len(rawScores) > 0 {
+		pageMaxScore = utils.RoundFloat64(rawScores[0], dquery.ScoreDecimalPlaces)
+	}
+
+	return &storage.SearchResult{
+		Hits:         articles,
+		NextCursor:   nextCursor,
+		HasMore:      hasMore,
+		MaxScore:     maxScoreValue,
+		PageMaxScore: pageMaxScore,
+		TotalMatches: res.Hits.Total.Value,
+	}, nil
+}
+
+// SearchBoolean implements storage.FtsSearcher interface
+func (r *Searcher) SearchBoolean(ctx context.Context, query *dquery.Boolean, baseOpts *dquery.BaseOptions) (*storage.SearchResult, error) {
+	//TODO implement me
+	panic("implement me")
 }
 
 // Compile-time interface assertions

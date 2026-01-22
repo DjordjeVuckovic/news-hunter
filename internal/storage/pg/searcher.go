@@ -671,8 +671,9 @@ func (r *Searcher) SearchPhrase(ctx context.Context, query *dquery.Phrase, baseO
 
 // SearchBoolean bool expression search
 // Performs boolean search using PostgreSQL's tsquery with AND (&), OR (|), NOT (!) operators
-func (r *Searcher) SearchBoolean(ctx context.Context, query *dquery.Boolean, cursor *dquery.Cursor, size int) (*storage.SearchResult, error) {
-	slog.Info("Executing pool boolean search", "expression", query.Expression, "has_cursor", cursor != nil, "size", size)
+func (r *Searcher) SearchBoolean(ctx context.Context, query *dquery.Boolean, baseOpts *dquery.BaseOptions) (*storage.SearchResult, error) {
+
+	slog.Info("Executing pool boolean search", "expression", query.Expression, "has_cursor", baseOpts.Cursor != nil, "size", baseOpts.Size)
 
 	// TODO: Implement boolean query parser
 	// Parse query.Expression: "climate AND (change OR warming) AND NOT politics"
