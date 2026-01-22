@@ -35,7 +35,7 @@ func NewSearcher(config ClientConfig) (*Searcher, error) {
 	}, nil
 }
 
-// SearchQueryString implements storage.Searcher interface
+// SearchQueryString implements storage.FtsSearcher interface
 // Performs simple string-based search using Elasticsearch's multi_match query with BM25
 // Application determines optimal fields and weights based on index configuration
 func (r *Searcher) SearchQuery(ctx context.Context, query *dquery.String, baseOpts *dquery.BaseOptions) (*storage.SearchResult, error) {
@@ -447,11 +447,11 @@ func (r *Searcher) SearchFields(ctx context.Context, query *dquery.MultiMatch, b
 	}, nil
 }
 
-// SearchPhrase implements storage.Searcher interface
+// SearchPhrase implements storage.FtsSearcher interface
 // TODO: Implement phrase search for Elasticsearch using match_phrase query
 func (r *Searcher) SearchPhrase(ctx context.Context, query *dquery.Phrase, baseOpts *dquery.BaseOptions) (*storage.SearchResult, error) {
 	return nil, fmt.Errorf("phrase search not yet implemented for Elasticsearch")
 }
 
 // Compile-time interface assertions
-var _ storage.Searcher = (*Searcher)(nil)
+var _ storage.FtsSearcher = (*Searcher)(nil)

@@ -18,9 +18,9 @@ type SearchResult struct {
 	TotalMatches int64                     `json:"total_matches,omitempty"`
 }
 
-// Searcher is the structured API interface
+// FtsSearcher is the full text API interface
 // Provides full-text search capability
-type Searcher interface {
+type FtsSearcher interface {
 	// SearchQuery performs simple string-based search with application-optimized settings
 	// The storage implementation determines optimal fields, weights, and search strategy
 	// based on index configuration and content type.

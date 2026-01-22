@@ -15,10 +15,10 @@ import (
 
 type SearchRouter struct {
 	e        *echo.Echo
-	searcher storage.Searcher
+	searcher storage.FtsSearcher
 }
 
-func NewSearchRouter(e *echo.Echo, searcher storage.Searcher) *SearchRouter {
+func NewSearchRouter(e *echo.Echo, searcher storage.FtsSearcher) *SearchRouter {
 	router := &SearchRouter{
 		e:        e,
 		searcher: searcher,

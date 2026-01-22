@@ -39,8 +39,8 @@ func NewIndexer(ctx context.Context, cfg StorageConfig) (storage.Indexer, error)
 	}
 }
 
-// NewSearcher creates a new storage.Searcher based on the storage type
-func NewSearcher(ctx context.Context, cfg StorageConfig) (storage.Searcher, error) {
+// NewSearcher creates a new storage.FtsSearcher based on the storage type
+func NewSearcher(ctx context.Context, cfg StorageConfig) (storage.FtsSearcher, error) {
 	switch cfg.Type {
 	case storage.PG:
 		pgConfig := *cfg.Pg
