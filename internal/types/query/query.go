@@ -87,7 +87,16 @@ type Boolean struct {
 	//   "(renewable OR sustainable) AND energy"
 	//   "Trump AND NOT biden"
 	//   "(climate OR weather) AND (change OR warming)"
-	Expression string `json:"expression" validate:"required,min=1"`
+	Expression string   `json:"expression" validate:"required,min=1"`
+	Language   Language `json:"language,omitempty"`
+}
+
+// GetLanguage returns the language with default fallback
+func (q *Boolean) GetLanguage() Language {
+	if q.Language == "" {
+		return DefaultLanguage
+	}
+	return q.Language
 }
 
 // Phrase: Phrase match query with optional slop

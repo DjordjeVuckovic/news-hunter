@@ -12,17 +12,6 @@ News Hunter is a full-text search engine for exploring multilingual news headlin
 
 This project is part of a master thesis research that explores PostgreSQL's comprehensive search capabilities and compares its performance with Elasticsearch through extensive benchmarks across multiple search paradigms.
 
-**Research Focus**:
-- **Full-Text Search**: Advanced features (tsvector, ts_rank, text search configurations, ranking, relevance)
-- **Boolean Search**: Complex query operators (AND, OR, NOT) within full-text search context
-- **Field-Level Search**: Targeted searches on specific fields (e.g., title:"Trump" & description:"Melania")
-- **Fuzzy Search**: Typo tolerance and approximate matching using Levenshtein distance and similarity algorithms
-- **Trigram Similarity (pg_trgm)**: Character-level matching for handling spelling variations, typos, and partial matches
-- **Vector Search**: Semantic/similarity search using pgvector extension for embedding-based retrieval
-- **Performance Benchmarking**: Query response time, indexing performance, resource utilization
-- **Relevance Evaluation**: Comparing search quality and ranking algorithms between PostgreSQL and Elasticsearch
-- **Multilingual Support**: Text search across different languages and character sets
-
 **Search Paradigms to Explore**:
 1. **Full-Text Search**: Traditional keyword-based full-text search with relevance ranking
 2. **Structured Search**: Boolean operators and field-specific queries
@@ -75,41 +64,17 @@ The project follows a layered architecture pattern:
 - **dataset/**: Sample datasets and documentation
 - **scripts/**: Utility scripts for setup and maintenance
 
+## Design Principles
+- You MUST write clean, idiomatic Go code following best practices.
+- You MUST organize code into clear packages with single responsibility.
+- You MUST NOT write unnecessary comments; code should be self-explanatory.
+- You MUST write unit tests for all core logic with high coverage.
+
 ## Key Components
 
 ### Type System Organization
 
 The type system is organized into bounded contexts, each with its own package:
-
-**Document Context** (`internal/types/document/`):
-- `Article`: Core article entity with metadata
-- `ArticleMetadata`: Article metadata (source, publication date, category)
-- `WeightedDocument`: Interface for documents with field weights
-- Responsible for: Document structure, validation, and field access
-
-**Query Context** (`internal/types/query/`):
-- Query types: `QueryString`, `Match`, `MultiMatch`, `BooleanQuery`
-- `Language`: Search language configuration (English, Serbian, etc.)
-- `Score`: Relevance scoring utilities
-- `Cursor`: Pagination cursor for search results
-- Responsible for: Search query modeling, language configuration, scoring logic, pagination
-
-**Query Type Design**:
-- **`QueryString`**: Simple application-level API - user provides text, application determines fields/weights
-- **`Match`**: Explicit single-field control - user specifies field, operator, fuzziness
-- **`MultiMatch`**: Explicit multi-field control - user specifies fields, weights, operator
-- **`BooleanQuery`**: Structured boolean queries with AND/OR/NOT operators
-
-**Type Renamings** (simplified for clarity):
-- `FullTextQuery` → `QueryString` (following Elasticsearch terminology)
-- `MatchQuery` → `Match`
-- `MultiMatchQuery` → `MultiMatch`
-- `QueryType` → `Type`
-- `SearchLanguage` → `Language`
-
-**Operator Context** (`internal/types/operator/`):
-- `Operator`: AND/OR logical operators for search queries
-- Responsible for: Boolean logic validation and behavior
 
 **Benefits of this organization**:
 - Clear separation of concerns between document and query types
@@ -171,17 +136,19 @@ Built with Echo framework providing:
    - Query parameter: `?query=climate change`
    - Best for: End-user search boxes, simple text queries
 
-2. **Match API** (`POST /v1/articles/search/match`)
-   - Single-field search with explicit control
-   - User specifies field, operator, fuzziness, language
-   - JSON body with full parameter control
-   - Best for: Field-specific searches, advanced users
-
-3. **Multi-Match API** (`POST /v1/articles/search/multi_match`)
-   - Multi-field search with explicit field weights
-   - User controls fields, weights, operator, language
-   - JSON body with comprehensive configuration
-   - Best for: Complex queries, fine-tuned relevance
+2. **Structured Match API** (`POST /v1/articles/_search/match`)
+   - Explicit single-field control
+   - User specifies field, operator (AND/OR), fuzziness
+   - Request body:
+     ```json
+     {
+       "field": "title",
+       "query": "climate change",
+       "operator": "AND",
+       "fuzziness": 1
+     }
+     ```
+   - Best for: Advanced users needing precise control
 
 **Search Features**:
 - Full-text search with relevance ranking
@@ -200,6 +167,7 @@ Built with Echo framework providing:
 - **Explicit API**: User-controlled (Match, MultiMatch)
 - **DTO Layer**: Clean separation between API and domain
 - **Optional Interfaces**: Storage backends can optionally implement Match/MultiMatch
+- **Extensible**: Easy to add new query types in the future
 
 ## Development Commands
 
@@ -261,78 +229,6 @@ Commands expect environment variables (typically in `.env` files):
 Tests are located alongside source files with `_test.go` suffix. Use standard Go testing patterns:
 - `go test ./...` - Run all tests
 - `go test -v ./internal/reader` - Run specific package tests with verbose output
-
-## Design Principles
-
-### Domain-Driven Design (DDD)
-
-The project follows Domain-Driven Design principles where valuable and appropriate:
-
-**Value Objects**:
-- Use value objects for domain concepts with rich behavior and validation
-- Example: `operator.Operator` - encapsulates AND/OR logic with validation and behavior
-- Value objects are immutable and validated at creation
-- Provide meaningful methods like `IsAnd()`, `IsOr()` rather than string comparisons
-- **Idiomatic Go**: Place value objects in dedicated packages for clean namespacing
-
-**When to use Value Objects**:
-- Domain concepts with validation rules (e.g., `operator.Operator`, `query.Language`)
-- Concepts that should be immutable once created
-- Types that benefit from type safety over primitive types (no string mistakes)
-- Concepts with behavior that belongs to the value itself
-
-**Package Structure for Value Objects**:
-Follow Go's idiomatic approach of using packages as namespaces:
-- `internal/types/operator/` - Contains `operator.Operator` type
-- `internal/types/query/` - Contains `query.Language` type
-- Usage: `operator.And`, `operator.Or`, `query.LanguageEnglish` (clean namespacing)
-- Mirrors Go stdlib (`time.Monday`) and popular libraries (`http.MethodGet`)
-
-**Example - Operator Value Object**:
-```go
-// ✅ Good: Dedicated package with clean namespacing
-// File: internal/types/operator/operator.go
-package operator
-
-type Operator string
-
-const (
-    And Operator = "and"  // Clean: operator.And
-    Or  Operator = "or"   // Clean: operator.Or
-)
-
-func New(op string) (Operator, error) {
-    switch op {
-    case "and", "AND":
-        return And, nil
-    case "or", "OR", "":
-        return Or, nil
-    default:
-        return "", fmt.Errorf("invalid operator: %q", op)
-    }
-}
-
-func (o Operator) IsAnd() bool { return o == And }
-func (o Operator) IsOr() bool { return o == Or }
-
-// Usage in query types:
-query.Operator = operator.And  // ✅ Clean and idiomatic
-
-// ❌ Bad: All in types package with redundant prefixes
-const OperatorAnd = "and"  // Would be types.OperatorAnd - redundant!
-```
-
-**Ubiquitous Language**:
-- Use Elasticsearch terminology as the ubiquitous language for search concepts
-- Rationale: ES is the industry standard, aids benchmarking clarity, helps with adoption
-- General search concepts (fuzziness, operators) are preferred over engine-specific features
-- Document engine-specific limitations (e.g., "PostgreSQL: Ignored", "Elasticsearch: Full support")
-
-**Engine Neutrality**:
-- Avoid exposing engine-specific features in type definitions when they don't translate
-- Example: Removed `tie_breaker` (ES-only) from MultiMatchQuery type
-- Keep general concepts like `fuzziness` with documentation of engine support
-- Let storage implementations handle engine-specific optimizations
 
 **Type System Purity**:
 - Type definitions should represent search concepts, not implementation details
