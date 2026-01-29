@@ -5,13 +5,6 @@ select * from articles limit 10;
 SELECT to_tsvector('english', 'Sikkim warning: Hydroelectricity push must be accompanied by safety measures');
 -- multiple occurrences
 SELECT to_tsvector('english', 'Livin la vida loca: Living the life in the fast lane. Living it up in the city.');
--- weightings
-SELECT setweight(to_tsvector('english', title), 'A') ||
-       setweight(to_tsvector('english', content), 'B') AS weighted_document
-FROM (
-         SELECT 'News Search Guide' as title,
-                'Learn how to search in News effectively' as content
-     ) t;
 
 -- tsvector with multiple columns
 SELECT to_tsvector('english', title || ' ' || content) AS combined_tsvector

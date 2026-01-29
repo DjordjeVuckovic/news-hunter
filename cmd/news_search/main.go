@@ -32,6 +32,7 @@ func main() {
 
 	s := server.New(sCfg, heathChecker).
 		SetupMiddlewares().
+		SetupErrorHandler().
 		SetupHealthChecks("/health").
 		SetupOpenApi("/swagger/*")
 

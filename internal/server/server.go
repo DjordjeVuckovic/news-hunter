@@ -11,6 +11,7 @@ import (
 	"time"
 
 	openapi "github.com/DjordjeVuckovic/news-hunter/api/openapi-spec"
+	"github.com/DjordjeVuckovic/news-hunter/internal/apperr"
 	mw "github.com/DjordjeVuckovic/news-hunter/internal/middleware"
 	"github.com/DjordjeVuckovic/news-hunter/pkg/server"
 	"github.com/labstack/echo/v4"
@@ -112,6 +113,32 @@ func (s *Server) handleHealthCheck(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{"status": "healthy"})
+}
+
+func (s *Server) SetupErrorHandler() *Server {
+	s.Echo.HTTPErrorHandler = func(err error, c echo.Context) {
+		if c.Response().Committed {
+			return
+		}
+
+		var ve *apperr.ValidationError
+		if errors.As(err, &ve) {
+			_ = c.JSON(http.StatusBadRequest, map[string]string{"error": ve.Message})
+			return
+		}
+
+		var he *echo.HTTPError
+		if errors.As(err, &he) {
+			msg := fmt.Sprintf("%v", he.Message)
+			_ = c.JSON(he.Code, map[string]string{"error": msg})
+			return
+		}
+
+		slog.Error("Unhandled error", "error", err)
+		_ = c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+	}
+
+	return s
 }
 
 func (s *Server) SetupOpenApi(path string) *Server {

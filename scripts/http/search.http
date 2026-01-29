@@ -1,0 +1,178 @@
+@host = http://localhost:8080
+
+### Simple query string search
+GET {{host}}/v1/articles/search?q=climate%20change&size=50
+Accept: application/json
+
+### Match - single field
+POST {{host}}/v1/articles/_search
+Content-Type: application/json
+
+{
+  "size": 5,
+  "query": {
+    "match": {
+      "field": "title",
+      "query": "climate change",
+      "operator": "and",
+      "language": "english"
+    }
+  }
+}
+
+### Match - with fuzziness
+POST {{host}}/v1/articles/_search
+Content-Type: application/json
+
+{
+  "size": 5,
+  "query": {
+    "match": {
+      "field": "content",
+      "query": "climte changge",
+      "fuzziness": "AUTO"
+    }
+  }
+}
+
+### Multi-match - multiple fields with weights
+POST {{host}}/v1/articles/_search
+Content-Type: application/json
+
+{
+  "size": 5,
+  "query": {
+    "multi_match": {
+      "query": "climate change policy",
+      "fields": ["title", "description", "content"],
+      "field_weights": {
+        "title": 3.0,
+        "description": 2.0,
+        "content": 1.0
+      },
+      "operator": "and"
+    }
+  }
+}
+
+### Phrase - exact phrase
+POST {{host}}/v1/articles/_search
+Content-Type: application/json
+
+{
+  "size": 5,
+  "query": {
+    "phrase": {
+      "query": "climate change",
+      "fields": ["title", "description"],
+      "language": "english"
+    }
+  }
+}
+
+### Phrase - with slop
+POST {{host}}/v1/articles/_search
+Content-Type: application/json
+
+{
+  "size": 5,
+  "query": {
+    "phrase": {
+      "query": "climate change",
+      "fields": ["title", "content"],
+      "slop": 2
+    }
+  }
+}
+
+### Boolean - simple AND
+POST {{host}}/v1/articles/_search
+Content-Type: application/json
+
+{
+  "size": 10,
+  "query": {
+    "boolean": {
+      "expression": "climate AND change",
+      "language": "english"
+    }
+  }
+}
+
+### Boolean - OR with parentheses
+POST {{host}}/v1/articles/_search
+Content-Type: application/json
+
+{
+  "size": 10,
+  "query": {
+    "boolean": {
+      "expression": "(renewable OR sustainable) AND energy"
+    }
+  }
+}
+
+### Boolean - NOT exclusion
+POST {{host}}/v1/articles/_search
+Content-Type: application/json
+
+{
+  "size": 10,
+  "query": {
+    "boolean": {
+      "expression": "climate AND change AND NOT politics"
+    }
+  }
+}
+
+### Boolean - complex nested
+POST {{host}}/v1/articles/_search
+Content-Type: application/json
+
+{
+  "size": 10,
+  "query": {
+    "boolean": {
+      "expression": "(climate OR weather) AND (change OR warming) AND NOT politics"
+    }
+  }
+}
+
+### Boolean - quoted phrase within boolean
+POST {{host}}/v1/articles/_search
+Content-Type: application/json
+
+{
+  "size": 10,
+  "query": {
+    "boolean": {
+      "expression": "\"climate change\" AND NOT politics"
+    }
+  }
+}
+
+### Boolean - invalid (empty parens, expect 400)
+POST {{host}}/v1/articles/_search
+Content-Type: application/json
+
+{
+  "size": 10,
+  "query": {
+    "boolean": {
+      "expression": "climate AND ()"
+    }
+  }
+}
+
+### Boolean - invalid (unbalanced parens, expect 400)
+POST {{host}}/v1/articles/_search
+Content-Type: application/json
+
+{
+  "size": 10,
+  "query": {
+    "boolean": {
+      "expression": "(climate AND change"
+    }
+  }
+}
