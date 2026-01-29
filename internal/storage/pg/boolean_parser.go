@@ -5,30 +5,34 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/DjordjeVuckovic/news-hunter/internal/parser"
+	"github.com/DjordjeVuckovic/news-hunter/internal/token"
 )
 
 type BooleanParser struct {
-	tokenizer *parser.BoolTokenizer
+	tokenizer *token.BoolTokenizer
 }
 
 func NewBooleanParser() *BooleanParser {
 	return &BooleanParser{
-		tokenizer: parser.NewBoolTokenizer(),
+		tokenizer: token.NewBoolTokenizer(),
 	}
 }
 
 func (p *BooleanParser) Parse(expression string) (string, error) {
 	tokens := p.tokenizer.Tokenize(expression)
-	return convertToTsquery(tokens)
+	return p.convertToTsquery(tokens)
 }
 
-func convertToTsquery(tokens []parser.Token) (string, error) {
+func (p *BooleanParser) convertToTsquery(tokens []token.Token) (string, error) {
+	if err := p.tokenizer.Validate(tokens); err != nil {
+		return "", err
+	}
+
 	var parts []string
-	prevType := parser.EOF
+	prevType := token.EOF
 
 	for _, tok := range tokens {
-		if tok.Type == parser.EOF {
+		if tok.Type == token.EOF {
 			break
 		}
 
@@ -37,22 +41,22 @@ func convertToTsquery(tokens []parser.Token) (string, error) {
 		}
 
 		switch tok.Type {
-		case parser.WORD:
+		case token.WORD:
 			words := strings.Fields(sanitizeTerm(tok.Value))
 			if len(words) > 1 {
 				parts = append(parts, strings.Join(words, " <-> "))
 			} else if len(words) == 1 {
 				parts = append(parts, words[0])
 			}
-		case parser.AND:
+		case token.AND:
 			parts = append(parts, "&")
-		case parser.OR:
+		case token.OR:
 			parts = append(parts, "|")
-		case parser.NOT:
+		case token.NOT:
 			parts = append(parts, "!")
-		case parser.LPAREN:
+		case token.LPAREN:
 			parts = append(parts, "(")
-		case parser.RPAREN:
+		case token.RPAREN:
 			parts = append(parts, ")")
 		}
 
@@ -66,9 +70,9 @@ func convertToTsquery(tokens []parser.Token) (string, error) {
 	return result, nil
 }
 
-func needsImplicitAnd(prev, curr parser.TokenType) bool {
-	prevIsValue := prev == parser.WORD || prev == parser.RPAREN
-	currIsValue := curr == parser.WORD || curr == parser.LPAREN || curr == parser.NOT
+func needsImplicitAnd(prev, curr token.Type) bool {
+	prevIsValue := prev == token.WORD || prev == token.RPAREN
+	currIsValue := curr == token.WORD || curr == token.LPAREN || curr == token.NOT
 	return prevIsValue && currIsValue
 }
 

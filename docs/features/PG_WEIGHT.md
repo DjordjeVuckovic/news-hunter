@@ -107,7 +107,7 @@ The user's explicit request was to debug and fix a PostgreSQL full-text search b
 3. UPDATE statement didn't use `setweight()` consistently
 
 **Corrected SQL**:
-```sql
+```postgresql
 -- Create function to update search_vector with proper field weights
 CREATE OR REPLACE FUNCTION update_article_search_vector()
     RETURNS TRIGGER AS $

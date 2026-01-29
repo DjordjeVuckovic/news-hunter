@@ -8,6 +8,7 @@ import (
 
 	"github.com/DjordjeVuckovic/news-hunter/internal/dto"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
+	"github.com/DjordjeVuckovic/news-hunter/internal/token"
 	dquery "github.com/DjordjeVuckovic/news-hunter/internal/types/query"
 	"github.com/DjordjeVuckovic/news-hunter/pkg/utils"
 	"github.com/elastic/go-elasticsearch/v8"
@@ -20,6 +21,7 @@ import (
 type Searcher struct {
 	client    *elasticsearch.TypedClient
 	indexName string
+	tokenizer *token.BoolTokenizer
 }
 
 func NewSearcher(config ClientConfig) (*Searcher, error) {
@@ -32,10 +34,11 @@ func NewSearcher(config ClientConfig) (*Searcher, error) {
 	return &Searcher{
 		client:    client,
 		indexName: config.IndexName,
+		tokenizer: token.NewBoolTokenizer(),
 	}, nil
 }
 
-// SearchQueryString implements storage.FtsSearcher interface
+// SearchQuery implements storage.FtsSearcher interface
 // Performs simple string-based search using Elasticsearch's multi_match query with BM25
 // Application determines optimal fields and weights based on index configuration
 func (r *Searcher) SearchQuery(ctx context.Context, query *dquery.String, baseOpts *dquery.BaseOptions) (*storage.SearchResult, error) {
@@ -207,7 +210,7 @@ func (r *Searcher) mapToResult(hits []types.Hit, maxScore float64) ([]dto.Articl
 	return articles, rawScores, nil
 }
 
-// SearchMatch implements storage.SingleMatchSearcher interface
+// SearchField implements storage.SingleMatchSearcher interface
 // Performs single-field match query using Elasticsearch's match query
 func (r *Searcher) SearchField(ctx context.Context, query *dquery.Match, baseOpts *dquery.BaseOptions) (*storage.SearchResult, error) {
 	cursor, size := baseOpts.Cursor, baseOpts.Size
@@ -320,7 +323,7 @@ func (r *Searcher) SearchField(ctx context.Context, query *dquery.Match, baseOpt
 	}, nil
 }
 
-// SearchMultiMatch implements storage.MultiMatchSearcher interface
+// SearchFields implements storage.MultiMatchSearcher interface
 // Performs multi-field match query using Elasticsearch's multi_match query
 func (r *Searcher) SearchFields(ctx context.Context, query *dquery.MultiMatch, baseOpts *dquery.BaseOptions) (*storage.SearchResult, error) {
 	cursor, size := baseOpts.Cursor, baseOpts.Size
@@ -564,10 +567,113 @@ func (r *Searcher) SearchPhrase(ctx context.Context, query *dquery.Phrase, baseO
 	}, nil
 }
 
-// SearchBoolean implements storage.FtsSearcher interface
 func (r *Searcher) SearchBoolean(ctx context.Context, query *dquery.Boolean, baseOpts *dquery.BaseOptions) (*storage.SearchResult, error) {
-	//TODO implement me
-	panic("implement me")
+	cursor, size := baseOpts.Cursor, baseOpts.Size
+
+	slog.Info("Executing es boolean search",
+		"expression", query.Expression,
+		"has_cursor", cursor != nil,
+		"size", size)
+
+	tokens := r.tokenizer.Tokenize(query.Expression)
+	if err := r.tokenizer.Validate(tokens); err != nil {
+		slog.Error("Invalid boolean query expression", "error", err, "expression", query.Expression)
+		return nil, fmt.Errorf("invalid boolean query expression: %w", err)
+	}
+
+	fields := make([]string, 0, len(dquery.RecommendedFieldWeights))
+	for field, weight := range dquery.RecommendedFieldWeights {
+		if weight != 1.0 {
+			fields = append(fields, fmt.Sprintf("%s^%.1f", field, weight))
+		} else {
+			fields = append(fields, field)
+		}
+	}
+
+	queryStringQuery := &types.QueryStringQuery{
+		Query:  query.Expression,
+		Fields: fields,
+	}
+
+	searchReq := r.client.Search().
+		Index(r.indexName).
+		Query(&types.Query{
+			QueryString: queryStringQuery,
+		}).
+		Size(size + 1).
+		TrackScores(true)
+
+	if cursor != nil {
+		searchReq = searchReq.SearchAfter(
+			types.FieldValue(cursor.Score),
+			types.FieldValue(cursor.ID.String()),
+		)
+	}
+
+	sortOrderDesc := sortorder.Desc
+	searchReq = searchReq.Sort(
+		&types.SortOptions{
+			SortOptions: map[string]types.FieldSort{
+				"_score": {Order: &sortOrderDesc},
+			},
+		},
+		&types.SortOptions{
+			SortOptions: map[string]types.FieldSort{
+				"id": {Order: &sortOrderDesc},
+			},
+		},
+	)
+
+	res, err := searchReq.Do(ctx)
+	if err != nil {
+		slog.Error("Elasticsearch boolean query failed", "error", err, "expression", query.Expression)
+		return nil, fmt.Errorf("failed to execute boolean search: %w", err)
+	}
+
+	maxScore := dquery.CalcSafeScore((*float64)(res.Hits.MaxScore))
+
+	articles, rawScores, err := r.mapToResult(res.Hits.Hits, maxScore)
+	if err != nil {
+		return nil, fmt.Errorf("failed to map search results to types: %w", err)
+	}
+
+	slog.Info("ES boolean search results fetched",
+		"total_matches", res.Hits.Total.Value,
+		"returned_count", len(articles),
+		"max_score", res.Hits.MaxScore,
+		"normalized_max", maxScore)
+
+	hasMore := len(articles) > size
+	if hasMore {
+		articles = articles[:size]
+		rawScores = rawScores[:size]
+	}
+
+	var nextCursor *dquery.Cursor
+	if hasMore && len(articles) > 0 {
+		nextCursor = &dquery.Cursor{
+			Score: rawScores[len(rawScores)-1],
+			ID:    articles[len(articles)-1].Article.ID,
+		}
+	}
+
+	var maxScoreValue float64
+	var pageMaxScore float64
+	if res.Hits.MaxScore != nil {
+		maxScoreValue = utils.RoundFloat64(float64(*res.Hits.MaxScore), dquery.ScoreDecimalPlaces)
+	}
+	if len(rawScores) > 0 {
+		pageMaxScore = utils.RoundFloat64(rawScores[0], dquery.ScoreDecimalPlaces)
+	}
+
+	return &storage.SearchResult{
+		Hits:         articles,
+		NextCursor:   nextCursor,
+		HasMore:      hasMore,
+		MaxScore:     maxScoreValue,
+		PageMaxScore: pageMaxScore,
+		TotalMatches: res.Hits.Total.Value,
+	}, nil
 }
 
 // Compile-time interface assertions

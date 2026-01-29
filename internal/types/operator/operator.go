@@ -25,7 +25,6 @@ const (
 	Not Operator = "NOT"
 )
 
-// Default is the default operator when not specified
 const Default = And
 
 func Parse(s string) (Operator, error) {
@@ -33,9 +32,9 @@ func Parse(s string) (Operator, error) {
 		return Default, nil
 	}
 
-	op := Operator(strings.ToLower(s))
+	op := Operator(strings.ToUpper(s))
 	switch op {
-	case Or, And:
+	case Or, And, Not:
 		return op, nil
 	default:
 		return "", fmt.Errorf("invalid operator: %s (must be 'or' or 'and')", s)

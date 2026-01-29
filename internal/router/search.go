@@ -192,9 +192,11 @@ func (r *SearchRouter) structuredSearchHandler(c echo.Context) error {
 		return r.handleMultiMatchQuery(c, req.Query.MultiMatch, opts)
 	case dquery.PhraseType:
 		return r.handlePhraseQuery(c, req.Query.Phrase, opts)
+	case dquery.BooleanType:
+		return r.handleBooleanQuery(c, req.Query.Boolean, opts)
 	default:
 		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "query must specify one of: match, multi_match, phrase",
+			"error": "query must specify one of: match, multi_match, phrase, boolean",
 		})
 	}
 }
@@ -242,6 +244,22 @@ func (r *SearchRouter) handlePhraseQuery(c echo.Context, params *dto.PhraseParam
 	searchResult, err := r.searcher.SearchPhrase(c.Request().Context(), domainQuery, options)
 	if err != nil {
 		slog.Error("Failed to execute phrase search", "error", err, "fields", params.Fields, "query", params.Query, "slop", params.Slop)
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+	}
+
+	return r.buildResponse(c, searchResult)
+}
+
+func (r *SearchRouter) handleBooleanQuery(c echo.Context, params *dto.BooleanParams, options *dquery.BaseOptions) error {
+	domainQuery, err := params.ToDomain()
+	if err != nil {
+		slog.Error("Failed to convert DTO to types", "error", err)
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+
+	searchResult, err := r.searcher.SearchBoolean(c.Request().Context(), domainQuery, options)
+	if err != nil {
+		slog.Error("Failed to execute boolean search", "error", err, "expression", params.Expression)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 	}
 

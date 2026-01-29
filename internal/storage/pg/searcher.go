@@ -669,18 +669,144 @@ func (r *Searcher) SearchPhrase(ctx context.Context, query *dquery.Phrase, baseO
 	}, nil
 }
 
-// SearchBoolean bool expression search
-// Performs boolean search using PostgreSQL's tsquery with AND (&), OR (|), NOT (!) operators
 func (r *Searcher) SearchBoolean(ctx context.Context, query *dquery.Boolean, baseOpts *dquery.BaseOptions) (*storage.SearchResult, error) {
+	cursor, size := baseOpts.Cursor, baseOpts.Size
+	lang := query.GetLanguage()
 
-	slog.Info("Executing pool boolean search", "expression", query.Expression, "has_cursor", baseOpts.Cursor != nil, "size", baseOpts.Size)
+	slog.Info("Executing pool boolean search",
+		"expression", query.Expression,
+		"language", lang,
+		"has_cursor", cursor != nil,
+		"size", size)
 
-	// TODO: Implement boolean query parser
-	// Parse query.Expression: "climate AND (change OR warming) AND NOT politics"
-	// Convert to PostgreSQL tsquery syntax: "climate & (change | warming) & !politics"
-	// Use websearch_to_tsquery or to_tsquery for parsing
+	boolParser := NewBooleanParser()
+	tsqueryStr, err := boolParser.Parse(query.Expression)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse boolean expression: %w", err)
+	}
 
-	return nil, fmt.Errorf("boolean search not yet implemented for PostgreSQL")
+	slog.Debug("Parsed boolean expression", "input", query.Expression, "tsquery", tsqueryStr)
+
+	queryExpr := fmt.Sprintf("to_tsquery('%s'::regconfig, $1)", lang)
+	whereClause := fmt.Sprintf("search_vector @@ %s", queryExpr)
+	rankExpr := fmt.Sprintf("ts_rank(search_vector, %s)", queryExpr)
+
+	var globalMaxScore float64
+	var count int64
+	maxSQL := fmt.Sprintf(`
+		SELECT COALESCE(MAX(%s), 0.0) as max_score, COUNT(*)
+		FROM articles
+		WHERE %s
+	`, rankExpr, whereClause)
+
+	if err := r.db.QueryRow(ctx, maxSQL, tsqueryStr).Scan(&globalMaxScore, &count); err != nil || globalMaxScore <= 0 {
+		slog.Error("Failed to fetch global max score", "error", err)
+		return nil, fmt.Errorf("cannot fetch global max score: %w", err)
+	}
+	slog.Info("Computed global max score", "max_score", globalMaxScore, "total_matches", count)
+
+	var searchSQL string
+	var args []interface{}
+
+	if cursor == nil {
+		searchSQL = fmt.Sprintf(`
+			SELECT
+				id, title, subtitle, content, author, description, url, language, created_at, metadata,
+				%s as rank
+			FROM articles
+			WHERE %s
+			ORDER BY rank DESC, id DESC
+			LIMIT $2
+		`, rankExpr, whereClause)
+		args = []interface{}{tsqueryStr, size + 1}
+	} else {
+		searchSQL = fmt.Sprintf(`
+			SELECT
+				id, title, subtitle, content, author, description, url, language, created_at, metadata,
+				%s as rank
+			FROM articles
+			WHERE %s
+			  AND (%s, id) < ($2, $3)
+			ORDER BY rank DESC, id DESC
+			LIMIT $4
+		`, rankExpr, whereClause, rankExpr)
+		args = []interface{}{tsqueryStr, cursor.Score, cursor.ID, size + 1}
+	}
+
+	rows, err := r.db.Query(ctx, searchSQL, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute boolean search query: %w", err)
+	}
+	defer rows.Close()
+
+	var articles []dto.ArticleSearchResult
+	var rawScores []float64
+
+	for rows.Next() {
+		var metadataJSON []byte
+		var rawScore float64
+		var article dto.Article
+
+		if err := rows.Scan(
+			&article.ID,
+			&article.Title,
+			&article.Subtitle,
+			&article.Content,
+			&article.Author,
+			&article.Description,
+			&article.URL,
+			&article.Language,
+			&article.CreatedAt,
+			&metadataJSON,
+			&rawScore,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan article: %w", err)
+		}
+
+		if err := json.Unmarshal(metadataJSON, &article.Metadata); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal metadata: %w", err)
+		}
+
+		searchResult := dto.ArticleSearchResult{
+			Article:         article,
+			Score:           utils.RoundFloat64(rawScore, dquery.ScoreDecimalPlaces),
+			ScoreNormalized: utils.RoundFloat64(rawScore/globalMaxScore, dquery.ScoreDecimalPlaces),
+		}
+
+		articles = append(articles, searchResult)
+		rawScores = append(rawScores, rawScore)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating rows: %w", err)
+	}
+
+	slog.Info("PG boolean search results fetched",
+		"total_page_matches", len(articles),
+		"global_max_score", globalMaxScore)
+
+	hasMore := len(articles) > size
+	if hasMore {
+		articles = articles[:size]
+		rawScores = rawScores[:size]
+	}
+
+	var nextCursor *dquery.Cursor
+	if hasMore && len(articles) > 0 {
+		nextCursor = &dquery.Cursor{
+			Score: rawScores[len(rawScores)-1],
+			ID:    articles[len(articles)-1].Article.ID,
+		}
+	}
+
+	return &storage.SearchResult{
+		Hits:         articles,
+		NextCursor:   nextCursor,
+		HasMore:      hasMore,
+		MaxScore:     utils.RoundFloat64(globalMaxScore, dquery.ScoreDecimalPlaces),
+		PageMaxScore: utils.RoundFloat64(rawScores[0], dquery.ScoreDecimalPlaces),
+		TotalMatches: count,
+	}, nil
 }
 
 // Compile-time interface assertions

@@ -68,6 +68,7 @@ type QueryWrapper struct {
 	Match      *MatchParams      `json:"match,omitempty"`
 	MultiMatch *MultiMatchParams `json:"multi_match,omitempty"`
 	Phrase     *PhraseParams     `json:"phrase,omitempty"`
+	Boolean    *BooleanParams    `json:"boolean,omitempty"`
 }
 
 // MatchParams represents match query parameters (maps directly to types)
@@ -114,13 +115,11 @@ func (p *MatchParams) ToDomain() (*query.Match, error) {
 
 	var opts []query.MatchQueryOption
 
-	if p.Operator != "" {
-		op, err := operator.Parse(p.Operator)
-		if err != nil {
-			return nil, fmt.Errorf("invalid operator: %w", err)
-		}
-		opts = append(opts, query.WithMatchOperator(op))
+	op, err := operator.Parse(p.Operator)
+	if err != nil {
+		return nil, fmt.Errorf("%w", err)
 	}
+	opts = append(opts, query.WithMatchOperator(op))
 
 	if p.Fuzziness != "" {
 		opts = append(opts, query.WithMatchFuzziness(p.Fuzziness))
@@ -141,13 +140,11 @@ func (p *MultiMatchParams) ToDomain() (*query.MultiMatch, error) {
 
 	var opts []query.MultiMatchQueryOption
 
-	if p.Operator != "" {
-		op, err := operator.Parse(p.Operator)
-		if err != nil {
-			return nil, fmt.Errorf("invalid operator: %w", err)
-		}
-		opts = append(opts, query.WithMultiMatchOperator(op))
+	op, err := operator.Parse(p.Operator)
+	if err != nil {
+		return nil, fmt.Errorf("%w", err)
 	}
+	opts = append(opts, query.WithMultiMatchOperator(op))
 
 	if p.Language != "" {
 		lang := query.Language(p.Language)
@@ -163,6 +160,31 @@ func (p *MultiMatchParams) ToDomain() (*query.MultiMatch, error) {
 	}
 
 	return newQuery, nil
+}
+
+type BooleanParams struct {
+	Expression string `json:"expression"`
+	Language   string `json:"language,omitempty"`
+}
+
+func (p *BooleanParams) ToDomain() (*query.Boolean, error) {
+	if p.Expression == "" {
+		return nil, fmt.Errorf("expression is required")
+	}
+
+	b := &query.Boolean{
+		Expression: p.Expression,
+	}
+
+	if p.Language != "" {
+		lang := query.Language(p.Language)
+		if !query.SupportedLanguages[lang] {
+			return nil, fmt.Errorf("unsupported language: %s", p.Language)
+		}
+		b.Language = lang
+	}
+
+	return b, nil
 }
 
 func (p *PhraseParams) ToDomain() (*query.Phrase, error) {
@@ -206,6 +228,9 @@ func (q *QueryWrapper) GetQueryType() query.Kind {
 	if q.Phrase != nil {
 		return query.PhraseType
 	}
+	if q.Boolean != nil {
+		return query.BooleanType
+	}
 	return ""
 }
 
@@ -233,9 +258,12 @@ func (q *QueryWrapper) UnmarshalJSON(data []byte) error {
 	if q.Phrase != nil {
 		count++
 	}
+	if q.Boolean != nil {
+		count++
+	}
 
 	if count == 0 {
-		return fmt.Errorf("query must specify one of: match, multi_match, phrase")
+		return fmt.Errorf("query must specify one of: match, multi_match, phrase, boolean")
 	}
 	if count > 1 {
 		return fmt.Errorf("query must specify only one query type")

@@ -1,9 +1,9 @@
-package parser
+package token
 
-type TokenType int
+type Type int
 
 const (
-	EOF TokenType = iota
+	EOF Type = iota
 	WORD
 	AND
 	OR
@@ -12,7 +12,7 @@ const (
 	RPAREN
 )
 
-func (t TokenType) String() string {
+func (t Type) String() string {
 	switch t {
 	case EOF:
 		return "EOF"
@@ -35,6 +35,6 @@ func (t TokenType) String() string {
 
 // Token represents a lexical token with its type and literal value.
 type Token struct {
-	Type  TokenType
+	Type  Type
 	Value string
 }

@@ -1,6 +1,7 @@
-package parser
+package token
 
 import (
+	"fmt"
 	"strings"
 	"unicode"
 )
@@ -14,8 +15,10 @@ func NewBoolTokenizer() *BoolTokenizer {
 	return &BoolTokenizer{}
 }
 
+// Tokenize converts the input string into a slice of Tokens.
+// Example: Input: `(apple AND "banana split") OR NOT cherry`
 func (t *BoolTokenizer) Tokenize(input string) []Token {
-	t.input = []rune(input)
+	t.input = []rune(strings.Trim(input, " "))
 	t.pos = 0
 
 	var tokens []Token
@@ -84,4 +87,54 @@ func (t *BoolTokenizer) readQuoted() Token {
 
 func isWordChar(ch rune) bool {
 	return unicode.IsLetter(ch) || unicode.IsDigit(ch) || ch == '_'
+}
+
+func (t *BoolTokenizer) Validate(tokens []Token) error {
+	depth := 0
+	hasWord := false
+
+	for i, tok := range tokens {
+		if tok.Type == EOF {
+			break
+		}
+
+		switch tok.Type {
+		case WORD:
+			hasWord = true
+		case LPAREN:
+			depth++
+			if i+1 < len(tokens) && tokens[i+1].Type == RPAREN {
+				return fmt.Errorf("empty parentheses")
+			}
+		case RPAREN:
+			depth--
+			if depth < 0 {
+				return fmt.Errorf("unexpected closing parenthesis")
+			}
+		case AND, OR:
+			if i == 0 {
+				return fmt.Errorf("expression cannot start with %s", tok.Value)
+			}
+			prev := tokens[i-1].Type
+			if prev != WORD && prev != RPAREN {
+				return fmt.Errorf("unexpected %s operator", tok.Value)
+			}
+		case NOT:
+			if i+1 >= len(tokens) || (tokens[i+1].Type != WORD && tokens[i+1].Type != LPAREN && tokens[i+1].Type != NOT) {
+				return fmt.Errorf("NOT must be followed by a term or group")
+			}
+		default:
+			return fmt.Errorf("invalid token: %s", tok.Value)
+		}
+	}
+
+	if depth != 0 {
+		return fmt.Errorf("unbalanced parentheses: %d unclosed", depth)
+	}
+
+	if !hasWord {
+		return fmt.Errorf("expression must contain at least one search term")
+	}
+
+	return nil
 }

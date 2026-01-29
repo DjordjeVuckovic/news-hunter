@@ -1,4 +1,4 @@
-package parser
+package token
 
 import (
 	"testing"
@@ -210,5 +210,94 @@ func TestBoolTokenizer_IsReusable(t *testing.T) {
 	}
 	if second[0].Value != "C" {
 		t.Errorf("second call first token: expected %q, got %q", "C", second[0].Value)
+	}
+}
+
+func TestValidateTokens(t *testing.T) {
+	tokenizer := NewBoolTokenizer()
+
+	tests := []struct {
+		name    string
+		input   string
+		wantErr string
+	}{
+		{name: "valid simple AND", input: "climate AND change"},
+		{name: "valid OR", input: "renewable OR sustainable"},
+		{name: "valid NOT", input: "climate AND NOT politics"},
+		{name: "valid nested parens", input: "(climate OR weather) AND change"},
+		{name: "valid double NOT", input: "NOT NOT climate"},
+		{name: "valid complex", input: "(climate OR weather) AND (change OR warming) AND NOT politics"},
+
+		{
+			name:    "empty expression",
+			input:   "",
+			wantErr: "expression must contain at least one search term",
+		},
+		{
+			name:    "whitespace only",
+			input:   "   ",
+			wantErr: "expression must contain at least one search term",
+		},
+		{
+			name:    "unclosed paren",
+			input:   "(climate AND change",
+			wantErr: "unbalanced parentheses: 1 unclosed",
+		},
+		{
+			name:    "extra closing paren",
+			input:   "climate AND change)",
+			wantErr: "unexpected closing parenthesis",
+		},
+		{
+			name:    "empty parens",
+			input:   "climate AND ()",
+			wantErr: "empty parentheses",
+		},
+		{
+			name:    "leading AND",
+			input:   "AND climate",
+			wantErr: "expression cannot start with AND",
+		},
+		{
+			name:    "leading OR",
+			input:   "OR climate",
+			wantErr: "expression cannot start with OR",
+		},
+		{
+			name:    "consecutive operators",
+			input:   "climate AND OR change",
+			wantErr: "unexpected OR operator",
+		},
+		{
+			name:    "trailing NOT",
+			input:   "climate NOT",
+			wantErr: "NOT must be followed by a term or group",
+		},
+		{
+			name:    "NOT before AND",
+			input:   "climate NOT AND change",
+			wantErr: "NOT must be followed by a term or group",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tokens := tokenizer.Tokenize(tt.input)
+			err := tokenizer.Validate(tokens)
+
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("expected no error, got: %v", err)
+				}
+				return
+			}
+
+			if err == nil {
+				t.Fatalf("expected error %q, got nil", tt.wantErr)
+			}
+			if err.Error() != tt.wantErr {
+				t.Errorf("expected error %q, got %q", tt.wantErr, err.Error())
+			}
+		})
 	}
 }
