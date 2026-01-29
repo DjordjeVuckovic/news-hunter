@@ -1,106 +1,87 @@
 package parser
 
-import "unicode"
+import (
+	"strings"
+	"unicode"
+)
 
-// BoolTokenizer is responsible for breaking input strings into tokens for parsing. Mainly used for
 type BoolTokenizer struct {
-	input string
+	input []rune
 	pos   int
 }
 
-// NewBoolTokenizer creates a new Tokenizer for the given input string.
-func NewBoolTokenizer(input string) *BoolTokenizer {
-	return &BoolTokenizer{input: input, pos: 0}
+func NewBoolTokenizer() *BoolTokenizer {
+	return &BoolTokenizer{}
 }
 
-// Tokenize processes the input string and returns a slice of Tokens.
-func (t *BoolTokenizer) Tokenize() []Token {
-	if len(t.input) == 0 {
-		return []Token{{Type: EOF, Value: ""}}
-	}
+func (t *BoolTokenizer) Tokenize(input string) []Token {
+	t.input = []rune(input)
+	t.pos = 0
 
-	tokens := make([]Token, 0)
+	var tokens []Token
 
 	for t.pos < len(t.input) {
-		t.skipWhitespace()
-		char := t.input[t.pos]
-		switch char {
-		case '(':
-			t.pos++
+		ch := t.input[t.pos]
+		switch {
+		case ch == '(':
 			tokens = append(tokens, Token{Type: LPAREN, Value: "("})
-		case ')':
 			t.pos++
+		case ch == ')':
 			tokens = append(tokens, Token{Type: RPAREN, Value: ")"})
-		case 'A':
-			if len(t.input[t.pos:]) >= 3 && t.input[t.pos:t.pos+3] == "AND" {
-				t.pos += 3
-				tokens = append(tokens, Token{Type: AND, Value: t.input[t.pos : t.pos+3]})
-				continue
-			}
-			wordToken := t.readWord()
-			if wordToken != nil {
-				tokens = append(tokens, *wordToken)
-			} else {
-				t.pos++
-			}
-		case 'N':
-			if len(t.input[t.pos:]) >= 3 && t.input[t.pos:t.pos+3] == "NOT" {
-				t.pos += 3
-				tokens = append(tokens, Token{Type: NOT, Value: "NOT"})
-				continue
-			}
-			wordToken := t.readWord()
-			if wordToken != nil {
-				tokens = append(tokens, *wordToken)
-			} else {
-				t.pos++
-			}
-		case 'O':
-			if len(t.input[t.pos:]) >= 2 && t.input[t.pos:t.pos+2] == "OR" {
-				t.pos += 2
-				tokens = append(tokens, Token{Type: OR, Value: "OR"})
-				continue
-			}
-			wordToken := t.readWord()
-			if wordToken != nil {
-				tokens = append(tokens, *wordToken)
-			} else {
-				t.pos++
-			}
+			t.pos++
+		case ch == '"':
+			tokens = append(tokens, t.readQuoted())
+		case isWordChar(ch):
+			tokens = append(tokens, t.readWord())
 		default:
-			wordToken := t.readWord()
-			if wordToken != nil {
-				tokens = append(tokens, *wordToken)
-			} else {
-				t.pos++
-			}
+			t.pos++
 		}
-
+		t.skipWhitespace()
 	}
 
-	tokens = append(tokens, Token{Type: EOF, Value: ""})
-
+	tokens = append(tokens, Token{Type: EOF})
 	return tokens
 }
 
 func (t *BoolTokenizer) skipWhitespace() {
-	for t.pos < len(t.input) && (t.input[t.pos] == ' ' || t.input[t.pos] == '\t' || t.input[t.pos] == '\n' || t.input[t.pos] == '\r') {
+	for t.pos < len(t.input) && unicode.IsSpace(t.input[t.pos]) {
 		t.pos++
 	}
 }
 
-func (t *BoolTokenizer) readWord() *Token {
+func (t *BoolTokenizer) readWord() Token {
 	start := t.pos
-	for t.pos < len(t.input) && t.isWordChar(t.input[t.pos]) {
+	for t.pos < len(t.input) && isWordChar(t.input[t.pos]) {
 		t.pos++
 	}
-	if start == t.pos {
-		return nil
-	}
 
-	return &Token{Type: WORD, Value: t.input[start:t.pos]}
+	word := string(t.input[start:t.pos])
+
+	switch strings.ToUpper(word) {
+	case "AND":
+		return Token{Type: AND, Value: word}
+	case "OR":
+		return Token{Type: OR, Value: word}
+	case "NOT":
+		return Token{Type: NOT, Value: word}
+	default:
+		return Token{Type: WORD, Value: word}
+	}
 }
 
-func (t *BoolTokenizer) isWordChar(char byte) bool {
-	return unicode.IsLetter(rune(char)) || unicode.IsDigit(rune(char)) || char == '_' || char == '"'
+func (t *BoolTokenizer) readQuoted() Token {
+	t.pos++ // skip opening quote
+	start := t.pos
+	for t.pos < len(t.input) && t.input[t.pos] != '"' {
+		t.pos++
+	}
+	value := string(t.input[start:t.pos])
+	if t.pos < len(t.input) {
+		t.pos++ // skip closing quote
+	}
+	return Token{Type: WORD, Value: value}
+}
+
+func isWordChar(ch rune) bool {
+	return unicode.IsLetter(ch) || unicode.IsDigit(ch) || ch == '_'
 }
