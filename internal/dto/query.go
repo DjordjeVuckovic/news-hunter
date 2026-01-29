@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/DjordjeVuckovic/news-hunter/internal/apperr"
 	"github.com/DjordjeVuckovic/news-hunter/internal/types/operator"
 	"github.com/DjordjeVuckovic/news-hunter/internal/types/query"
 )
@@ -107,17 +108,17 @@ type PhraseParams struct {
 
 func (p *MatchParams) ToDomain() (*query.Match, error) {
 	if p.Query == "" {
-		return nil, fmt.Errorf("query is required")
+		return nil, apperr.NewValidation("query is required")
 	}
 	if p.Field == "" {
-		return nil, fmt.Errorf("field is required")
+		return nil, apperr.NewValidation("field is required")
 	}
 
 	var opts []query.MatchQueryOption
 
 	op, err := operator.Parse(p.Operator)
 	if err != nil {
-		return nil, fmt.Errorf("%w", err)
+		return nil, apperr.NewValidationWrap("invalid operator", err)
 	}
 	opts = append(opts, query.WithMatchOperator(op))
 
@@ -128,7 +129,7 @@ func (p *MatchParams) ToDomain() (*query.Match, error) {
 	if p.Language != "" {
 		lang := query.Language(p.Language)
 		if !query.SupportedLanguages[lang] {
-			return nil, fmt.Errorf("unsupported language: %s", p.Language)
+			return nil, apperr.NewValidation(fmt.Sprintf("unsupported language: %s", p.Language))
 		}
 		opts = append(opts, query.WithMatchLanguage(lang))
 	}
@@ -137,26 +138,25 @@ func (p *MatchParams) ToDomain() (*query.Match, error) {
 }
 
 func (p *MultiMatchParams) ToDomain() (*query.MultiMatch, error) {
-
 	var opts []query.MultiMatchQueryOption
 
 	op, err := operator.Parse(p.Operator)
 	if err != nil {
-		return nil, fmt.Errorf("%w", err)
+		return nil, apperr.NewValidationWrap("invalid operator", err)
 	}
 	opts = append(opts, query.WithMultiMatchOperator(op))
 
 	if p.Language != "" {
 		lang := query.Language(p.Language)
 		if !query.SupportedLanguages[lang] {
-			return nil, fmt.Errorf("unsupported language: %s", p.Language)
+			return nil, apperr.NewValidation(fmt.Sprintf("unsupported language: %s", p.Language))
 		}
 		opts = append(opts, query.WithMultiMatchLanguage(lang))
 	}
 
 	newQuery, err := query.NewMultiMatchQuery(p.Query, p.Fields, opts...)
 	if err != nil {
-		return nil, fmt.Errorf("invalid input: %w", err)
+		return nil, apperr.NewValidationWrap("invalid input", err)
 	}
 
 	return newQuery, nil
@@ -169,7 +169,7 @@ type BooleanParams struct {
 
 func (p *BooleanParams) ToDomain() (*query.Boolean, error) {
 	if p.Expression == "" {
-		return nil, fmt.Errorf("expression is required")
+		return nil, apperr.NewValidation("expression is required")
 	}
 
 	b := &query.Boolean{
@@ -179,7 +179,7 @@ func (p *BooleanParams) ToDomain() (*query.Boolean, error) {
 	if p.Language != "" {
 		lang := query.Language(p.Language)
 		if !query.SupportedLanguages[lang] {
-			return nil, fmt.Errorf("unsupported language: %s", p.Language)
+			return nil, apperr.NewValidation(fmt.Sprintf("unsupported language: %s", p.Language))
 		}
 		b.Language = lang
 	}
@@ -189,10 +189,10 @@ func (p *BooleanParams) ToDomain() (*query.Boolean, error) {
 
 func (p *PhraseParams) ToDomain() (*query.Phrase, error) {
 	if p.Query == "" {
-		return nil, fmt.Errorf("query is required")
+		return nil, apperr.NewValidation("query is required")
 	}
 	if len(p.Fields) == 0 {
-		return nil, fmt.Errorf("fields are required (at least one field)")
+		return nil, apperr.NewValidation("fields are required (at least one field)")
 	}
 
 	var opts []query.PhraseOption
@@ -204,14 +204,14 @@ func (p *PhraseParams) ToDomain() (*query.Phrase, error) {
 	if p.Language != "" {
 		lang := query.Language(p.Language)
 		if !query.SupportedLanguages[lang] {
-			return nil, fmt.Errorf("unsupported language: %s", p.Language)
+			return nil, apperr.NewValidation(fmt.Sprintf("unsupported language: %s", p.Language))
 		}
 		opts = append(opts, query.WithPhraseLanguage(lang))
 	}
 
 	newQuery, err := query.NewPhrase(p.Query, p.Fields, opts...)
 	if err != nil {
-		return nil, fmt.Errorf("invalid phrase query: %w", err)
+		return nil, apperr.NewValidationWrap("invalid phrase query", err)
 	}
 
 	return newQuery, nil
@@ -263,10 +263,10 @@ func (q *QueryWrapper) UnmarshalJSON(data []byte) error {
 	}
 
 	if count == 0 {
-		return fmt.Errorf("query must specify one of: match, multi_match, phrase, boolean")
+		return apperr.NewValidation("query must specify one of: match, multi_match, phrase, boolean")
 	}
 	if count > 1 {
-		return fmt.Errorf("query must specify only one query type")
+		return apperr.NewValidation("query must specify only one query type")
 	}
 
 	return nil

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"unicode"
+
+	"github.com/DjordjeVuckovic/news-hunter/internal/apperr"
 )
 
 type BoolTokenizer struct {
@@ -104,36 +106,36 @@ func (t *BoolTokenizer) Validate(tokens []Token) error {
 		case LPAREN:
 			depth++
 			if i+1 < len(tokens) && tokens[i+1].Type == RPAREN {
-				return fmt.Errorf("empty parentheses")
+				return apperr.NewValidation("empty parentheses")
 			}
 		case RPAREN:
 			depth--
 			if depth < 0 {
-				return fmt.Errorf("unexpected closing parenthesis")
+				return apperr.NewValidation("unexpected closing parenthesis")
 			}
 		case AND, OR:
 			if i == 0 {
-				return fmt.Errorf("expression cannot start with %s", tok.Value)
+				return apperr.NewValidation(fmt.Sprintf("expression cannot start with %s", tok.Value))
 			}
 			prev := tokens[i-1].Type
 			if prev != WORD && prev != RPAREN {
-				return fmt.Errorf("unexpected %s operator", tok.Value)
+				return apperr.NewValidation(fmt.Sprintf("unexpected %s operator", tok.Value))
 			}
 		case NOT:
 			if i+1 >= len(tokens) || (tokens[i+1].Type != WORD && tokens[i+1].Type != LPAREN && tokens[i+1].Type != NOT) {
-				return fmt.Errorf("NOT must be followed by a term or group")
+				return apperr.NewValidation("NOT must be followed by a term or group")
 			}
 		default:
-			return fmt.Errorf("invalid token: %s", tok.Value)
+			return apperr.NewValidation(fmt.Sprintf("invalid token: %s", tok.Value))
 		}
 	}
 
 	if depth != 0 {
-		return fmt.Errorf("unbalanced parentheses: %d unclosed", depth)
+		return apperr.NewValidation(fmt.Sprintf("unbalanced parentheses: %d unclosed", depth))
 	}
 
 	if !hasWord {
-		return fmt.Errorf("expression must contain at least one search term")
+		return apperr.NewValidation("expression must contain at least one search term")
 	}
 
 	return nil

@@ -350,3 +350,4 @@ SELECT
     ) as highlighted_content
 FROM articles
 WHERE search_vector @@ plainto_tsquery('english', 'trump')
+LIMIT 50;

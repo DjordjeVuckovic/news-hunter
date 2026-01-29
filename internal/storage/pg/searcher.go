@@ -21,7 +21,7 @@ func NewReader(pool *ConnectionPool) (*Searcher, error) {
 	return &Searcher{db: pool.conn}, nil
 }
 
-// Search implements storage.FtsSearcher interface
+// SearchQuery implements storage.FtsSearcher interface
 // Performs simple string-based search using PostgreSQL's tsvector and plainto_tsquery
 // Application determines optimal fields and weights based on index configuration
 func (r *Searcher) SearchQuery(ctx context.Context, query *dquery.String, baseOpts *dquery.BaseOptions) (*storage.SearchResult, error) {
@@ -35,9 +35,12 @@ func (r *Searcher) SearchQuery(ctx context.Context, query *dquery.String, baseOp
 			FROM articles
 			WHERE search_vector @@ plainto_tsquery('english', $1)
 		`
-	if err := r.db.QueryRow(ctx, maxSQL, query.Query).Scan(&globalMaxScore, &count); err != nil || globalMaxScore <= 0 {
+	if err := r.db.QueryRow(ctx, maxSQL, query.Query).Scan(&globalMaxScore, &count); err != nil {
 		slog.Error("Failed to fetch global max score", "error", err)
 		return nil, fmt.Errorf("cannot fetch global max score: %w", err)
+	}
+	if count == 0 {
+		return &storage.SearchResult{}, nil
 	}
 	slog.Info("Computed global max score", "max_score", globalMaxScore, "total_matches", count)
 
@@ -178,9 +181,12 @@ func (r *Searcher) SearchField(ctx context.Context, query *dquery.Match, baseOpt
 		WHERE %s
 	`, rankExpr, whereClause)
 
-	if err := r.db.QueryRow(ctx, maxSQL, query.Query).Scan(&globalMaxScore, &count); err != nil || globalMaxScore <= 0 {
+	if err := r.db.QueryRow(ctx, maxSQL, query.Query).Scan(&globalMaxScore, &count); err != nil {
 		slog.Error("Failed to fetch global max score", "error", err)
 		return nil, fmt.Errorf("cannot fetch global max score: %w", err)
+	}
+	if count == 0 {
+		return &storage.SearchResult{}, nil
 	}
 	slog.Info("Computed global max score", "max_score", globalMaxScore, "total_matches", count)
 
@@ -331,9 +337,12 @@ func (r *Searcher) SearchFields(ctx context.Context, query *dquery.MultiMatch, b
 		WHERE %s
 	`, rankExpr, whereClause)
 
-	if err := r.db.QueryRow(ctx, maxSQL, query.Query).Scan(&globalMaxScore, &count); err != nil || globalMaxScore <= 0 {
+	if err := r.db.QueryRow(ctx, maxSQL, query.Query).Scan(&globalMaxScore, &count); err != nil {
 		slog.Error("Failed to fetch global max score", "error", err)
 		return nil, fmt.Errorf("cannot fetch global max score: %w", err)
+	}
+	if count == 0 {
+		return &storage.SearchResult{}, nil
 	}
 	slog.Info("Computed global max score", "max_score", globalMaxScore, "total_matches", count)
 
@@ -530,9 +539,12 @@ func (r *Searcher) SearchPhrase(ctx context.Context, query *dquery.Phrase, baseO
 		maxArgs = []interface{}{}
 	}
 
-	if err := r.db.QueryRow(ctx, maxSQL, maxArgs...).Scan(&globalMaxScore, &count); err != nil || globalMaxScore <= 0 {
+	if err := r.db.QueryRow(ctx, maxSQL, maxArgs...).Scan(&globalMaxScore, &count); err != nil {
 		slog.Error("Failed to fetch global max score", "error", err)
 		return nil, fmt.Errorf("cannot fetch global max score: %w", err)
+	}
+	if count == 0 {
+		return &storage.SearchResult{}, nil
 	}
 	slog.Info("Computed global max score", "max_score", globalMaxScore, "total_matches", count)
 
@@ -699,9 +711,12 @@ func (r *Searcher) SearchBoolean(ctx context.Context, query *dquery.Boolean, bas
 		WHERE %s
 	`, rankExpr, whereClause)
 
-	if err := r.db.QueryRow(ctx, maxSQL, tsqueryStr).Scan(&globalMaxScore, &count); err != nil || globalMaxScore <= 0 {
+	if err := r.db.QueryRow(ctx, maxSQL, tsqueryStr).Scan(&globalMaxScore, &count); err != nil {
 		slog.Error("Failed to fetch global max score", "error", err)
 		return nil, fmt.Errorf("cannot fetch global max score: %w", err)
+	}
+	if count == 0 {
+		return &storage.SearchResult{}, nil
 	}
 	slog.Info("Computed global max score", "max_score", globalMaxScore, "total_matches", count)
 
