@@ -9,17 +9,3 @@ type OffsetResult[T any] struct {
 	Size    int   `json:"size"`
 	HasMore bool  `json:"has_more"`
 }
-
-// NewOffsetResult creates a new offset-based result
-func NewOffsetResult[T any](items []T, total int64, page int, size int) *OffsetResult[T] {
-	offset := (page - 1) * size
-	hasMore := int64(offset+size) < total
-
-	return &OffsetResult[T]{
-		Items:   items,
-		Total:   total,
-		Page:    page,
-		Size:    size,
-		HasMore: hasMore,
-	}
-}
