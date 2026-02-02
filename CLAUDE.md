@@ -21,30 +21,38 @@ This project is part of a master thesis research that explores PostgreSQL's comp
 
 **Key Goal**: Evaluate PostgreSQL as a comprehensive alternative to dedicated search engines like Elasticsearch, exploring capabilities beyond basic exact matching and simple filtering.
 
+
+## Design Principles
+- You MUST write clean, idiomatic Go code following best practices.
+- You MUST organize code into clear packages with single responsibility.
+- You MUST NOT write unnecessary comments; code should be self-explanatory.
+- You MUST write unit tests for all core logic with high coverage.
+
 ## Architecture
 
 The project follows a layered architecture pattern:
 
 - **cmd/**: Entry points for different operations
-  - `data_import/`: Imports News datasets into the database
-  - `news_search/`: HTTP API server for search functionality
+  - `ds_ingest/`: Imports News datasets into the database
+  - `news_api/`: HTTP API server for search functionality
   - `schemagen/`: Schema generation utilities
+  - `benchmark/`: Search engine benchmarking tools
 
 - **internal/**: Core business logic organized by domain
   - `types/`: Core type definitions organized by bounded contexts
     - `document/`: Document types (Article, ArticleMetadata, WeightedDocument)
     - `query/`: Query types (search query types, language, scoring, cursor)
     - `operator/`: Operator value object (AND/OR logic)
-  - `reader/`: CSV reading and YAML configuration mapping
-  - `collector/`: Article collection orchestration
-  - `processor/`: Article processing logic
+  - `ingest/`: Data ingestion pipeline
+    - `reader/`: CSV/YAML data reading and parsing
+    - `mapper/`: Data mapping according to configuration
+    - `collector/`: Orchestration of data ingestion process
+    - `processor/`: Article processing logic
+  - `api/`: API layer for HTTP server
   - `storage/`: Storage abstractions and implementations
     - `factory/`: Storage factory for creating storage instances
     - `pg/`: PostgreSQL storage implementation with full-text search
     - `es/`: Elasticsearch storage implementation
-  - `server/`: HTTP server configuration and setup
-  - `router/`: HTTP route handlers
-  - `middleware/`: HTTP middleware (logging, etc.)
   - `dto/`: Data transfer objects for API layer
 
 - **pkg/**: Shared packages and APIs
@@ -58,17 +66,12 @@ The project follows a layered architecture pattern:
 - **configs/**: Configuration files
   - `mappings/`: YAML configuration files for data field mappings
   - `elasticsearch/`: Elasticsearch configuration (index templates, ILM policies)
+  - `benchmark/`: Benchmarking configuration files
 - **db/**: Database-related files
   - `migrations/`: SQL migration files for database schema
   - `query/`: SQL query files for database operations
 - **dataset/**: Sample datasets and documentation
 - **scripts/**: Utility scripts for setup and maintenance
-
-## Design Principles
-- You MUST write clean, idiomatic Go code following best practices.
-- You MUST organize code into clear packages with single responsibility.
-- You MUST NOT write unnecessary comments; code should be self-explanatory.
-- You MUST write unit tests for all core logic with high coverage.
 
 ## Key Components
 
@@ -97,13 +100,6 @@ Follows idiomatic Go patterns with sub-package organization:
 - **PostgreSQL**: `storage/pg` - Full-text search with tsvector, ranking, and pagination
 - **Elasticsearch**: `storage/es` - Multilingual search with advanced indexing
 - **In-memory**: Built-in implementation for development/testing
-
-**File Organization**:
-Elasticsearch storage package files have been renamed for clarity:
-- `client.go` - ES client creation and configuration (formerly `es_client.go`)
-- `indexer.go` - Document indexing implementation (formerly `es_storer.go`)
-- `document.go` - ES document mapping and index building (formerly `es_doc.go`)
-- `searcher.go` - Full-text search implementation
 
 **Key Features**:
 - SearchResult with pagination metadata (total, hasMore, page info)
