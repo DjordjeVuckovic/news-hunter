@@ -1,7 +1,7 @@
 -- Full Text Search Playground
 select * from articles limit 10;
--- tsvector: a document representation for full-text search. Stemmed and normalized.
 
+-- tsvector: a document representation for full-text search. Stemmed and normalized.
 SELECT to_tsvector('english', 'Sikkim warning: Hydroelectricity push must be accompanied by safety measures');
 -- multiple occurrences
 SELECT to_tsvector('english', 'Livin la vida loca: Living the life in the fast lane. Living it up in the city.');

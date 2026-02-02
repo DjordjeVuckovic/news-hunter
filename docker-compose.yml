@@ -1,15 +1,28 @@
 services:
-  pg-news:
+  pg-news-native:
     image: postgres:17.5
     container_name: pg-news
     environment:
       POSTGRES_USER: news_user
       POSTGRES_PASSWORD: news_password
       POSTGRES_DB: news_db
+      PGDATA: /var/lib/postgresql/data/pgdata
     ports:
       - "54320:5432"
     volumes:
       - pg_news_data:/var/lib/postgresql/data
+
+  pg-news-parade:
+    image: paradedb/paradedb:latest-pg18
+    container_name: pg-paradedbx
+    environment:
+      POSTGRES_USER: news_user
+      POSTGRES_PASSWORD: news_password
+      POSTGRES_DB: news_db
+    ports:
+      - "54321:5432"
+    volumes:
+      - pg_news_parade_data:/var/lib/postgresql
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
@@ -49,4 +62,6 @@ volumes:
   pg_news_data:
     driver: local
   es_news_data:
+    driver: local
+  pg_news_parade_data:
     driver: local

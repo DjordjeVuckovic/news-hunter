@@ -2,6 +2,7 @@ package pg
 
 import (
 	"fmt"
+	"log/slog"
 	"strings"
 	"unicode"
 
@@ -58,6 +59,8 @@ func (p *BooleanParser) convertToTsquery(tokens []token.Token) (string, error) {
 			parts = append(parts, "(")
 		case token.RPAREN:
 			parts = append(parts, ")")
+		default:
+			slog.Error("unknown token type", "type", tok.Type, "value", tok.Value)
 		}
 
 		prevType = tok.Type

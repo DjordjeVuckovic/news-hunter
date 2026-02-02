@@ -11,13 +11,13 @@ GOOS ?= $(shell go env GOOS)
 GOARCH ?= $(shell go env GOARCH)
 
 # Build commands
-.PHONY: build build-all clean test fmt vet schema-gen
+.PHONY: build build-all clean test fmt vet schema-gen build-benchmark run-benchmark run-benchmark-all
 
 migrate-up:
 	@echo "Running database migrations up..."
 	@migrate -path $(MIGRATIONS_PATH) -database $(DB_CONN) up
 # Build all commands
-build-all: build-data-import build-schemagen
+build-all: build-data-import build-schemagen build-benchmark
 
 build-data-import:
 	@echo "Building data-import..."
@@ -99,7 +99,21 @@ run-search-pg: build-news-search
 run-search-es: build-news-search
 	@echo "Running news search service..."
 	@ENV_PATHS="cmd/news_search/es.env" ./$(BIN_DIR)/news-search
+# Benchmark commands
+build-benchmark:
+	@echo "Building benchmark..."
+	@mkdir -p $(BIN_DIR)
+	@go build -o $(BIN_DIR)/benchmark $(CMD_DIR)/benchmark
+
+run-benchmark: build-benchmark
+	@echo "Running FTS quality benchmark..."
+	@./$(BIN_DIR)/benchmark --pg $(DB_CONN) --suite configs/benchmark/fts_quality_v1.yaml
+
+run-benchmark-all: build-benchmark
+	@echo "Running FTS quality benchmark (PG + ES)..."
+	@./$(BIN_DIR)/benchmark --pg $(DB_CONN) --es-addresses "http://localhost:9200" --suite configs/benchmark/fts_quality_v1.yaml
+
 # Development workflow
-dev: fmt vet test schema-gen build-all
+dev: fmt vet test build-all
 
 .DEFAULT_GOAL := build-all
