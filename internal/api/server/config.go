@@ -19,7 +19,7 @@ type Config struct {
 }
 
 func LoadConfig() (*Config, error) {
-	err := env.LoadDotEnv("cmd/news_search/.env")
+	err := env.LoadDotEnv("cmd/news_api/.env")
 	if err != nil {
 		slog.Info("Skipping .env ...", "error", err)
 	}

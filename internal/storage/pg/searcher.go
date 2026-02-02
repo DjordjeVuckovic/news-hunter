@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/DjordjeVuckovic/news-hunter/internal/dto"
+	"github.com/DjordjeVuckovic/news-hunter/internal/api/dto"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
 	dquery "github.com/DjordjeVuckovic/news-hunter/internal/types/query"
 	"github.com/DjordjeVuckovic/news-hunter/pkg/utils"

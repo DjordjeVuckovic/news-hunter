@@ -23,7 +23,7 @@ go install github.com/swaggo/swag/cmd/swag@latest
 ```
 - Generate OpenAPI spec
 ```bash
-swag init -g cmd/news_search/main.go -o ./api/openapi-spec
+swag init -g cmd/news_api/main.go -o ./api/openapi-spec
 ```
 ### Run formatter
 ```bash

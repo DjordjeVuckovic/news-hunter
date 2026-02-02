@@ -14,15 +14,15 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/DjordjeVuckovic/news-hunter/internal/router"
-	"github.com/DjordjeVuckovic/news-hunter/internal/server"
+	"github.com/DjordjeVuckovic/news-hunter/internal/api/router"
+	server2 "github.com/DjordjeVuckovic/news-hunter/internal/api/server"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage/factory"
 	pkgserver "github.com/DjordjeVuckovic/news-hunter/pkg/server"
 	"github.com/labstack/echo/v4"
 )
 
 func main() {
-	sCfg, err := server.LoadConfig()
+	sCfg, err := server2.LoadConfig()
 	if err != nil {
 		slog.Error("Failed to load config", "error", err)
 		os.Exit(1)
@@ -30,7 +30,7 @@ func main() {
 
 	heathChecker := pkgserver.NewOkHealthChecker()
 
-	s := server.New(sCfg, heathChecker).
+	s := server2.New(sCfg, heathChecker).
 		SetupMiddlewares().
 		SetupErrorHandler().
 		SetupHealthChecks("/health").

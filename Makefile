@@ -20,14 +20,14 @@ migrate-up:
 build-all: build-data-import build-schemagen build-benchmark
 
 build-data-import:
-	@echo "Building data-import..."
+	@echo "Building data_import..."
 	@mkdir -p $(BIN_DIR)
 	@go build -o $(BIN_DIR)/data-import $(CMD_DIR)/data_import
 
-build-news-search:
-	@echo "Building news-searcher..."
+build-news_api:
+	@echo "Building news_api..."
 	@mkdir -p $(BIN_DIR)
-	@go build -o $(BIN_DIR)/news-search $(CMD_DIR)/news_search
+	@go build -o $(BIN_DIR)/news_api $(CMD_DIR)/news_search
 
 build-schemagen:
 	@echo "Building schema generator..."
@@ -88,17 +88,17 @@ run-import-es: build-data-import
 	@echo "Running data import..."
 	@ENV_PATHS="cmd/data_import/es.env" ./$(BIN_DIR)/data-import
 
-run-search: build-news-search
+run-search: build-news_api
 	@echo "Running news search service..."
-	@ENV_PATHS="cmd/news_search/.env" ./$(BIN_DIR)/news-search
+	@ENV_PATHS="cmd/news_search/.env" ./$(BIN_DIR)/news_api
 
-run-search-pg: build-news-search
+run-search-pg: build-news_api
 	@echo "Running news search service..."
-	@ENV_PATHS="cmd/news_search/pg.env" ./$(BIN_DIR)/news-search
+	@ENV_PATHS="cmd/news_search/pg.env" ./$(BIN_DIR)/news_api
 
-run-search-es: build-news-search
+run-search-es: build-news_api
 	@echo "Running news search service..."
-	@ENV_PATHS="cmd/news_search/es.env" ./$(BIN_DIR)/news-search
+	@ENV_PATHS="cmd/news_search/es.env" ./$(BIN_DIR)/news_api
 # Benchmark commands
 build-benchmark:
 	@echo "Building benchmark..."

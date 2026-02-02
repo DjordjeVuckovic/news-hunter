@@ -11,8 +11,8 @@ import (
 	"time"
 
 	openapi "github.com/DjordjeVuckovic/news-hunter/api/openapi-spec"
+	mw "github.com/DjordjeVuckovic/news-hunter/internal/api/middleware"
 	"github.com/DjordjeVuckovic/news-hunter/internal/apperr"
-	mw "github.com/DjordjeVuckovic/news-hunter/internal/middleware"
 	"github.com/DjordjeVuckovic/news-hunter/pkg/server"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"

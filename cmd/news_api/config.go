@@ -24,7 +24,7 @@ type NewsSearchConfig struct {
 
 func (as *AppConfig) Load() (*NewsSearchConfig, error) {
 
-	err := env.LoadDotEnv(as.ENV, "cmd/news_search/.env")
+	err := env.LoadDotEnv(as.ENV, "cmd/news_api/.env")
 	if err != nil {
 		slog.Info("Failed to .env load environment variables, continuing with existing environment variables", "error", err)
 	}

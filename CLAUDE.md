@@ -192,7 +192,7 @@ go run ./cmd/data_import
 
 # Build other commands
 go build -o bin/schemagen ./cmd/schemagen
-go build -o bin/news-search ./cmd/news_search
+go build -o bin/news-search ./cmd/news_api
 
 # Run tests
 go test ./...

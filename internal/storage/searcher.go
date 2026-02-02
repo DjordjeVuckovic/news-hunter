@@ -3,7 +3,7 @@ package storage
 import (
 	"context"
 
-	"github.com/DjordjeVuckovic/news-hunter/internal/dto"
+	"github.com/DjordjeVuckovic/news-hunter/internal/api/dto"
 	"github.com/DjordjeVuckovic/news-hunter/internal/types/query"
 )
 
