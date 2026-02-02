@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/DjordjeVuckovic/news-hunter/internal/reader"
+	"github.com/DjordjeVuckovic/news-hunter/internal/ingest/reader"
 	"github.com/DjordjeVuckovic/news-hunter/internal/types/document"
 )
 

@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/DjordjeVuckovic/news-hunter/internal/collector"
+	"github.com/DjordjeVuckovic/news-hunter/internal/ingest/collector"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
 	"github.com/DjordjeVuckovic/news-hunter/internal/types/document"
 )

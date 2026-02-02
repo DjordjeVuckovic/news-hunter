@@ -31,7 +31,7 @@ type DataImportConfig struct {
 }
 
 func (as *AppConfig) Load() (*DataImportConfig, error) {
-	err := env.LoadDotEnv(as.ENV, "cmd/data_import/.env", "cmd/data_import/pg.env", "cmd/data_import/es.env")
+	err := env.LoadDotEnv(as.ENV, "cmd/ds_ingest/.env", "cmd/ds_ingest/pg.env", "cmd/ds_ingest/es.env")
 
 	if err != nil {
 		slog.Info("Skipping .env environment variables...", "error", err)

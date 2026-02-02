@@ -17,17 +17,17 @@ migrate-up:
 	@echo "Running database migrations up..."
 	@migrate -path $(MIGRATIONS_PATH) -database $(DB_CONN) up
 # Build all commands
-build-all: build-data-import build-schemagen build-benchmark
+build-all: build-ds-ingest build-schemagen build-benchmark
 
-build-data-import:
-	@echo "Building data_import..."
+build-ds-ingest:
+	@echo "Building ds_ingest..."
 	@mkdir -p $(BIN_DIR)
-	@go build -o $(BIN_DIR)/data-import $(CMD_DIR)/data_import
+	@go build -o $(BIN_DIR)/ds-ingest $(CMD_DIR)/ds_ingest
 
-build-news_api:
-	@echo "Building news_api..."
+build-news-api:
+	@echo "Building news-api..."
 	@mkdir -p $(BIN_DIR)
-	@go build -o $(BIN_DIR)/news_api $(CMD_DIR)/news_search
+	@go build -o $(BIN_DIR)/news-api $(CMD_DIR)/news_search
 
 build-schemagen:
 	@echo "Building schema generator..."
@@ -79,26 +79,26 @@ run-schemagen: build-schemagen
 	@./$(BIN_DIR)/schemagen -output=api
 
 # Run data import with default config
-run-import-pg: build-data-import
+run-import-pg: build-ds-ingest
 	@echo "Running data import..."
-	@ENV_PATHS="cmd/data_import/pg.env" ./$(BIN_DIR)/data-import
+	@ENV_PATHS="cmd/ds_ingest/pg.env" ./$(BIN_DIR)/ds-ingest
 
 # Run data import with default config
-run-import-es: build-data-import
+run-import-es: build-ds-ingest
 	@echo "Running data import..."
-	@ENV_PATHS="cmd/data_import/es.env" ./$(BIN_DIR)/data-import
+	@ENV_PATHS="cmd/ds_ingest/es.env" ./$(BIN_DIR)/ds-ingest
 
-run-search: build-news_api
+run-search: build-news-api
 	@echo "Running news search service..."
-	@ENV_PATHS="cmd/news_search/.env" ./$(BIN_DIR)/news_api
+	@ENV_PATHS="cmd/news_search/.env" ./$(BIN_DIR)/news-api
 
-run-search-pg: build-news_api
+run-search-pg: build-news-api
 	@echo "Running news search service..."
-	@ENV_PATHS="cmd/news_search/pg.env" ./$(BIN_DIR)/news_api
+	@ENV_PATHS="cmd/news_search/pg.env" ./$(BIN_DIR)/news-api
 
-run-search-es: build-news_api
+run-search-es: build-news-api
 	@echo "Running news search service..."
-	@ENV_PATHS="cmd/news_search/es.env" ./$(BIN_DIR)/news_api
+	@ENV_PATHS="cmd/news_search/es.env" ./$(BIN_DIR)/news-api
 # Benchmark commands
 build-benchmark:
 	@echo "Building benchmark..."

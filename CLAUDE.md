@@ -185,10 +185,10 @@ docker-compose up -d
 ### Building and Running
 ```bash
 # Build specific command
-go build -o bin/data-import ./cmd/data_import
+go build -o bin/data-import ./cmd/ds_ingest
 
 # Run with environment variables
-go run ./cmd/data_import
+go run ./cmd/ds_ingest
 
 # Build other commands
 go build -o bin/schemagen ./cmd/schemagen
