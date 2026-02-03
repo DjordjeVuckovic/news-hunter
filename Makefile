@@ -11,13 +11,13 @@ GOOS ?= $(shell go env GOOS)
 GOARCH ?= $(shell go env GOARCH)
 
 # Build commands
-.PHONY: build build-all clean test fmt vet schema-gen build-benchmark run-benchmark run-benchmark-all
+.PHONY: build build-all clean test fmt vet schema-gen build-bench run-bench run-bench-all
 
 migrate-up:
 	@echo "Running database migrations up..."
 	@migrate -path $(MIGRATIONS_PATH) -database $(DB_CONN) up
 # Build all commands
-build-all: build-ds-ingest build-news-api build-schemagen build-benchmark
+build-all: build-ds-ingest build-news-api build-schemagen build-bench
 
 build-ds-ingest:
 	@echo "Building ds_ingest..."
@@ -100,18 +100,18 @@ run-search-es: build-news-api
 	@echo "Running news search service..."
 	@ENV_PATHS="cmd/news_search/es.env" ./$(BIN_DIR)/news-api
 # Benchmark commands
-build-benchmark:
-	@echo "Building benchmark..."
+build-bench:
+	@echo "Building bench..."
 	@mkdir -p $(BIN_DIR)
-	@go build -o $(BIN_DIR)/benchmark $(CMD_DIR)/benchmark
+	@go build -o $(BIN_DIR)/bench $(CMD_DIR)/bench
 
-run-benchmark: build-benchmark
-	@echo "Running FTS quality benchmark..."
-	@./$(BIN_DIR)/benchmark --pg $(DB_CONN) --suite configs/benchmark/fts_quality_v1.yaml
+run-bench: build-bench
+	@echo "Running FTS quality bench..."
+	@./$(BIN_DIR)/bench --pg $(DB_CONN) --suite configs/bench/fts_quality_v1.yaml
 
-run-benchmark-all: build-benchmark
-	@echo "Running FTS quality benchmark (PG + ES)..."
-	@./$(BIN_DIR)/benchmark --pg $(DB_CONN) --es-addresses "http://localhost:9200" --suite configs/benchmark/fts_quality_v1.yaml
+run-bench-all: build-bench
+	@echo "Running FTS quality bench (PG + ES)..."
+	@./$(BIN_DIR)/bench --pg $(DB_CONN) --es-addresses "http://localhost:9200" --suite configs/bench/fts_quality_v1.yaml
 
 # Development workflow
 dev: fmt vet test build-all

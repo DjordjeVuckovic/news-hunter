@@ -157,11 +157,11 @@ Supports the TREC-style pooling + LLM-assist workflow.
 
 ```bash
 # Run against all engines
-./bin/benchmark \
+./bin/bench \
   --pg-native "postgresql://news_user:news_password@localhost:54320/news_db" \
   --pg-parade "postgresql://news_user:news_password@localhost:54321/news_db" \
   --es-addresses "http://localhost:9200" \
-  --suite configs/benchmark/fts_quality_v1.yaml \
+  --suite configs/bench/fts_quality_v1.yaml \
   --output benchmark_results
 ```
 

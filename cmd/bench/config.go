@@ -19,7 +19,7 @@ type cliConfig struct {
 func parseFlags() cliConfig {
 	cfg := cliConfig{}
 
-	flag.StringVar(&cfg.SuitePath, "suite", "configs/benchmark/fts_quality_v1.yaml", "Path to benchmark suite YAML")
+	flag.StringVar(&cfg.SuitePath, "suite", "configs/bench/fts_quality_v1.yaml", "Path to bench suite YAML")
 	flag.StringVar(&cfg.PgConnStr, "pg", "", "PostgreSQL connection string (enables PG native engine)")
 	flag.StringVar(&cfg.EsAddresses, "es-addresses", "", "Elasticsearch addresses, comma-separated (enables ES engine)")
 	flag.StringVar(&cfg.EsIndex, "es-index", "news", "Elasticsearch index name")

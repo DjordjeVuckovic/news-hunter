@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/DjordjeVuckovic/news-hunter/internal/benchmark/suite"
+	"github.com/DjordjeVuckovic/news-hunter/internal/bench/suite"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
 	"github.com/DjordjeVuckovic/news-hunter/internal/types/query"
 	"github.com/google/uuid"
@@ -43,7 +43,7 @@ func Execute(ctx context.Context, eng SearchEngine, bq *suite.BenchmarkQuery, ma
 
 func dispatch(ctx context.Context, searcher storage.FtsSearcher, q *query.Base, opts *query.BaseOptions) (*storage.SearchResult, error) {
 	switch q.Kind {
-	case query.QueryStringType:
+	case query.StringType:
 		return searcher.SearchQuery(ctx, q.QueryString, opts)
 	case query.MatchType:
 		return searcher.SearchField(ctx, q.Match, opts)

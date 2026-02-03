@@ -7,11 +7,12 @@ import (
 	"os"
 	"strings"
 
-	"github.com/DjordjeVuckovic/news-hunter/internal/benchmark/engine"
-	"github.com/DjordjeVuckovic/news-hunter/internal/benchmark/report"
-	"github.com/DjordjeVuckovic/news-hunter/internal/benchmark/runner"
-	"github.com/DjordjeVuckovic/news-hunter/internal/benchmark/suite"
+	"github.com/DjordjeVuckovic/news-hunter/internal/bench/engine"
+	"github.com/DjordjeVuckovic/news-hunter/internal/bench/report"
+	"github.com/DjordjeVuckovic/news-hunter/internal/bench/runner"
+	"github.com/DjordjeVuckovic/news-hunter/internal/bench/suite"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage/es"
+	"github.com/DjordjeVuckovic/news-hunter/internal/storage/pg"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage/pg/native"
 )
 
@@ -22,10 +23,10 @@ func main() {
 
 	s, err := suite.LoadFromFile(cfg.SuitePath)
 	if err != nil {
-		slog.Error("Failed to load benchmark suite", "path", cfg.SuitePath, "error", err)
+		slog.Error("Failed to load bench suite", "path", cfg.SuitePath, "error", err)
 		os.Exit(1)
 	}
-	slog.Info("Loaded benchmark suite", "name", s.Name, "queries", len(s.Queries))
+	slog.Info("Loaded bench suite", "name", s.Name, "queries", len(s.Queries))
 
 	engines, cleanup, err := createEngines(ctx, cfg)
 	if err != nil {
@@ -67,7 +68,7 @@ func createEngines(ctx context.Context, cfg cliConfig) ([]engine.SearchEngine, f
 	var cleanups []func()
 
 	if cfg.PgConnStr != "" {
-		pool, err := native.NewConnectionPool(ctx, native.PoolConfig{ConnStr: cfg.PgConnStr})
+		pool, err := pg.NewConnectionPool(ctx, pg.PoolConfig{ConnStr: cfg.PgConnStr})
 		if err != nil {
 			return nil, nil, fmt.Errorf("pg connection: %w", err)
 		}

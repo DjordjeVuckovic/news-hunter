@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/DjordjeVuckovic/news-hunter/internal/benchmark/engine"
-	"github.com/DjordjeVuckovic/news-hunter/internal/benchmark/metrics"
-	"github.com/DjordjeVuckovic/news-hunter/internal/benchmark/suite"
+	"github.com/DjordjeVuckovic/news-hunter/internal/bench/engine"
+	"github.com/DjordjeVuckovic/news-hunter/internal/bench/metrics"
+	"github.com/DjordjeVuckovic/news-hunter/internal/bench/suite"
 )
 
 type Runner struct {

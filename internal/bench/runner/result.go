@@ -3,7 +3,7 @@ package runner
 import (
 	"time"
 
-	"github.com/DjordjeVuckovic/news-hunter/internal/benchmark/metrics"
+	"github.com/DjordjeVuckovic/news-hunter/internal/bench/metrics"
 	"github.com/DjordjeVuckovic/news-hunter/internal/types/query"
 )
 

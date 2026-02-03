@@ -27,7 +27,7 @@ queries:
 		assert.Equal(t, "test", s.Name)
 		assert.Len(t, s.Queries, 1)
 		assert.Equal(t, "q1", s.Queries[0].ID)
-		assert.Equal(t, query.QueryStringType, s.Queries[0].Kind)
+		assert.Equal(t, query.StringType, s.Queries[0].Kind)
 	})
 
 	t.Run("empty queries", func(t *testing.T) {
@@ -128,7 +128,7 @@ func TestToDomainQuery(t *testing.T) {
 	t.Run("query_string", func(t *testing.T) {
 		bq := &BenchmarkQuery{
 			ID:   "qs1",
-			Kind: query.QueryStringType,
+			Kind: query.StringType,
 			QueryString: &QueryStringSpec{
 				Query:    "climate change",
 				Language: "english",
@@ -205,7 +205,7 @@ func TestToDomainQuery(t *testing.T) {
 	t.Run("nil spec", func(t *testing.T) {
 		bq := &BenchmarkQuery{
 			ID:   "bad",
-			Kind: query.QueryStringType,
+			Kind: query.StringType,
 		}
 		_, err := ToDomainQuery(bq)
 		assert.Error(t, err)

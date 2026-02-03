@@ -8,12 +8,12 @@ import (
 
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage/es"
-	"github.com/DjordjeVuckovic/news-hunter/internal/storage/pg/native"
+	"github.com/DjordjeVuckovic/news-hunter/internal/storage/pg"
 )
 
 type StorageConfig struct {
 	storage.Type
-	Pg *native.PoolConfig
+	Pg *pg.PoolConfig
 	Es *es.ClientConfig
 }
 
@@ -45,9 +45,9 @@ func LoadEnv() (*StorageConfig, error) {
 		}
 	}
 
-	var pgCfg *native.PoolConfig
+	var pgCfg *pg.PoolConfig
 	if storageType == storage.PG {
-		pgCfg = &native.PoolConfig{
+		pgCfg = &pg.PoolConfig{
 			ConnStr: os.Getenv("PG_CONNECTION_STRING"),
 		}
 		if pgCfg.ConnStr == "" {

@@ -13,8 +13,8 @@ import (
 type Kind string
 
 const (
-	// QueryStringType QueryTypeQueryString: Simple text-based search query (application-optimized)
-	QueryStringType Kind = "query_string"
+	// StringType QueryTypeQueryString: Simple text-based search query (application-optimized)
+	StringType Kind = "query_string"
 
 	// MatchType: Single-field match query (Elasticsearch terminology)
 	// ES: match query on single field

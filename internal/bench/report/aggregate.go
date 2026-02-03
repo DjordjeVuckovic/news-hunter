@@ -3,7 +3,7 @@ package report
 import (
 	"time"
 
-	"github.com/DjordjeVuckovic/news-hunter/internal/benchmark/runner"
+	"github.com/DjordjeVuckovic/news-hunter/internal/bench/runner"
 )
 
 func Generate(br *runner.BenchmarkResult) *Report {

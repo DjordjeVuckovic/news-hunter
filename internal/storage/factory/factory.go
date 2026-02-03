@@ -7,6 +7,7 @@ import (
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage/es"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage/in_mem"
+	"github.com/DjordjeVuckovic/news-hunter/internal/storage/pg"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage/pg/native"
 )
 
@@ -16,12 +17,12 @@ func NewIndexer(ctx context.Context, cfg StorageConfig) (storage.Indexer, error)
 	case storage.PG:
 		pgConfig := *cfg.Pg
 
-		pool, err := native.NewConnectionPool(ctx, pgConfig)
+		pool, err := pg.NewConnectionPool(ctx, pgConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create PostgreSQL connection pool: %w", err)
 		}
 
-		return native.NewIndexer(pool)
+		return pg.NewIndexer(pool)
 
 	case storage.ES:
 		esConfig := *cfg.Es
@@ -45,7 +46,7 @@ func NewSearcher(ctx context.Context, cfg StorageConfig) (storage.FtsSearcher, e
 	case storage.PG:
 		pgConfig := *cfg.Pg
 
-		pool, err := native.NewConnectionPool(ctx, pgConfig)
+		pool, err := pg.NewConnectionPool(ctx, pgConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create PostgreSQL connection pool: %w", err)
 		}

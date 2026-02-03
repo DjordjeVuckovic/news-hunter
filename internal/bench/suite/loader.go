@@ -40,7 +40,7 @@ func ToDomainQuery(bq *BenchmarkQuery) (*query.Base, error) {
 	base := &query.Base{Kind: bq.Kind}
 
 	switch bq.Kind {
-	case query.QueryStringType:
+	case query.StringType:
 		if bq.QueryString == nil {
 			return nil, fmt.Errorf("query %q: kind is %s but query_string spec is nil", bq.ID, bq.Kind)
 		}

@@ -8,6 +8,7 @@ import (
 
 	"github.com/DjordjeVuckovic/news-hunter/internal/api/dto"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
+	"github.com/DjordjeVuckovic/news-hunter/internal/storage/pg"
 	dquery "github.com/DjordjeVuckovic/news-hunter/internal/types/query"
 	"github.com/DjordjeVuckovic/news-hunter/pkg/utils"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -17,8 +18,8 @@ type Searcher struct {
 	db *pgxpool.Pool
 }
 
-func NewReader(pool *ConnectionPool) (*Searcher, error) {
-	return &Searcher{db: pool.conn}, nil
+func NewReader(pool *pg.ConnectionPool) (*Searcher, error) {
+	return &Searcher{db: pool.GetConn()}, nil
 }
 
 // SearchQuery implements storage.FtsSearcher interface
