@@ -17,7 +17,7 @@ migrate-up:
 	@echo "Running database migrations up..."
 	@migrate -path $(MIGRATIONS_PATH) -database $(DB_CONN) up
 # Build all commands
-build-all: build-ds-ingest build-schemagen build-benchmark
+build-all: build-ds-ingest build-news-api build-schemagen build-benchmark
 
 build-ds-ingest:
 	@echo "Building ds_ingest..."
@@ -27,7 +27,7 @@ build-ds-ingest:
 build-news-api:
 	@echo "Building news-api..."
 	@mkdir -p $(BIN_DIR)
-	@go build -o $(BIN_DIR)/news-api $(CMD_DIR)/news_search
+	@go build -o $(BIN_DIR)/news-api $(CMD_DIR)/news_api
 
 build-schemagen:
 	@echo "Building schema generator..."

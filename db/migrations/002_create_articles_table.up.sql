@@ -1,7 +1,7 @@
 DO
 $$
     BEGIN
-        CREATE TABLE IF NOT EXISTS articles
+        CREATE TABLE articles
         (
             id            uuid        NOT NULL PRIMARY KEY DEFAULT uuid_generate_v4(),
             title         text        NOT NULL,
@@ -15,7 +15,7 @@ $$
             language      VARCHAR(10)                      DEFAULT 'english',
             description   text                             DEFAULT ''
         );
-        CREATE INDEX IF NOT EXISTS idx_articles_search_vector ON articles
+        CREATE INDEX idx_articles_search_vector ON articles
             USING gin (search_vector);
     END
 $$

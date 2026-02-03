@@ -5,9 +5,8 @@ import (
 	"log/slog"
 	"os"
 
-	collector2 "github.com/DjordjeVuckovic/news-hunter/internal/ingest/collector"
-	"github.com/DjordjeVuckovic/news-hunter/internal/ingest/processor"
-	reader2 "github.com/DjordjeVuckovic/news-hunter/internal/ingest/reader"
+	"github.com/DjordjeVuckovic/news-hunter/internal/ingest"
+	"github.com/DjordjeVuckovic/news-hunter/internal/ingest/reader"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage/factory"
 	"github.com/DjordjeVuckovic/news-hunter/internal/types/document"
 )
@@ -29,23 +28,23 @@ func main() {
 		os.Exit(1)
 	}
 
-	loader := reader2.NewYAMLConfigLoader(file)
+	loader := reader.NewYAMLConfigLoader(file)
 
 	dataFile, err := os.Open(cfg.DatasetPath)
 	if err != nil {
 		slog.Error("failed to read configuration file", "error", err)
 		os.Exit(1)
 	}
-	articleReader := reader2.NewCSVReader(dataFile)
+	articleReader := reader.NewCSVReader(dataFile)
 
 	mappingCfg, err := loader.Load(true)
 	if err != nil {
 		slog.Error("failed to load configuration", "error", err)
 		os.Exit(1)
 	}
-	mapper := reader2.NewArticleMapper(mappingCfg)
+	mapper := reader.NewArticleMapper(mappingCfg)
 
-	c := collector2.NewArticleCollector(articleReader, mapper)
+	c := ingest.NewArticleCollector(articleReader, mapper)
 
 	pipeline, err := newPipeline(ctx, cfg, c)
 	if err != nil {
@@ -65,7 +64,7 @@ func main() {
 func newPipeline(
 	ctx context.Context,
 	cfg *DataImportConfig,
-	coll collector2.Collector[document.Article]) (processor.Pipeline, error) {
+	coll ingest.Collector[document.Article]) (ingest.Pipeline, error) {
 	slog.Info("Creating pipeline", "storageType", cfg.StorageConfig.Type)
 
 	storer, err := factory.NewIndexer(ctx, cfg.StorageConfig)
@@ -74,5 +73,5 @@ func newPipeline(
 		return nil, err
 	}
 
-	return processor.NewPipeline(coll, storer, processor.WithBulk(cfg.BulkOptions.Size)), nil
+	return ingest.NewPipeline(coll, storer, ingest.WithBulk(cfg.BulkOptions.Size)), nil
 }

@@ -23,9 +23,6 @@ type SearchResult struct {
 type FtsSearcher interface {
 	// SearchQuery performs simple string-based search with application-optimized settings
 	// The storage implementation determines optimal fields, weights, and search strategy
-	// based on index configuration and content type.
-	// size: number of results to return per page
-	// Returns types objects with types cursor (not encoded string)
 	SearchQuery(ctx context.Context, query *query.String, baseOpts *query.BaseOptions) (*SearchResult, error)
 	// SearchField performs single-field match query with relevance scoring
 	SearchField(ctx context.Context, query *query.Match, baseOpts *query.BaseOptions) (*SearchResult, error)
@@ -37,4 +34,10 @@ type FtsSearcher interface {
 	SearchPhrase(ctx context.Context, query *query.Phrase, baseOpts *query.BaseOptions) (*SearchResult, error)
 	// SearchBoolean performs complex boolean queries combining multiple conditions
 	SearchBoolean(ctx context.Context, query *query.Boolean, baseOpts *query.BaseOptions) (*SearchResult, error)
+}
+
+// SemanticSearcher is the semantic search API interface
+type SemanticSearcher interface {
+	// SemanticSearch performs semantic search using vector embeddings
+	SemanticSearch(ctx context.Context, query *query.Semantic, baseOpts *query.BaseOptions) (*SearchResult, error)
 }

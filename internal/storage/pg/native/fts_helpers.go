@@ -1,4 +1,4 @@
-package pg
+package native
 
 import (
 	"fmt"

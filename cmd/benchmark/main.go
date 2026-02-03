@@ -12,7 +12,7 @@ import (
 	"github.com/DjordjeVuckovic/news-hunter/internal/benchmark/runner"
 	"github.com/DjordjeVuckovic/news-hunter/internal/benchmark/suite"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage/es"
-	"github.com/DjordjeVuckovic/news-hunter/internal/storage/pg"
+	"github.com/DjordjeVuckovic/news-hunter/internal/storage/pg/native"
 )
 
 func main() {
@@ -67,13 +67,13 @@ func createEngines(ctx context.Context, cfg cliConfig) ([]engine.SearchEngine, f
 	var cleanups []func()
 
 	if cfg.PgConnStr != "" {
-		pool, err := pg.NewConnectionPool(ctx, pg.PoolConfig{ConnStr: cfg.PgConnStr})
+		pool, err := native.NewConnectionPool(ctx, native.PoolConfig{ConnStr: cfg.PgConnStr})
 		if err != nil {
 			return nil, nil, fmt.Errorf("pg connection: %w", err)
 		}
 		cleanups = append(cleanups, pool.Close)
 
-		searcher, err := pg.NewReader(pool)
+		searcher, err := native.NewReader(pool)
 		if err != nil {
 			pool.Close()
 			return nil, nil, fmt.Errorf("pg searcher: %w", err)

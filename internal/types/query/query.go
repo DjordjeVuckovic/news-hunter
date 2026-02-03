@@ -465,3 +465,14 @@ func (q *MultiMatch) GetOperator() operator.Operator {
 	}
 	return q.Operator
 }
+
+type Semantic struct {
+	// Query: The text to semantically search for
+	Query string `json:"query" validate:"required,min=1"`
+}
+
+func NewSemantic(query string) Semantic {
+	return Semantic{
+		Query: query,
+	}
+}

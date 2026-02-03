@@ -1,11 +1,10 @@
-package processor
+package ingest
 
 import (
 	"context"
 	"log/slog"
 	"time"
 
-	"github.com/DjordjeVuckovic/news-hunter/internal/ingest/collector"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
 	"github.com/DjordjeVuckovic/news-hunter/internal/types/document"
 )
@@ -33,7 +32,7 @@ type PipelineConfig struct {
 
 // ArticlePipeline handles article processing from collection to storage
 type ArticlePipeline struct {
-	collector collector.Collector[document.Article]
+	collector Collector[document.Article]
 	storer    storage.Indexer
 	config    *PipelineConfig
 }
@@ -59,7 +58,7 @@ func WithConfig(config *PipelineConfig) PipelineOption {
 }
 
 // NewPipeline creates a new generic article processing pipeline
-func NewPipeline(c collector.Collector[document.Article], storer storage.Indexer, opts ...PipelineOption) *ArticlePipeline {
+func NewPipeline(c Collector[document.Article], storer storage.Indexer, opts ...PipelineOption) *ArticlePipeline {
 	p := &ArticlePipeline{
 		collector: c,
 		storer:    storer,
@@ -113,7 +112,7 @@ func (p *ArticlePipeline) Run(ctx context.Context) error {
 }
 
 // processBasic handles individual article processing
-func (p *ArticlePipeline) processBasic(ctx context.Context, results <-chan collector.Result[document.Article]) error {
+func (p *ArticlePipeline) processBasic(ctx context.Context, results <-chan Result[document.Article]) error {
 	processedCount := 0
 	errorCount := 0
 
@@ -162,7 +161,7 @@ func (p *ArticlePipeline) processBasic(ctx context.Context, results <-chan colle
 }
 
 // processBatch handles bulk article processing
-func (p *ArticlePipeline) processBatch(ctx context.Context, results <-chan collector.Result[document.Article]) error {
+func (p *ArticlePipeline) processBatch(ctx context.Context, results <-chan Result[document.Article]) error {
 	var articles []document.Article
 	processedCount := 0
 	errorCount := 0
