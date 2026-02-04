@@ -4,15 +4,15 @@
 
 ## Scope
 
-- `internal/benchmark/judgment/pooler.go` — TREC-style result pooling (merge top-K from all engines)
-- `internal/benchmark/judgment/exporter.go` — Export pool for annotation (TSV/CSV)
-- `internal/benchmark/judgment/importer.go` — Import completed annotations back into suite YAML
+- `internal/bench/judgment/pooler.go` — TREC-style result pooling (merge top-K from all engines)
+- `internal/bench/judgment/exporter.go` — Export pool for annotation (TSV/CSV)
+- `internal/bench/judgment/importer.go` — Import completed annotations back into suite YAML
 - Documented workflow for manual + LLM-assisted annotation
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `internal/benchmark/judgment/pooler.go` | TREC-style result pooling |
-| `internal/benchmark/judgment/exporter.go` | Export pool for annotation |
-| `internal/benchmark/judgment/importer.go` | Import completed annotations |
+| `internal/bench/judgment/pooler.go` | TREC-style result pooling |
+| `internal/bench/judgment/exporter.go` | Export pool for annotation |
+| `internal/bench/judgment/importer.go` | Import completed annotations |

@@ -36,7 +36,7 @@ The project follows a layered architecture pattern:
   - `ds_ingest/`: Imports News datasets into the database
   - `news_api/`: HTTP API server for search functionality
   - `schemagen/`: Schema generation utilities
-  - `benchmark/`: Search engine benchmarking tools
+  - `bench/`: Search engine benchmarking tools
 
 - **internal/**: Core business logic organized by domain
   - `types/`: Core type definitions organized by bounded contexts
@@ -45,15 +45,11 @@ The project follows a layered architecture pattern:
     - `operator/`: Operator value object (AND/OR logic)
   - `ingest/`: Data ingestion pipeline
     - `reader/`: CSV/YAML data reading and parsing
-    - `mapper/`: Data mapping according to configuration
-    - `collector/`: Orchestration of data ingestion process
-    - `processor/`: Article processing logic
   - `api/`: API layer for HTTP server
   - `storage/`: Storage abstractions and implementations
     - `factory/`: Storage factory for creating storage instances
     - `pg/`: PostgreSQL storage implementation with full-text search
     - `es/`: Elasticsearch storage implementation
-  - `dto/`: Data transfer objects for API layer
 
 - **pkg/**: Shared packages and APIs
   - `apis/datamapping/`: Data mapping type definitions

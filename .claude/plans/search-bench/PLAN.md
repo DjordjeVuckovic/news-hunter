@@ -2,12 +2,12 @@
 
 ## Overview
 
-Build an extensible benchmark framework to evaluate full-text search quality across PostgreSQL native, ParadeDB, and Elasticsearch using industry-standard IR metrics. The framework uses TREC-style pooling with LLM-assisted relevance judgments, ~30-50 curated queries across all 5 search paradigms, and produces comparison reports. Latency is captured as metadata; dedicated load testing deferred to k6 later on.
+Build an extensible bench framework to evaluate full-text search quality across PostgreSQL native, ParadeDB, and Elasticsearch using industry-standard IR metrics. The framework uses TREC-style pooling with LLM-assisted relevance judgments, ~30-50 curated queries across all 5 search paradigms, and produces comparison reports. Latency is captured as metadata; dedicated load testing deferred to k6 later on.
 
 ## Package Structure
 
 ```
-internal/benchmark/
+internal/bench/
     metrics/        -- Pure IR metric functions (no project deps)
     suite/          -- Test suite types and YAML loader
     engine/         -- Thin adapter over FtsSearcher
@@ -16,13 +16,13 @@ internal/benchmark/
     judgment/       -- TREC-style pooling + LLM judgment helper
     types/          -- Shared types (e.g., ScoreSet)
 
-cmd/benchmark/      -- CLI entry point
-configs/benchmark/  -- Test suite YAML files
+cmd/bench/      -- CLI entry point
+configs/bench/  -- Test suite YAML files
 ```
 
 ## Implementation Steps
 
-### Step 1: Metrics Package (`internal/benchmark/metrics/`)
+### Step 1: Metrics Package (`internal/bench/metrics/`)
 
 Pure functions with zero project dependencies. All take `[]uuid.UUID` (ranked doc IDs) and `map[uuid.UUID]int` (relevance judgments) as input.
 
@@ -36,7 +36,7 @@ Pure functions with zero project dependencies. All take `[]uuid.UUID` (ranked do
 
 **Key type:**
 ```go
-package benchmark
+package bench
 
 type ScoreSet struct {
     NDCG      map[int]float64  // K -> NDCG@K
@@ -48,7 +48,7 @@ type ScoreSet struct {
 }
 ```
 
-### Step 2: Suite Package (`internal/benchmark/suite/`)
+### Step 2: Suite Package (`internal/bench/suite/`)
 
 Defines test queries and loads them from YAML. Uses separate spec types (like existing DTO pattern) to keep domain types clean.
 
@@ -76,9 +76,9 @@ type RelevanceJudgment struct {
 }
 ```
 
-### Step 3: Engine Adapter (`internal/benchmark/engine/`)
+### Step 3: Engine Adapter (`internal/bench/engine/`)
 
-Thin wrapper that bridges benchmark queries to the existing `FtsSearcher` interface and extracts ranked doc IDs from `SearchResult.Hits`.
+Thin wrapper that bridges bench queries to the existing `FtsSearcher` interface and extracts ranked doc IDs from `SearchResult.Hits`.
 
 **Files:**
 
@@ -96,7 +96,7 @@ type QueryExecution struct {
 }
 ```
 
-### Step 4: Runner (`internal/benchmark/runner/`)
+### Step 4: Runner (`internal/bench/runner/`)
 
 Orchestrates: for each query, for each engine, execute query, compute all metrics.
 
@@ -106,7 +106,7 @@ Orchestrates: for each query, for each engine, execute query, compute all metric
 - `result.go` - `QueryResult` (per query-engine pair), `BenchmarkResult` (map[queryID][engineName]QueryResult)
 - `runner.go` - `Runner.Run(ctx)` iterating queries x engines, calling `engine.Execute()` then `metrics.ComputeAll()`
 
-### Step 5: Report (`internal/benchmark/report/`)
+### Step 5: Report (`internal/bench/report/`)
 
 Converts `BenchmarkResult` into human-readable and machine-readable output.
 
@@ -130,7 +130,7 @@ Precision@10      |     0.550 |     0.620 |         0.650
 Recall@10         |     0.450 |     0.500 |         0.540
 ```
 
-### Step 6: Judgment Helper (`internal/benchmark/judgment/`)
+### Step 6: Judgment Helper (`internal/bench/judgment/`)
 
 Supports the TREC-style pooling + LLM-assist workflow.
 
@@ -141,18 +141,18 @@ Supports the TREC-style pooling + LLM-assist workflow.
 - `importer.go` - `ImportJudgments(path) []RelevanceJudgment` reads completed annotations back
 
 **Workflow:**
-1. Run benchmark with empty judgments -> collect `QueryExecution` results
+1. Run bench with empty judgments -> collect `QueryExecution` results
 2. `PoolResults()` merges top-20 from each engine per query
 3. `ExportForAnnotation()` creates annotation file with doc metadata
 4. Annotate: LLM labels + manual review/correction
 5. `ImportJudgments()` merges annotations back into suite YAML
-6. Re-run benchmark with populated judgments -> compute metrics
+6. Re-run bench with populated judgments -> compute metrics
 
-### Step 7: CLI (`cmd/benchmark/`)
+### Step 7: CLI (`cmd/bench/`)
 
 **Files:**
 
-- `main.go` - Wires everything: load suite, create engines, run benchmark, generate reports
+- `main.go` - Wires everything: load suite, create engines, run bench, generate reports
 - `config.go` - CLI flags: `--suite`, `--output`, `--k`, `--max-k`, `--pg-native`, `--pg-parade`, `--es-addresses`, `--es-index`
 
 ```bash
@@ -162,10 +162,10 @@ Supports the TREC-style pooling + LLM-assist workflow.
   --pg-parade "postgresql://news_user:news_password@localhost:54321/news_db" \
   --es-addresses "http://localhost:9200" \
   --suite configs/bench/fts_quality_v1.yaml \
-  --output benchmark_results
+  --output bench_results
 ```
 
-### Step 8: Test Suite YAML (`configs/benchmark/fts_quality_v1.yaml`)
+### Step 8: Test Suite YAML (`configs/bench/fts_quality_v1.yaml`)
 
 ~35 queries distributed across paradigms:
 
@@ -179,50 +179,50 @@ Supports the TREC-style pooling + LLM-assist workflow.
 
 ### Step 9: Makefile + Infra
 
-- Add `build-benchmark`, `run-benchmark`, `run-benchmark-all` targets
-- Add `cmd/benchmark/.env` template
-- Add `benchmark_results/` to `.gitignore`
+- Add `build-bench`, `run-bench`, `run-bench-all` targets
+- Add `cmd/bench/.env` template
+- Add `bench_results/` to `.gitignore`
 
 ## Files Modified (existing)
 
 | File | Change |
 |------|--------|
-| `Makefile` | Add benchmark build/run targets |
-| `.gitignore` | Add `benchmark_results/` |
+| `Makefile` | Add bench build/run targets |
+| `.gitignore` | Add `bench_results/` |
 
 ## Files Created (new)
 
 | File | Purpose |
 |------|---------|
-| `internal/benchmark/metrics/metrics.go` | ScoreSet type, ComputeAll, grade constants |
-| `internal/benchmark/metrics/ndcg.go` | NDCG@K computation |
-| `internal/benchmark/metrics/precision.go` | P@K, R@K, F1@K |
-| `internal/benchmark/metrics/ranking.go` | AP, RR |
-| `internal/benchmark/metrics/metrics_test.go` | Comprehensive unit tests |
-| `internal/benchmark/suite/types.go` | TestSuite, BenchmarkQuery, spec types |
-| `internal/benchmark/suite/loader.go` | YAML loading and domain conversion |
-| `internal/benchmark/suite/loader_test.go` | Loader unit tests |
-| `internal/benchmark/engine/engine.go` | SearchEngine type |
-| `internal/benchmark/engine/adapter.go` | Execute + extractDocIDs |
-| `internal/benchmark/engine/factory.go` | CreateEngines from specs |
-| `internal/benchmark/runner/config.go` | Runner config with defaults |
-| `internal/benchmark/runner/result.go` | QueryResult, BenchmarkResult |
-| `internal/benchmark/runner/runner.go` | Orchestration loop |
-| `internal/benchmark/report/types.go` | Report, Entry, AggregatedEntry |
-| `internal/benchmark/report/aggregate.go` | Mean computation |
-| `internal/benchmark/report/json.go` | JSON output |
-| `internal/benchmark/report/table.go` | Text table output |
-| `internal/benchmark/judgment/pooler.go` | TREC-style result pooling |
-| `internal/benchmark/judgment/exporter.go` | Export pool for annotation |
-| `internal/benchmark/judgment/importer.go` | Import completed annotations |
-| `cmd/benchmark/main.go` | CLI entry point |
-| `cmd/benchmark/config.go` | Flag parsing, engine spec creation |
-| `configs/benchmark/fts_quality_v1.yaml` | Initial test suite (~35 queries) |
+| `internal/bench/metrics/metrics.go` | ScoreSet type, ComputeAll, grade constants |
+| `internal/bench/metrics/ndcg.go` | NDCG@K computation |
+| `internal/bench/metrics/precision.go` | P@K, R@K, F1@K |
+| `internal/bench/metrics/ranking.go` | AP, RR |
+| `internal/bench/metrics/metrics_test.go` | Comprehensive unit tests |
+| `internal/bench/suite/types.go` | TestSuite, BenchmarkQuery, spec types |
+| `internal/bench/suite/loader.go` | YAML loading and domain conversion |
+| `internal/bench/suite/loader_test.go` | Loader unit tests |
+| `internal/bench/engine/engine.go` | SearchEngine type |
+| `internal/bench/engine/adapter.go` | Execute + extractDocIDs |
+| `internal/bench/engine/factory.go` | CreateEngines from specs |
+| `internal/bench/runner/config.go` | Runner config with defaults |
+| `internal/bench/runner/result.go` | QueryResult, BenchmarkResult |
+| `internal/bench/runner/runner.go` | Orchestration loop |
+| `internal/bench/report/types.go` | Report, Entry, AggregatedEntry |
+| `internal/bench/report/aggregate.go` | Mean computation |
+| `internal/bench/report/json.go` | JSON output |
+| `internal/bench/report/table.go` | Text table output |
+| `internal/bench/judgment/pooler.go` | TREC-style result pooling |
+| `internal/bench/judgment/exporter.go` | Export pool for annotation |
+| `internal/bench/judgment/importer.go` | Import completed annotations |
+| `cmd/bench/main.go` | CLI entry point |
+| `cmd/bench/config.go` | Flag parsing, engine spec creation |
+| `configs/bench/fts_quality_v1.yaml` | Initial test suite (~35 queries) |
 
 ## Verification
 
-1. `go test ./internal/benchmark/metrics/...` - All metric unit tests pass
-2. `go test ./internal/benchmark/suite/...` - Suite loader tests pass with sample YAML
-3. `go build ./cmd/benchmark` - CLI compiles
-4. `docker-compose up -d` then `make run-benchmark-all` - Runs against live PG + ES, produces `benchmark_results/report.json` and table output
+1. `go test ./internal/bench/metrics/...` - All metric unit tests pass
+2. `go test ./internal/bench/suite/...` - Suite loader tests pass with sample YAML
+3. `go build ./cmd/bench` - CLI compiles
+4. `docker-compose up -d` then `make run-bench-all` - Runs against live PG + ES, produces `bench_results/report.json` and table output
 5. Spot-check: for a query with known relevant docs, verify NDCG@10 = 1.0 when engine returns them in ideal order

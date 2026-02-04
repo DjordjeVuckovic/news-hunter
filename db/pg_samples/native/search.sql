@@ -10,7 +10,7 @@ LIMIT 100;
 
 -- advanced search with OR operator(plainto_tsquery)
 SELECT id, title, ts_rank(search_vector, query) as rank
-FROM articles, plainto_tsquery('english', 'trump | obama') query
+FROM articles, to_tsquery('english', 'trump | obama') query
 WHERE search_vector @@ query
 ORDER BY rank DESC
 LIMIT 100;
