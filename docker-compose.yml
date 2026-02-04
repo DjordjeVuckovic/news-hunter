@@ -1,20 +1,19 @@
 services:
   pg-news-native:
-    image: postgres:17.5
-    container_name: pg-news
+    image: postgres:18
+    container_name: pg-native-news
     environment:
       POSTGRES_USER: news_user
       POSTGRES_PASSWORD: news_password
       POSTGRES_DB: news_db
-      PGDATA: /var/lib/postgresql/data/pgdata
     ports:
       - "54320:5432"
     volumes:
-      - pg_news_data:/var/lib/postgresql/data
+      - pg_news_data:/var/lib/postgresql
 
   pg-news-parade:
     image: paradedb/paradedb:latest-pg18
-    container_name: pg-paradedbx
+    container_name: pg-parade-news
     environment:
       POSTGRES_USER: news_user
       POSTGRES_PASSWORD: news_password
