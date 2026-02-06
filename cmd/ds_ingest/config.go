@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/DjordjeVuckovic/news-hunter/internal/embedding"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage/factory"
 	"github.com/DjordjeVuckovic/news-hunter/pkg/config/env"
 )
@@ -28,10 +29,11 @@ type DataImportConfig struct {
 		Size    int
 	}
 	factory.StorageConfig
+	Embedding embedding.Config
 }
 
 func (as *AppConfig) Load() (*DataImportConfig, error) {
-	err := env.LoadDotEnv(as.ENV, "cmd/ds_ingest/.env", "cmd/ds_ingest/pg.env", "cmd/ds_ingest/es.env")
+	err := env.LoadDotEnv(as.ENV, "cmd/ds_ingest/.env")
 
 	if err != nil {
 		slog.Info("Skipping .env environment variables...", "error", err)
@@ -62,6 +64,12 @@ func (as *AppConfig) Load() (*DataImportConfig, error) {
 		bulkSizeNum = 5_000
 	}
 
+	embed, err := embedding.LoadConfigFromEnv()
+	if err != nil {
+		slog.Error("Failed to load embedding configuration from environment", "error", err)
+		return nil, err
+	}
+
 	cfg := &DataImportConfig{
 		DatasetPath:     dsPath,
 		DataMappingPath: mappingPath,
@@ -73,6 +81,7 @@ func (as *AppConfig) Load() (*DataImportConfig, error) {
 			Size:    bulkSizeNum,
 		},
 		StorageConfig: *storageCfg,
+		Embedding:     *embed,
 	}
 
 	return cfg, nil

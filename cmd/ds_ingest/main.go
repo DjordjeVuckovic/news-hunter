@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/DjordjeVuckovic/news-hunter/internal/embedding"
 	"github.com/DjordjeVuckovic/news-hunter/internal/ingest"
 	"github.com/DjordjeVuckovic/news-hunter/internal/ingest/reader"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage/factory"
@@ -73,5 +74,25 @@ func newPipeline(
 		return nil, err
 	}
 
-	return ingest.NewPipeline(coll, storer, ingest.WithBulk(cfg.BulkOptions.Size)), nil
+	var opts []ingest.PipelineOption
+	if cfg.BulkOptions.Enabled {
+		opts = append(opts, ingest.WithBulk(cfg.BulkOptions.Size))
+	}
+
+	if cfg.Embedding.Enabled {
+		ollama, err := embedding.NewOllamaClient(cfg.Embedding.BaseURL)
+		if err != nil {
+			slog.Error("failed to create embedder", "error", err)
+			return nil, err
+		}
+		embedder := embedding.NewEmbedder(ollama)
+		storageEmbedder, err := factory.NewEmbedderIndexer(ctx, cfg.StorageConfig)
+		if err != nil {
+			slog.Error("storer does not support embedding")
+			return nil, err
+		}
+		opts = append(opts, ingest.WithEmbedder(storageEmbedder, embedder))
+	}
+
+	return ingest.NewPipeline(coll, storer, opts...), nil
 }

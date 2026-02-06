@@ -1,6 +1,6 @@
 services:
   pg-news-native:
-    image: postgres:18
+    image: pgvector/pgvector:pg18
     container_name: pg-native-news
     environment:
       POSTGRES_USER: news_user

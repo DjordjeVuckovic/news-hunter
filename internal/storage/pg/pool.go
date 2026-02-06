@@ -4,27 +4,50 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	pgxvec "github.com/pgvector/pgvector-go/pgx"
 )
 
 type PoolConfig struct {
-	ConnStr string
+	ConnStr          string
+	RegisterVecTypes bool
 }
 type ConnectionPool struct {
 	conn *pgxpool.Pool
 }
 
 func NewConnectionPool(ctx context.Context, cfg PoolConfig) (*ConnectionPool, error) {
-	dbpool, err := pgxpool.New(ctx, cfg.ConnStr)
+	config, err := pgxpool.ParseConfig(cfg.ConnStr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create connection conn: %w", err)
+		return nil, fmt.Errorf("failed to parse config: %w", err)
+	}
+
+	config.AfterConnect = afterConnect(cfg.RegisterVecTypes)
+
+	dbpool, err := pgxpool.NewWithConfig(ctx, config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create connection pool: %w", err)
 	}
 
 	if err := dbpool.Ping(ctx); err != nil {
+		dbpool.Close()
 		return nil, fmt.Errorf("failed to ping DB: %w", err)
 	}
 
 	return &ConnectionPool{conn: dbpool}, nil
+}
+
+func afterConnect(registerVec bool) func(ctx context.Context, conn *pgx.Conn) error {
+	return func(ctx context.Context, conn *pgx.Conn) error {
+		if registerVec {
+			err := pgxvec.RegisterTypes(ctx, conn)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 }
 
 func (p *ConnectionPool) GetConn() *pgxpool.Pool {

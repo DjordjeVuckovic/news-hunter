@@ -23,7 +23,142 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/v1/articles/_search": {
+        "/v1/articles/search": {
+            "get": {
+                "description": "Simple text search with automatic field selection and weighting. Cacheable and bookmarkable. Application determines optimal search strategy based on index configuration.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "search"
+                ],
+                "summary": "Simple query string search",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "\"climate change\"",
+                        "description": "SearchStringQuery query text",
+                        "name": "q",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "example": 10,
+                        "description": "Results per page (default: 100, max: 10000)",
+                        "name": "size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Pagination cursor (base64-encoded from previous response)",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "example": "\"english\"",
+                        "description": "SearchStringQuery language: english, serbian (default: english)",
+                        "name": "lang",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "SearchStringQuery results with pagination metadata",
+                        "schema": {
+                            "$ref": "#/definitions/dto.SearchResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - missing or invalid parameters",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/articles/semantic_search": {
+            "get": {
+                "description": "Perform vector-based semantic search using the embedding model. Supports pagination via cursor. Application determines optimal search strategy based on index configuration. Results are cacheable and bookmarkable.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "search"
+                ],
+                "summary": "Vector-based semantic search",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "\"climate change\"",
+                        "description": "SearchStringQuery query text",
+                        "name": "q",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "example": 10,
+                        "description": "Results per page (default: 100, max: 10000)",
+                        "name": "size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Pagination cursor (base64-encoded from previous response)",
+                        "name": "cursor",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "SearchStringQuery results with pagination metadata",
+                        "schema": {
+                            "$ref": "#/definitions/dto.SemanticSearchResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - missing or invalid parameters",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/articles/structured": {
             "post": {
                 "description": "Execute structured search queries with explicit control over fields, weights, and operators. Supports match and multi_match query types. Follows Elasticsearch query DSL pattern.",
                 "consumes": [
@@ -49,7 +184,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "SearchQuery results with pagination metadata",
+                        "description": "SearchStringQuery results with pagination metadata",
                         "schema": {
                             "$ref": "#/definitions/dto.SearchResponse"
                         }
@@ -73,78 +208,7 @@ const docTemplate = `{
                         }
                     },
                     "501": {
-                        "description": "Query type not supported by storage backend",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/v1/articles/search": {
-            "get": {
-                "description": "Simple text search with automatic field selection and weighting. Cacheable and bookmarkable. Application determines optimal search strategy based on index configuration.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "search"
-                ],
-                "summary": "Simple query string search",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "example": "\"climate change\"",
-                        "description": "SearchQuery query text",
-                        "name": "q",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "example": 10,
-                        "description": "Results per page (default: 100, max: 10000)",
-                        "name": "size",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Pagination cursor (base64-encoded from previous response)",
-                        "name": "cursor",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "example": "\"english\"",
-                        "description": "SearchQuery language: english, serbian (default: english)",
-                        "name": "lang",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "SearchQuery results with pagination metadata",
-                        "schema": {
-                            "$ref": "#/definitions/dto.SearchResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad request - missing or invalid parameters",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
+                        "description": "Query type not supported by searcher backend",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -237,6 +301,17 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.BooleanParams": {
+            "type": "object",
+            "properties": {
+                "expression": {
+                    "type": "string"
+                },
+                "language": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.MatchParams": {
             "type": "object",
             "properties": {
@@ -284,14 +359,40 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.PhraseParams": {
+            "type": "object",
+            "properties": {
+                "fields": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "language": {
+                    "type": "string"
+                },
+                "query": {
+                    "type": "string"
+                },
+                "slop": {
+                    "type": "integer"
+                }
+            }
+        },
         "dto.QueryWrapper": {
             "type": "object",
             "properties": {
+                "boolean": {
+                    "$ref": "#/definitions/dto.BooleanParams"
+                },
                 "match": {
                     "$ref": "#/definitions/dto.MatchParams"
                 },
                 "multi_match": {
                     "$ref": "#/definitions/dto.MultiMatchParams"
+                },
+                "phrase": {
+                    "$ref": "#/definitions/dto.PhraseParams"
                 }
             }
         },
@@ -332,6 +433,23 @@ const docTemplate = `{
                 },
                 "total_matches": {
                     "type": "integer"
+                }
+            }
+        },
+        "dto.SemanticSearchResponse": {
+            "type": "object",
+            "properties": {
+                "has_more": {
+                    "type": "boolean"
+                },
+                "hits": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.Article"
+                    }
+                },
+                "next_cursor": {
+                    "type": "string"
                 }
             }
         }

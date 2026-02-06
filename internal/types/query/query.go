@@ -63,7 +63,7 @@ type String struct {
 	// Query: The search text to query
 	Query string `json:"query" validate:"required,min=1"`
 
-	// Language: Text analysis language configuration
+	// Language: Prompt analysis language configuration
 	Language Language `json:"language,omitempty"`
 
 	// DefaultOperator: How to combine terms when no explicit operator specified
@@ -121,7 +121,7 @@ type Phrase struct {
 	// Default: 0 (exact phrase)
 	Slop int `json:"slop,omitempty" validate:"min=0,max=3"`
 
-	// Language: Text analysis language
+	// Language: Prompt analysis language
 	Language Language `json:"language,omitempty"`
 }
 
@@ -269,7 +269,7 @@ type Match struct {
 	// Field: The single field to search in
 	Field string `json:"field" validate:"required"`
 
-	// Language: Text search language configuration
+	// Language: Prompt search language configuration
 	Language Language `json:"language,omitempty"`
 
 	// Operator: How to combine multiple terms
@@ -379,7 +379,7 @@ type MultiMatch struct {
 
 	Fields []MultiMatchField `json:"fields,omitempty"`
 
-	// Language: Text search language configuration
+	// Language: Prompt search language configuration
 	Language Language `json:"language,omitempty"`
 
 	// Operator: How to combine multiple terms
@@ -468,11 +468,12 @@ func (q *MultiMatch) GetOperator() operator.Operator {
 
 type Semantic struct {
 	// Query: The text to semantically search for
-	Query string `json:"query" validate:"required,min=1"`
+	Query     string  `json:"query" validate:"required,min=1"`
+	Threshold float64 `json:"threshold" validate:"required,min=1"`
 }
 
-func NewSemantic(query string) Semantic {
-	return Semantic{
+func NewSemantic(query string) *Semantic {
+	return &Semantic{
 		Query: query,
 	}
 }

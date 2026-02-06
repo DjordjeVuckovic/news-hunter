@@ -5,14 +5,14 @@ type ValidationError struct {
 	Err     error
 }
 
-func (e *ValidationError) Error() string {
+func (e ValidationError) Error() string {
 	if e.Err != nil {
 		return e.Message + ": " + e.Err.Error()
 	}
 	return e.Message
 }
 
-func (e *ValidationError) Unwrap() error {
+func (e ValidationError) Unwrap() error {
 	return e.Err
 }
 

@@ -234,6 +234,26 @@ func (q *QueryWrapper) GetQueryType() query.Kind {
 	return ""
 }
 
+type SemanticSearchRequest struct {
+	Query  string `json:"query"`
+	Size   int    `json:"size,omitempty"`
+	Cursor string `json:"cursor,omitempty"`
+}
+
+type SemanticSearchResponse struct {
+	NextCursor *string   `json:"next_cursor,omitempty"`
+	HasMore    bool      `json:"has_more"`
+	Hits       []Article `json:"hits"`
+}
+
+func (p *SemanticSearchRequest) ToDomain() (*query.Semantic, error) {
+	if p.Query == "" {
+		return nil, apperr.NewValidation("query is required")
+	}
+
+	return query.NewSemantic(p.Query), nil
+}
+
 // UnmarshalJSON implements custom JSON unmarshaling with validation
 func (q *QueryWrapper) UnmarshalJSON(data []byte) error {
 	type Alias QueryWrapper

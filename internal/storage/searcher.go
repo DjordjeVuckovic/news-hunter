@@ -18,12 +18,18 @@ type SearchResult struct {
 	TotalMatches int64                     `json:"total_matches,omitempty"`
 }
 
+type VectorSearchResult struct {
+	Hits       []dto.Article `json:"hits"`
+	NextCursor *query.Cursor `json:"-"`
+	HasMore    bool          `json:"has_more"`
+}
+
 // FtsSearcher is the full text API interface
 // Provides full-text search capability
 type FtsSearcher interface {
-	// SearchQuery performs simple string-based search with application-optimized settings
+	// SearchStringQuery performs simple string-based search with application-optimized settings
 	// The storage implementation determines optimal fields, weights, and search strategy
-	SearchQuery(ctx context.Context, query *query.String, baseOpts *query.BaseOptions) (*SearchResult, error)
+	SearchStringQuery(ctx context.Context, query *query.String, baseOpts *query.BaseOptions) (*SearchResult, error)
 	// SearchField performs single-field match query with relevance scoring
 	SearchField(ctx context.Context, query *query.Match, baseOpts *query.BaseOptions) (*SearchResult, error)
 	// SearchFields performs multi-field match query with per-field weighting
@@ -36,8 +42,14 @@ type FtsSearcher interface {
 	SearchBoolean(ctx context.Context, query *query.Boolean, baseOpts *query.BaseOptions) (*SearchResult, error)
 }
 
+type EmbedResult struct {
+	Hits       []dto.ArticleSearchResult `json:"hits"`
+	NextCursor *query.Cursor             `json:"-"`
+	HasMore    bool                      `json:"has_more"`
+}
+
 // SemanticSearcher is the semantic search API interface
 type SemanticSearcher interface {
-	// SemanticSearch performs semantic search using vector embeddings
-	SemanticSearch(ctx context.Context, query *query.Semantic, baseOpts *query.BaseOptions) (*SearchResult, error)
+	// SearchSemantic performs semantic search using vector embeddings
+	SearchSemantic(ctx context.Context, query *query.Semantic, baseOpts *query.BaseOptions) (*VectorSearchResult, error)
 }

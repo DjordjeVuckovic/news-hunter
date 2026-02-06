@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/DjordjeVuckovic/news-hunter/internal/embedding"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage/factory"
 	"github.com/DjordjeVuckovic/news-hunter/pkg/config/env"
 )
@@ -19,7 +20,8 @@ func NewAppConfig() *AppConfig {
 }
 
 type NewsSearchConfig struct {
-	StorageConfig factory.StorageConfig
+	StorageConfig   factory.StorageConfig
+	EmbeddingConfig embedding.Config
 }
 
 func (as *AppConfig) Load() (*NewsSearchConfig, error) {
@@ -35,7 +37,14 @@ func (as *AppConfig) Load() (*NewsSearchConfig, error) {
 		return nil, err
 	}
 
+	embed, err := embedding.LoadConfigFromEnv()
+	if err != nil {
+		slog.Error("Failed to load embedding configuration from environment", "error", err)
+		return nil, err
+	}
+
 	return &NewsSearchConfig{
-		StorageConfig: *storageCfg,
+		StorageConfig:   *storageCfg,
+		EmbeddingConfig: *embed,
 	}, nil
 }

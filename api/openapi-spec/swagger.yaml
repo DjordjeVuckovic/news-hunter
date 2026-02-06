@@ -53,6 +53,13 @@ definitions:
         description: ScoreNormalized is the normalized(between 0-1) score
         type: number
     type: object
+  dto.BooleanParams:
+    properties:
+      expression:
+        type: string
+      language:
+        type: string
+    type: object
   dto.MatchParams:
     properties:
       field:
@@ -84,12 +91,29 @@ definitions:
       query:
         type: string
     type: object
+  dto.PhraseParams:
+    properties:
+      fields:
+        items:
+          type: string
+        type: array
+      language:
+        type: string
+      query:
+        type: string
+      slop:
+        type: integer
+    type: object
   dto.QueryWrapper:
     properties:
+      boolean:
+        $ref: '#/definitions/dto.BooleanParams'
       match:
         $ref: '#/definitions/dto.MatchParams'
       multi_match:
         $ref: '#/definitions/dto.MultiMatchParams'
+      phrase:
+        $ref: '#/definitions/dto.PhraseParams'
     type: object
   dto.SearchRequest:
     properties:
@@ -117,6 +141,17 @@ definitions:
       total_matches:
         type: integer
     type: object
+  dto.SemanticSearchResponse:
+    properties:
+      has_more:
+        type: boolean
+      hits:
+        items:
+          $ref: '#/definitions/dto.Article'
+        type: array
+      next_cursor:
+        type: string
+    type: object
 info:
   contact:
     email: support@newshunter.com
@@ -130,7 +165,102 @@ info:
   title: News Hunter API
   version: "1.0"
 paths:
-  /v1/articles/_search:
+  /v1/articles/search:
+    get:
+      consumes:
+      - application/json
+      description: Simple text search with automatic field selection and weighting.
+        Cacheable and bookmarkable. Application determines optimal search strategy
+        based on index configuration.
+      parameters:
+      - description: SearchStringQuery query text
+        example: '"climate change"'
+        in: query
+        name: q
+        required: true
+        type: string
+      - description: 'Results per page (default: 100, max: 10000)'
+        example: 10
+        in: query
+        name: size
+        type: integer
+      - description: Pagination cursor (base64-encoded from previous response)
+        in: query
+        name: cursor
+        type: string
+      - description: 'SearchStringQuery language: english, serbian (default: english)'
+        example: '"english"'
+        in: query
+        name: lang
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: SearchStringQuery results with pagination metadata
+          schema:
+            $ref: '#/definitions/dto.SearchResponse'
+        "400":
+          description: Bad request - missing or invalid parameters
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Simple query string search
+      tags:
+      - search
+  /v1/articles/semantic_search:
+    get:
+      consumes:
+      - application/json
+      description: Perform vector-based semantic search using the embedding model.
+        Supports pagination via cursor. Application determines optimal search strategy
+        based on index configuration. Results are cacheable and bookmarkable.
+      parameters:
+      - description: SearchStringQuery query text
+        example: '"climate change"'
+        in: query
+        name: q
+        required: true
+        type: string
+      - description: 'Results per page (default: 100, max: 10000)'
+        example: 10
+        in: query
+        name: size
+        type: integer
+      - description: Pagination cursor (base64-encoded from previous response)
+        in: query
+        name: cursor
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: SearchStringQuery results with pagination metadata
+          schema:
+            $ref: '#/definitions/dto.SemanticSearchResponse'
+        "400":
+          description: Bad request - missing or invalid parameters
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Vector-based semantic search
+      tags:
+      - search
+  /v1/articles/structured:
     post:
       consumes:
       - application/json
@@ -148,7 +278,7 @@ paths:
       - application/json
       responses:
         "200":
-          description: Search results with pagination metadata
+          description: SearchStringQuery results with pagination metadata
           schema:
             $ref: '#/definitions/dto.SearchResponse'
         "400":
@@ -164,62 +294,12 @@ paths:
               type: string
             type: object
         "501":
-          description: Query type not supported by storage backend
+          description: Query type not supported by searcher backend
           schema:
             additionalProperties:
               type: string
             type: object
       summary: Structured search API
-      tags:
-      - search
-  /v1/articles/search:
-    get:
-      consumes:
-      - application/json
-      description: Simple text search with automatic field selection and weighting.
-        Cacheable and bookmarkable. Application determines optimal search strategy
-        based on index configuration.
-      parameters:
-      - description: Search query text
-        example: '"climate change"'
-        in: query
-        name: q
-        required: true
-        type: string
-      - description: 'Results per page (default: 100, max: 10000)'
-        example: 10
-        in: query
-        name: size
-        type: integer
-      - description: Pagination cursor (base64-encoded from previous response)
-        in: query
-        name: cursor
-        type: string
-      - description: 'Search language: english, serbian (default: english)'
-        example: '"english"'
-        in: query
-        name: lang
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Search results with pagination metadata
-          schema:
-            $ref: '#/definitions/dto.SearchResponse'
-        "400":
-          description: Bad request - missing or invalid parameters
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: Internal server error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Simple query string search
       tags:
       - search
 swagger: "2.0"

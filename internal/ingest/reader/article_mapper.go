@@ -24,7 +24,7 @@ func (m *ArticleMapper) Map(record map[string]string, _ *MappingOptions) (docume
 		return document.Article{}, err
 	}
 
-	article := document.Article{}
+	article := document.Article{ID: document.NewArticleID()}
 	val := reflect.ValueOf(&article).Elem()
 
 	for _, fm := range m.cfg.FieldMappings {

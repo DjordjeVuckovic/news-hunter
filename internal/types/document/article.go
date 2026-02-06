@@ -41,3 +41,7 @@ func (ar *Article) ContainsField(field string) bool {
 	_, found := reflectType.FieldByName(field)
 	return found
 }
+
+func NewArticleID() uuid.UUID {
+	return uuid.New()
+}

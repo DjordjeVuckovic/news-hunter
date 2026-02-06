@@ -16,12 +16,15 @@ import (
 
 	"github.com/DjordjeVuckovic/news-hunter/internal/api/router"
 	server2 "github.com/DjordjeVuckovic/news-hunter/internal/api/server"
+	"github.com/DjordjeVuckovic/news-hunter/internal/embedding"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage/factory"
 	pkgserver "github.com/DjordjeVuckovic/news-hunter/pkg/server"
 	"github.com/labstack/echo/v4"
 )
 
 func main() {
+	slog.SetLogLoggerLevel(slog.LevelDebug)
+
 	sCfg, err := server2.LoadConfig()
 	if err != nil {
 		slog.Error("Failed to load config", "error", err)
@@ -48,14 +51,17 @@ func main() {
 		return
 	}
 
-	reader, err := factory.NewSearcher(s.Context(), cfg.StorageConfig)
+	searcher, err := factory.NewSearcher(s.Context(), cfg.StorageConfig)
 	if err != nil {
-		slog.Error("Failed to create storage reader", "error", err)
+		slog.Error("Failed to create storage searcher", "error", err)
 		os.Exit(1)
 		return
 	}
 
-	searchrouter := router.NewSearchRouter(s.Echo, reader)
+	embedClient, err := embedding.NewOllamaClient(cfg.EmbeddingConfig.BaseURL)
+	sematicSearcher, err := factory.NewSemanticSearcher(s.Context(), cfg.StorageConfig, embedClient)
+
+	searchrouter := router.NewSearchRouter(s.Echo, searcher, sematicSearcher)
 	searchrouter.Bind()
 
 	go func() {

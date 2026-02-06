@@ -22,10 +22,10 @@ func NewReader(pool *pg.ConnectionPool) (*Searcher, error) {
 	return &Searcher{db: pool.GetConn()}, nil
 }
 
-// SearchQuery implements storage.FtsSearcher interface
+// SearchStringQuery implements storage.FtsSearcher interface
 // Performs simple string-based search using PostgreSQL's tsvector and plainto_tsquery
 // Application determines optimal fields and weights based on index configuration
-func (r *Searcher) SearchQuery(ctx context.Context, query *dquery.String, baseOpts *dquery.BaseOptions) (*storage.SearchResult, error) {
+func (r *Searcher) SearchStringQuery(ctx context.Context, query *dquery.String, baseOpts *dquery.BaseOptions) (*storage.SearchResult, error) {
 	cursor, size := baseOpts.Cursor, baseOpts.Size
 	slog.Info("Executing pool query_string search", "query", query.Query, "has_cursor", cursor != nil, "size", size)
 

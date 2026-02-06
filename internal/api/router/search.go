@@ -15,14 +15,16 @@ import (
 )
 
 type SearchRouter struct {
-	e        *echo.Echo
-	searcher storage.FtsSearcher
+	e               *echo.Echo
+	searcher        storage.FtsSearcher
+	sematicSearcher storage.SemanticSearcher
 }
 
-func NewSearchRouter(e *echo.Echo, searcher storage.FtsSearcher) *SearchRouter {
+func NewSearchRouter(e *echo.Echo, searcher storage.FtsSearcher, sematicSearcher storage.SemanticSearcher) *SearchRouter {
 	router := &SearchRouter{
-		e:        e,
-		searcher: searcher,
+		e:               e,
+		searcher:        searcher,
+		sematicSearcher: sematicSearcher,
 	}
 
 	return router
@@ -34,6 +36,8 @@ func (r *SearchRouter) Bind() {
 
 	// Unified structured search API (match/multi_match with query wrapper)
 	r.e.POST("/v1/articles/_search", r.structuredSearchHandler)
+
+	r.e.GET("/v1/articles/semantic_search", r.handleSematicQuery)
 }
 
 // searchHandler handles simple query string search (GET)
@@ -47,11 +51,11 @@ func (r *SearchRouter) Bind() {
 // @Tags search
 // @Accept json
 // @Produce json
-// @Param q query string true "SearchQuery query text" example("climate change")
+// @Param q query string true "SearchStringQuery query text" example("climate change")
 // @Param size query int false "Results per page (default: 100, max: 10000)" example(10)
 // @Param cursor query string false "Pagination cursor (base64-encoded from previous response)"
-// @Param lang query string false "SearchQuery language: english, serbian (default: english)" example("english")
-// @Success 200 {object} dto.SearchResponse "SearchQuery results with pagination metadata"
+// @Param lang query string false "SearchStringQuery language: english, serbian (default: english)" example("english")
+// @Success 200 {object} dto.SearchResponse "SearchStringQuery results with pagination metadata"
 // @Failure 400 {object} map[string]string "Bad request - missing or invalid parameters"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Router /v1/articles/search [get]
@@ -84,7 +88,7 @@ func (r *SearchRouter) searchHandler(c echo.Context) error {
 	}
 
 	queryString := dquery.NewQueryString(query)
-	searchResult, err := r.searcher.SearchQuery(c.Request().Context(), queryString, &dquery.BaseOptions{
+	searchResult, err := r.searcher.SearchStringQuery(c.Request().Context(), queryString, &dquery.BaseOptions{
 		Cursor: cursor,
 		Size:   sizeInt,
 	})
@@ -114,7 +118,7 @@ func (r *SearchRouter) searchHandler(c echo.Context) error {
 // @Accept json
 // @Produce json
 // @Param request body dto.SearchRequest true "Structured search request with query wrapper"
-// @Success 200 {object} dto.SearchResponse "SearchQuery results with pagination metadata"
+// @Success 200 {object} dto.SearchResponse "SearchStringQuery results with pagination metadata"
 // @Failure 400 {object} map[string]string "Bad request - invalid query structure or parameters"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Failure 501 {object} map[string]string "Query type not supported by searcher backend"
@@ -254,6 +258,95 @@ func (r *SearchRouter) handleBooleanQuery(c echo.Context, params *dto.BooleanPar
 	}
 
 	return r.buildResponse(c, searchResult)
+}
+
+// handleSematicQuery handles semantic query search (GET)
+//
+// This endpoint provides a vector-based semantic search experience using the embedding model.
+// The application automatically determines optimal search strategy based on index configuration.
+// Results are cacheable and URLs are bookmarkable.
+//
+// @Summary Vector-based semantic search
+// @Description Perform vector-based semantic search using the embedding model. Supports pagination via cursor. Application determines optimal search strategy based on index configuration. Results are cacheable and bookmarkable.
+// @Tags search
+// @Accept json
+// @Produce json
+// @Param q query string true "SearchStringQuery query text" example("climate change")
+// @Param size query int false "Results per page (default: 100, max: 10000)" example(10)
+// @Param cursor query string false "Pagination cursor (base64-encoded from previous response)"
+// @Success 200 {object} dto.SemanticSearchResponse "SearchStringQuery results with pagination metadata"
+// @Failure 400 {object} map[string]string "Bad request - missing or invalid parameters"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Router /v1/articles/semantic_search [get]
+// @Example Request:  GET /v1/articles/semantic_search?q=climate%20change&size=10
+// @Example Response: {"hits": [...], "next_cursor": "eyJ...", "has_more": true}
+func (r *SearchRouter) handleSematicQuery(c echo.Context) error {
+	query := c.QueryParam("q")
+	if query == "" {
+		return apperr.NewValidation("q parameter is required")
+	}
+
+	sizeStr := c.QueryParam("size")
+	size, err := r.parseSize(sizeStr)
+	if err != nil {
+		return err
+	}
+
+	cursorStr := c.QueryParam("cursor")
+
+	req := dto.SemanticSearchRequest{
+		Query:  query,
+		Size:   size,
+		Cursor: cursorStr,
+	}
+
+	var cursor *dquery.Cursor
+	if req.Cursor != "" {
+		var err error
+		cursor, err = dquery.DecodeCursor(req.Cursor)
+		if err != nil {
+			return apperr.NewValidation("invalid cursor parameter")
+		}
+	}
+
+	options := &dquery.BaseOptions{
+		Cursor: cursor,
+		Size:   size,
+	}
+
+	domainQuery, err := req.ToDomain()
+	if err != nil {
+		return err
+	}
+
+	searchResult, err := r.sematicSearcher.SearchSemantic(c.Request().Context(), domainQuery, options)
+	if err != nil {
+		slog.Error("Failed to execute semantic search", "error", err, "query", req.Query)
+		return err
+	}
+
+	var nextCursorStr *string
+	if searchResult.NextCursor != nil {
+		encoded, err := dquery.EncodeCursor(searchResult.NextCursor.Score, searchResult.NextCursor.ID)
+		if err != nil {
+			slog.Error("Failed to encode cursor", "error", err)
+			return fmt.Errorf("failed to encode cursor: %w", err)
+		}
+		nextCursorStr = &encoded
+	}
+
+	hits := searchResult.Hits
+	if hits == nil {
+		hits = []dto.Article{}
+	}
+
+	apiResponse := dto.SemanticSearchResponse{
+		Hits:       hits,
+		NextCursor: nextCursorStr,
+		HasMore:    searchResult.HasMore,
+	}
+
+	return c.JSON(http.StatusOK, apiResponse)
 }
 
 func (r *SearchRouter) parseSize(sizeStr string) (int, error) {

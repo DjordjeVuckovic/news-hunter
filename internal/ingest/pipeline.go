@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/DjordjeVuckovic/news-hunter/internal/embedding"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
 	"github.com/DjordjeVuckovic/news-hunter/internal/types/document"
 )
@@ -32,9 +33,14 @@ type PipelineConfig struct {
 
 // ArticlePipeline handles article processing from collection to storage
 type ArticlePipeline struct {
+	config *PipelineConfig
+
 	collector Collector[document.Article]
-	storer    storage.Indexer
-	config    *PipelineConfig
+
+	storer storage.Indexer
+
+	embedder     *embedding.Embedder
+	embedIndexer storage.EmbedIndexer
 }
 
 type PipelineOption func(pipeline *ArticlePipeline)
@@ -54,6 +60,13 @@ func WithBulk(size int) PipelineOption {
 func WithConfig(config *PipelineConfig) PipelineOption {
 	return func(pipeline *ArticlePipeline) {
 		pipeline.config = config
+	}
+}
+
+func WithEmbedder(storageEmbedder storage.EmbedIndexer, embedGen *embedding.Embedder) PipelineOption {
+	return func(pipeline *ArticlePipeline) {
+		pipeline.embedIndexer = storageEmbedder
+		pipeline.embedder = embedGen
 	}
 }
 
@@ -149,7 +162,7 @@ func (p *ArticlePipeline) processBasic(ctx context.Context, results <-chan Resul
 				)
 				errorCount++
 			} else {
-				slog.Debug("Article saved successfully",
+				slog.Debug("Vec saved successfully",
 					"id", id,
 					"title", res.Result.Title,
 					"pipeline", p.config.Name,
@@ -184,13 +197,6 @@ func (p *ArticlePipeline) processBatch(ctx context.Context, results <-chan Resul
 				batchCount++
 			}
 		}
-
-		slog.Info("Pipeline batch processing completed",
-			"pipeline", p.config.Name,
-			"total_processed", processedCount,
-			"total_errors", errorCount,
-			"total_batches", batchCount,
-		)
 	}()
 
 	for {
@@ -239,6 +245,37 @@ func (p *ArticlePipeline) processBatch(ctx context.Context, results <-chan Resul
 					processedCount += len(articles)
 					batchCount++
 				}
+				if p.embedder != nil && p.embedIndexer != nil {
+					var embeds []*embedding.Vec
+					processable := articles[:10]
+					for _, a := range processable {
+						embed, err := p.embedder.EmbedDoc(ctx, a)
+						if err != nil {
+							slog.Error("Error generating embedding for article",
+								"error", err,
+								"title", a.Title,
+								"pipeline", p.config.Name,
+							)
+							continue
+						}
+
+						embeds = append(embeds, embed)
+					}
+
+					if err := p.embedIndexer.SaveBulk(ctx, embeds); err != nil {
+						slog.Error("Error saving article embeddings",
+							"error", err,
+							"count", len(embeds),
+							"pipeline", p.config.Name,
+						)
+					} else {
+						slog.Info("Vec embeddings saved successfully",
+							"count", len(embeds),
+							"pipeline", p.config.Name,
+						)
+					}
+				}
+
 				articles = articles[:0] // Reset slice
 			}
 		}
@@ -250,12 +287,10 @@ func (p *ArticlePipeline) Stop() {
 	slog.Info("Stopping pipeline...", "pipeline", p.config.Name)
 
 	if p.collector != nil {
-		// Collector stop logic would go here if available
 		slog.Debug("Collector stopped", "pipeline", p.config.Name)
 	}
 
 	if p.storer != nil {
-		// Indexer cleanup logic would go here if available
 		p.storer = nil
 		slog.Debug("Indexer cleaned up", "pipeline", p.config.Name)
 	}
