@@ -1,3 +1,4 @@
+BEGIN;
 
 -- Create function to update search_vector with proper field weights
 CREATE OR REPLACE FUNCTION update_article_search_vector()
@@ -42,3 +43,5 @@ SET search_vector =
         setweight(to_tsvector(COALESCE(language, 'english')::regconfig,
                               COALESCE(subtitle, '') || ' ' || COALESCE(author, '')), 'D')
 WHERE search_vector IS NULL OR search_vector = ''::tsvector;
+
+COMMIT;
