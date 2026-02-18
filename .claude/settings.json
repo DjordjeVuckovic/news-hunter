@@ -5,8 +5,7 @@
       "Bash(go build:*)",
       "Bash(go fmt:*)",
       "Bash(go mod tidy)",
-      "Bash(go vet :*)",
-      "Read(~/.zshrc)"
+      "Bash(go vet :*)"
     ],
     "deny": [
       "Bash(curl:*)",

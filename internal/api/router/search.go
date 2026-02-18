@@ -15,19 +15,30 @@ import (
 )
 
 type SearchRouter struct {
-	e               *echo.Echo
-	searcher        storage.FtsSearcher
-	sematicSearcher storage.SemanticSearcher
+	e                *echo.Echo
+	searcher         storage.FtsSearcher
+	semanticSearcher storage.SemanticSearcher
 }
 
-func NewSearchRouter(e *echo.Echo, searcher storage.FtsSearcher, sematicSearcher storage.SemanticSearcher) *SearchRouter {
+type SearchRouterOption func(*SearchRouter)
+
+func NewSearchRouter(e *echo.Echo, searcher storage.FtsSearcher, opts ...SearchRouterOption) *SearchRouter {
 	router := &SearchRouter{
-		e:               e,
-		searcher:        searcher,
-		sematicSearcher: sematicSearcher,
+		e:        e,
+		searcher: searcher,
+	}
+
+	for _, opt := range opts {
+		opt(router)
 	}
 
 	return router
+}
+
+func WithSemanticSearcher(searcher storage.SemanticSearcher) SearchRouterOption {
+	return func(r *SearchRouter) {
+		r.semanticSearcher = searcher
+	}
 }
 
 func (r *SearchRouter) Bind() {
@@ -37,7 +48,10 @@ func (r *SearchRouter) Bind() {
 	// Unified structured search API (match/multi_match with query wrapper)
 	r.e.POST("/v1/articles/_search", r.structuredSearchHandler)
 
-	r.e.GET("/v1/articles/semantic_search", r.handleSematicQuery)
+	// Semantic search endpoint (only if provided via options)
+	if r.semanticSearcher != nil {
+		r.e.GET("/v1/articles/semantic_search", r.handleSematicQuery)
+	}
 }
 
 // searchHandler handles simple query string search (GET)
@@ -319,7 +333,7 @@ func (r *SearchRouter) handleSematicQuery(c echo.Context) error {
 		return err
 	}
 
-	searchResult, err := r.sematicSearcher.SearchSemantic(c.Request().Context(), domainQuery, options)
+	searchResult, err := r.semanticSearcher.SearchSemantic(c.Request().Context(), domainQuery, options)
 	if err != nil {
 		slog.Error("Failed to execute semantic search", "error", err, "query", req.Query)
 		return err

@@ -247,8 +247,7 @@ func (p *ArticlePipeline) processBatch(ctx context.Context, results <-chan Resul
 				}
 				if p.embedder != nil && p.embedIndexer != nil {
 					var embeds []*embedding.Vec
-					processable := articles[:10]
-					for _, a := range processable {
+					for _, a := range articles {
 						embed, err := p.embedder.EmbedDoc(ctx, a)
 						if err != nil {
 							slog.Error("Error generating embedding for article",
@@ -276,7 +275,7 @@ func (p *ArticlePipeline) processBatch(ctx context.Context, results <-chan Resul
 					}
 				}
 
-				articles = articles[:0] // Reset slice
+				articles = articles[:0]
 			}
 		}
 	}

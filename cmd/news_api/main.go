@@ -58,10 +58,27 @@ func main() {
 		return
 	}
 
-	embedClient, err := embedding.NewOllamaClient(cfg.EmbeddingConfig.BaseURL)
-	sematicSearcher, err := factory.NewSemanticSearcher(s.Context(), cfg.StorageConfig, embedClient)
+	var routerOpts []router.SearchRouterOption
+	if cfg.EmbeddingConfig.Enabled {
+		embedClient, err := embedding.NewOllamaClient(cfg.EmbeddingConfig.BaseURL)
+		if err != nil {
+			slog.Error("Failed to create embedding client", "error", err)
+			os.Exit(1)
+			return
+		}
+		semanticSearcher, err := factory.NewSemanticSearcher(s.Context(), cfg.StorageConfig, embedClient)
+		if err != nil {
+			slog.Error("Failed to create semantic searcher", "error", err)
+			os.Exit(1)
+			return
+		}
+		routerOpts = append(routerOpts, router.WithSemanticSearcher(semanticSearcher))
+		slog.Info("Semantic search enabled")
+	} else {
+		slog.Info("Semantic search disabled")
+	}
 
-	searchrouter := router.NewSearchRouter(s.Echo, searcher, sematicSearcher)
+	searchrouter := router.NewSearchRouter(s.Echo, searcher, routerOpts...)
 	searchrouter.Bind()
 
 	go func() {
