@@ -8,7 +8,6 @@ import (
 type QueryResult struct {
 	QueryID      string
 	JobName      string
-	Layer        string
 	EngineName   string
 	Scores       metrics.ScoreSet
 	RankedDocIDs []uuid.UUID
@@ -19,7 +18,6 @@ type QueryResult struct {
 
 type JobResult struct {
 	JobName     string
-	Layer       string
 	Results     map[string]map[string]QueryResult // [queryID][engineName]
 	QueryOrder  []string
 	EngineNames []string

@@ -25,7 +25,6 @@ func (r *Runner) RunAll(
 	ctx context.Context,
 	bs *spec.BenchSpec,
 	executors map[string]engine.Executor,
-	apiExec *engine.APIExecutor,
 ) (*BenchmarkResult, error) {
 	br := &BenchmarkResult{Config: r.config}
 
@@ -35,7 +34,7 @@ func (r *Runner) RunAll(
 			return nil, fmt.Errorf("load suite for job %q: %w", job.Name, err)
 		}
 
-		jr, err := r.RunJob(ctx, job, loaded, executors, apiExec)
+		jr, err := r.RunJob(ctx, job, loaded, executors)
 		if err != nil {
 			return nil, fmt.Errorf("run job %q: %w", job.Name, err)
 		}
@@ -50,7 +49,6 @@ func (r *Runner) RunJob(
 	job spec.Job,
 	loaded *suite.LoadedSuite,
 	executors map[string]engine.Executor,
-	apiExec *engine.APIExecutor,
 ) (*JobResult, error) {
 	jobExecutors := make(map[string]engine.Executor)
 	for _, engName := range job.Engines {
@@ -61,61 +59,49 @@ func (r *Runner) RunJob(
 		jobExecutors[engName] = exec
 	}
 
-	layer := Layer(job.Layer)
 	jr := &JobResult{
 		JobName:     job.Name,
-		Layer:       job.Layer,
 		Results:     make(map[string]map[string]QueryResult),
 		EngineNames: job.Engines,
 	}
 
-	if layer == LayerRaw || layer == LayerAll {
-		r.runRawQueries(ctx, jr, loaded.Suite.RawQueries, loaded.Registry, jobExecutors)
-	}
-
-	if layer == LayerAPI || layer == LayerAll {
-		if apiExec == nil {
-			slog.Warn("api layer requested but no API executor configured", "job", job.Name)
-		} else {
-			r.runAPIQueries(ctx, jr, loaded.Suite.APIQueries, apiExec)
-		}
-	}
+	r.runQueries(ctx, jr, loaded.Suite.Queries, loaded.Registry, jobExecutors, loaded.Dir)
 
 	return jr, nil
 }
 
-func (r *Runner) runRawQueries(
+func (r *Runner) runQueries(
 	ctx context.Context,
 	jr *JobResult,
-	queries []suite.RawQuery,
+	queries []suite.Query,
 	registry *suite.TemplateRegistry,
 	executors map[string]engine.Executor,
+	suiteDir string,
 ) {
 	for i := range queries {
-		rq := &queries[i]
-		jr.QueryOrder = append(jr.QueryOrder, rq.ID)
-		jr.Results[rq.ID] = make(map[string]QueryResult)
-		judgments := rq.JudgmentMap()
+		q := &queries[i]
+		jr.QueryOrder = append(jr.QueryOrder, q.ID)
+		jr.Results[q.ID] = make(map[string]QueryResult)
+		judgments := q.JudgmentMap()
 
 		for engName, exec := range executors {
-			rawSQL, err := rq.ResolveEngineQuery(engName, registry)
+			resolved, err := q.ResolveEngineQuery(engName, registry, suiteDir)
 			if err != nil {
 				qr := QueryResult{
-					QueryID:    rq.ID,
+					QueryID:    q.ID,
 					JobName:    jr.JobName,
-					Layer:      "raw",
 					EngineName: engName,
 					Error:      fmt.Errorf("resolve query: %w", err),
 				}
-				jr.Results[rq.ID][engName] = qr
-				slog.Warn("resolve query failed", "query", rq.ID, "engine", engName, "error", err)
+				jr.Results[q.ID][engName] = qr
+				slog.Warn("resolve query failed", "query", q.ID, "engine", engName, "error", err)
 				continue
 			}
-			if rawSQL == "" {
+			if resolved == nil {
 				continue
 			}
 
-			result := r.executeWithRetries(ctx, exec, rawSQL, r.config.WarmupRuns, r.config.Runs)
+			result := r.executeWithRetries(ctx, exec, resolved.Query, nil, r.config.WarmupRuns, r.config.Runs)
 
 			var scores metrics.ScoreSet
 			if result.err == nil && len(judgments) > 0 {
@@ -123,9 +109,8 @@ func (r *Runner) runRawQueries(
 			}
 
 			qr := QueryResult{
-				QueryID:      rq.ID,
+				QueryID:      q.ID,
 				JobName:      jr.JobName,
-				Layer:        "raw",
 				EngineName:   engName,
 				Scores:       scores,
 				RankedDocIDs: result.rankedIDs,
@@ -133,50 +118,10 @@ func (r *Runner) runRawQueries(
 				Latency:      result.latencyStats,
 				Error:        result.err,
 			}
-			jr.Results[rq.ID][engName] = qr
+			jr.Results[q.ID][engName] = qr
 
 			if result.err != nil {
-				slog.Warn("raw query failed", "query", rq.ID, "engine", engName, "error", result.err)
-			}
-		}
-	}
-}
-
-func (r *Runner) runAPIQueries(
-	ctx context.Context,
-	jr *JobResult,
-	queries []suite.APIQuery,
-	apiExec *engine.APIExecutor,
-) {
-	for i := range queries {
-		aq := &queries[i]
-		jr.QueryOrder = append(jr.QueryOrder, aq.ID)
-		jr.Results[aq.ID] = make(map[string]QueryResult)
-		judgments := aq.JudgmentMap()
-
-		for _, backend := range aq.Backends {
-			result := r.executeAPIWithRetries(ctx, apiExec, aq, r.config.WarmupRuns, r.config.Runs)
-
-			var scores metrics.ScoreSet
-			if result.err == nil && len(judgments) > 0 {
-				scores = metrics.ComputeAll(result.rankedIDs, judgments, r.config.KValues, r.config.RelevanceThreshold)
-			}
-
-			qr := QueryResult{
-				QueryID:      aq.ID,
-				JobName:      jr.JobName,
-				Layer:        "api",
-				EngineName:   backend,
-				Scores:       scores,
-				RankedDocIDs: result.rankedIDs,
-				TotalMatches: result.totalMatches,
-				Latency:      result.latencyStats,
-				Error:        result.err,
-			}
-			jr.Results[aq.ID][backend] = qr
-
-			if result.err != nil {
-				slog.Warn("api query failed", "query", aq.ID, "backend", backend, "error", result.err)
+				slog.Warn("query failed", "query", q.ID, "engine", engName, "error", result.err)
 			}
 		}
 	}
@@ -192,11 +137,12 @@ type execResult struct {
 func (r *Runner) executeWithRetries(
 	ctx context.Context,
 	exec engine.Executor,
-	rawQuery string,
+	query string,
+	params []any,
 	warmup, runs int,
 ) execResult {
 	for i := 0; i < warmup; i++ {
-		_, _ = exec.Execute(ctx, rawQuery)
+		_, _ = exec.Execute(ctx, query, params)
 	}
 
 	var latencies []time.Duration
@@ -204,42 +150,7 @@ func (r *Runner) executeWithRetries(
 	var lastErr error
 
 	for i := 0; i < runs; i++ {
-		result, err := exec.Execute(ctx, rawQuery)
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		lastExec = result
-		latencies = append(latencies, result.Latency)
-	}
-
-	if lastExec == nil {
-		return execResult{err: lastErr}
-	}
-
-	return execResult{
-		rankedIDs:    lastExec.RankedDocIDs,
-		totalMatches: lastExec.TotalMatches,
-		latencyStats: ComputeLatencyStats(latencies),
-	}
-}
-
-func (r *Runner) executeAPIWithRetries(
-	ctx context.Context,
-	apiExec *engine.APIExecutor,
-	aq *suite.APIQuery,
-	warmup, runs int,
-) execResult {
-	for i := 0; i < warmup; i++ {
-		_, _ = apiExec.ExecuteAPI(ctx, aq)
-	}
-
-	var latencies []time.Duration
-	var lastExec *engine.Execution
-	var lastErr error
-
-	for i := 0; i < runs; i++ {
-		result, err := apiExec.ExecuteAPI(ctx, aq)
+		result, err := exec.Execute(ctx, query, params)
 		if err != nil {
 			lastErr = err
 			continue

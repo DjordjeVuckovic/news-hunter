@@ -63,7 +63,7 @@ func WithConfig(config *PipelineConfig) PipelineOption {
 	}
 }
 
-func WithEmbedder(storageEmbedder storage.EmbedIndexer, embedGen *embedding.Embedder) PipelineOption {
+func WithEmbeddings(storageEmbedder storage.EmbedIndexer, embedGen *embedding.Embedder) PipelineOption {
 	return func(pipeline *ArticlePipeline) {
 		pipeline.embedIndexer = storageEmbedder
 		pipeline.embedder = embedGen

@@ -91,7 +91,7 @@ func newPipeline(
 			slog.Error("storer does not support embedding")
 			return nil, err
 		}
-		opts = append(opts, ingest.WithEmbedder(storageEmbedder, embedder))
+		opts = append(opts, ingest.WithEmbeddings(storageEmbedder, embedder))
 	}
 
 	return ingest.NewPipeline(coll, storer, opts...), nil

@@ -82,19 +82,14 @@ func runWithSpec(ctx context.Context, cfg cliConfig, runCfg runner.Config) {
 	}
 	defer cleanup()
 
-	var apiExec *engine.APIExecutor
-	if bs.API != nil && bs.API.BaseURL != "" {
-		apiExec = engine.NewAPIExecutor(bs.API.BaseURL)
-	}
-
 	r := runner.New(runCfg)
-	result, err := r.RunAll(ctx, bs, executors, apiExec)
+	result, err := r.RunAll(ctx, bs, executors)
 	if err != nil {
 		slog.Error("Benchmark failed", "error", err)
 		os.Exit(1)
 	}
 
-	outputReport(result, cfg.Output)
+	outputReport(result, &report.GenerateOptions{Spec: bs}, cfg.Output)
 }
 
 func runQuickMode(ctx context.Context, cfg cliConfig, runCfg runner.Config) {
@@ -108,7 +103,8 @@ func runQuickMode(ctx context.Context, cfg cliConfig, runCfg runner.Config) {
 
 	if cfg.PgConnStr != "" {
 		engines["pg-native"] = spec.Engine{Type: "postgres", Connection: cfg.PgConnStr}
-		engineNames = append(engineNames, "pg-native")
+		engines["pg-indexed"] = spec.Engine{Type: "postgres", Connection: cfg.PgConnStr}
+		engineNames = append(engineNames, "pg-native", "pg-indexed")
 	}
 	if cfg.EsAddresses != "" {
 		engines["elasticsearch"] = spec.Engine{Type: "elasticsearch", Connection: cfg.EsAddresses, Index: cfg.EsIndex}
@@ -122,35 +118,29 @@ func runQuickMode(ctx context.Context, cfg cliConfig, runCfg runner.Config) {
 	}
 	defer cleanup()
 
-	var apiExec *engine.APIExecutor
-	if cfg.APIURL != "" {
-		apiExec = engine.NewAPIExecutor(cfg.APIURL)
-	}
-
 	bs := &spec.BenchSpec{
 		Jobs: []spec.Job{
 			{
 				Name:    "quick",
 				Suite:   cfg.SuitePath,
 				Engines: engineNames,
-				Layer:   cfg.Layer,
 			},
 		},
 		Engines: engines,
 	}
 
 	r := runner.New(runCfg)
-	result, err := r.RunAll(ctx, bs, executors, apiExec)
+	result, err := r.RunAll(ctx, bs, executors)
 	if err != nil {
 		slog.Error("Benchmark failed", "error", err)
 		os.Exit(1)
 	}
 
-	outputReport(result, cfg.Output)
+	outputReport(result, nil, cfg.Output)
 }
 
-func outputReport(result *runner.BenchmarkResult, outputPath string) {
-	rpt := report.Generate(result)
+func outputReport(result *runner.BenchmarkResult, opts *report.GenerateOptions, outputPath string) {
+	rpt := report.Generate(result, opts)
 	report.WriteTable(rpt, os.Stdout)
 
 	if outputPath != "" {
@@ -200,7 +190,7 @@ func runPool(ctx context.Context, cfg cliConfig) {
 	defer cleanup()
 
 	r := runner.New(runCfg)
-	result, err := r.RunAll(ctx, bs, executors, nil)
+	result, err := r.RunAll(ctx, bs, executors)
 	if err != nil {
 		slog.Error("Pool run failed", "error", err)
 		os.Exit(1)
@@ -269,7 +259,8 @@ func buildQuickSpec(cfg cliConfig) *spec.BenchSpec {
 
 	if cfg.PgConnStr != "" {
 		engines["pg-native"] = spec.Engine{Type: "postgres", Connection: cfg.PgConnStr}
-		engineNames = append(engineNames, "pg-native")
+		engines["pg-indexed"] = spec.Engine{Type: "postgres", Connection: cfg.PgConnStr}
+		engineNames = append(engineNames, "pg-native", "pg-indexed")
 	}
 	if cfg.EsAddresses != "" {
 		engines["elasticsearch"] = spec.Engine{Type: "elasticsearch", Connection: cfg.EsAddresses, Index: cfg.EsIndex}
@@ -283,7 +274,6 @@ func buildQuickSpec(cfg cliConfig) *spec.BenchSpec {
 				Name:    "quick",
 				Suite:   cfg.SuitePath,
 				Engines: engineNames,
-				Layer:   cfg.Layer,
 			},
 		},
 	}

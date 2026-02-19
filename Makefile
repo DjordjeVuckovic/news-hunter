@@ -20,7 +20,7 @@ migrate-up:
 build-all: build-ds-ingest build-news-api build-schemagen build-bench
 
 build-ds-ingest:
-	@echo "Building ds_ingest..."
+	@echo "Building ds_ds-ingest..."
 	@mkdir -p $(BIN_DIR)
 	@go build -o $(BIN_DIR)/ds-ingest $(CMD_DIR)/ds_ingest
 
@@ -78,27 +78,27 @@ run-schemagen: build-schemagen
 	@echo "Running schema generator..."
 	@./$(BIN_DIR)/schemagen -output=api
 
-# Run data import with default config
-run-import-pg: build-ds-ingest
-	@echo "Running data import..."
+# Run data ds-ingest with default config
+run-ds-ingest-pg: build-ds-ingest
+	@echo "Running data ds-ingest..."
 	@ENV_PATHS="cmd/ds_ingest/pg.env" ./$(BIN_DIR)/ds-ingest
 
-# Run data import with default config
-run-import-es: build-ds-ingest
-	@echo "Running data import..."
+# Run data ds-ingest with default config
+run-ds-ingest-es: build-ds-ingest
+	@echo "Running data ds-ingest..."
 	@ENV_PATHS="cmd/ds_ingest/es.env" ./$(BIN_DIR)/ds-ingest
 
 run-search: build-news-api
 	@echo "Running news search service..."
-	@ENV_PATHS="cmd/news_search/.env" ./$(BIN_DIR)/news-api
+	@ENV_PATHS="cmd/news_api/.env" ./$(BIN_DIR)/news-api
 
 run-search-pg: build-news-api
 	@echo "Running news search service..."
-	@ENV_PATHS="cmd/news_search/pg.env" ./$(BIN_DIR)/news-api
+	@ENV_PATHS="cmd/news_api/pg.env" ./$(BIN_DIR)/news-api
 
 run-search-es: build-news-api
 	@echo "Running news search service..."
-	@ENV_PATHS="cmd/news_search/es.env" ./$(BIN_DIR)/news-api
+	@ENV_PATHS="cmd/news_api/es.env" ./$(BIN_DIR)/news-api
 # Benchmark commands
 build-bench:
 	@echo "Building bench..."
@@ -112,6 +112,10 @@ run-bench: build-bench
 run-bench-all: build-bench
 	@echo "Running FTS quality bench (PG + ES)..."
 	@./$(BIN_DIR)/bench --pg $(DB_CONN) --es-addresses "http://localhost:9200" --suite configs/bench/fts_quality_v1.yaml
+
+run-bench-spec: build-bench
+	@echo "Running FTS quality bench via spec..."
+	@./$(BIN_DIR)/bench --spec configs/bench/spec.yaml
 
 # Development workflow
 dev: fmt vet test build-all

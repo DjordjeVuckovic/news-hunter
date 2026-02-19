@@ -1,0 +1,338 @@
+name: "FTS Quality Benchmark v1"
+description: "Starter suite with ~10 queries across search paradigms for end-to-end verification"
+version: "1.0"
+
+templates:
+  - id: pg_fts_multi_field
+    query: |
+      SELECT id FROM articles
+      WHERE to_tsvector('english', title || ' ' || coalesce(description,'') || ' ' || coalesce(content,''))
+            @@ plainto_tsquery('english', '{{terms}}')
+      ORDER BY ts_rank(
+        to_tsvector('english', title || ' ' || coalesce(description,'') || ' ' || coalesce(content,'')),
+        plainto_tsquery('english', '{{terms}}')
+      ) DESC
+      LIMIT {{limit}}
+
+  - id: pg_fts_single_field
+    query: |
+      SELECT id FROM articles
+      WHERE to_tsvector('english', {{field}}) @@ {{tsquery_fn}}('english', '{{terms}}')
+      ORDER BY ts_rank(to_tsvector('english', {{field}}), {{tsquery_fn}}('english', '{{terms}}')) DESC
+      LIMIT {{limit}}
+
+  - id: pg_fts_phrase
+    query: |
+      SELECT id FROM articles
+      WHERE to_tsvector('english', {{fields}})
+            @@ phraseto_tsquery('english', '{{terms}}')
+      ORDER BY ts_rank(
+        to_tsvector('english', {{fields}}),
+        phraseto_tsquery('english', '{{terms}}')
+      ) DESC
+      LIMIT {{limit}}
+
+  - id: pg_fts_boolean
+    query: |
+      SELECT id FROM articles
+      WHERE to_tsvector('english', {{fields}})
+            @@ to_tsquery('english', '{{tsquery_expr}}')
+      ORDER BY ts_rank(
+        to_tsvector('english', {{fields}}),
+        to_tsquery('english', '{{tsquery_expr}}')
+      ) DESC
+      LIMIT {{limit}}
+
+  - id: pg_fts_weighted
+    query: |
+      SELECT id FROM articles
+      WHERE to_tsvector('english', title || ' ' || coalesce(description,'') || ' ' || coalesce(content,''))
+            @@ plainto_tsquery('english', '{{terms}}')
+      ORDER BY ts_rank(
+        setweight(to_tsvector('english', title), 'A') ||
+        setweight(to_tsvector('english', coalesce(description,'')), 'B') ||
+        setweight(to_tsvector('english', coalesce(content,'')), 'C'),
+        plainto_tsquery('english', '{{terms}}')
+      ) DESC
+      LIMIT {{limit}}
+
+  # --- Pre-computed search_vector (GIN-indexed) templates ---
+  - id: pg_idx_multi_field
+    query: |
+      SELECT id FROM articles
+      WHERE search_vector @@ plainto_tsquery('english', '{{terms}}')
+      ORDER BY ts_rank(search_vector, plainto_tsquery('english', '{{terms}}')) DESC
+      LIMIT {{limit}}
+
+  - id: pg_idx_phrase
+    query: |
+      SELECT id FROM articles
+      WHERE search_vector @@ phraseto_tsquery('english', '{{terms}}')
+      ORDER BY ts_rank(search_vector, phraseto_tsquery('english', '{{terms}}')) DESC
+      LIMIT {{limit}}
+
+  - id: pg_idx_boolean
+    query: |
+      SELECT id FROM articles
+      WHERE search_vector @@ to_tsquery('english', '{{tsquery_expr}}')
+      ORDER BY ts_rank(search_vector, to_tsquery('english', '{{tsquery_expr}}')) DESC
+      LIMIT {{limit}}
+
+  - id: pg_idx_weighted
+    query: |
+      SELECT id FROM articles
+      WHERE search_vector @@ plainto_tsquery('english', '{{terms}}')
+      ORDER BY ts_rank(search_vector, plainto_tsquery('english', '{{terms}}')) DESC
+      LIMIT {{limit}}
+
+queries:
+  # --- Simple keyword search ---
+  - id: qs-climate
+    description: "Simple keyword search for climate change articles"
+    engines:
+      pg-native:
+        template: pg_fts_multi_field
+        params: { terms: "climate change", limit: 100 }
+      pg-indexed:
+        template: pg_idx_multi_field
+        params: { terms: "climate change", limit: 100 }
+      elasticsearch: |
+        {
+          "query": {
+            "multi_match": {
+              "query": "climate change",
+              "fields": ["title^3", "description^2", "content"]
+            }
+          },
+          "size": 100
+        }
+      api: |
+        {
+          "method": "GET",
+          "path": "/v1/articles/search",
+          "params": {
+            "query": "climate change",
+            "size": "100"
+          }
+        }
+    judgments: []
+
+  - id: qs-election
+    description: "Simple keyword search for election coverage"
+    engines:
+      pg-native:
+        template: pg_fts_multi_field
+        params: { terms: "presidential election results", limit: 100 }
+      pg-indexed:
+        template: pg_idx_multi_field
+        params: { terms: "presidential election results", limit: 100 }
+      elasticsearch: |
+        {
+          "query": {
+            "multi_match": {
+              "query": "presidential election results",
+              "fields": ["title^3", "description^2", "content"]
+            }
+          },
+          "size": 100
+        }
+    judgments: []
+
+  # --- Single-field match ---
+  - id: match-title-economy
+    description: "Title-only search for economy articles"
+    engines:
+      pg-native:
+        template: pg_fts_single_field
+        params: { field: "title", tsquery_fn: "plainto_tsquery", terms: "economy recession", limit: 100 }
+      pg-indexed:
+        template: pg_idx_multi_field
+        params: { terms: "economy recession", limit: 100 }
+      elasticsearch: |
+        {
+          "query": {
+            "match": {
+              "title": {
+                "query": "economy recession",
+                "operator": "or"
+              }
+            }
+          },
+          "size": 100
+        }
+      api: |
+        {
+          "method": "POST",
+          "path": "/v1/articles/_search",
+          "body": "{\"size\":100,\"query\":{\"match\":{\"field\":\"title\",\"query\":\"economy recession\",\"operator\":\"or\"}}}"
+        }
+    judgments: []
+
+  - id: match-content-ai
+    description: "Content-field search for AI technology"
+    engines:
+      pg-native:
+        template: pg_fts_single_field
+        params: { field: "content", tsquery_fn: "phraseto_tsquery", terms: "artificial intelligence", limit: 100 }
+      pg-indexed:
+        template: pg_idx_phrase
+        params: { terms: "artificial intelligence", limit: 100 }
+      elasticsearch: |
+        {
+          "query": {
+            "match": {
+              "content": {
+                "query": "artificial intelligence",
+                "operator": "and"
+              }
+            }
+          },
+          "size": 100
+        }
+    judgments: []
+
+  # --- Phrase matching ---
+  - id: phrase-global-warming
+    description: "Exact phrase search for 'global warming'"
+    engines:
+      pg-native:
+        template: pg_fts_phrase
+        params: { fields: "title || ' ' || coalesce(content,'')", terms: "global warming", limit: 100 }
+      pg-indexed:
+        template: pg_idx_phrase
+        params: { terms: "global warming", limit: 100 }
+      elasticsearch: |
+        {
+          "query": {
+            "multi_match": {
+              "query": "global warming",
+              "type": "phrase",
+              "fields": ["title", "content"]
+            }
+          },
+          "size": 100
+        }
+    judgments: []
+
+  - id: phrase-trade-war-slop
+    description: "Phrase search with slop for 'trade war'"
+    engines:
+      pg-native:
+        template: pg_fts_phrase
+        params: { fields: "title || ' ' || coalesce(description,'')", terms: "trade war", limit: 100 }
+      pg-indexed:
+        template: pg_idx_phrase
+        params: { terms: "trade war", limit: 100 }
+      elasticsearch: |
+        {
+          "query": {
+            "multi_match": {
+              "query": "trade war",
+              "type": "phrase",
+              "slop": 2,
+              "fields": ["title", "description"]
+            }
+          },
+          "size": 100
+        }
+    judgments: []
+
+  # --- Boolean / structured ---
+  - id: bool-climate-not-politics
+    description: "Boolean: climate articles excluding politics"
+    engines:
+      pg-native:
+        template: pg_fts_boolean
+        params: { fields: "title || ' ' || coalesce(content,'')", tsquery_expr: "climate & !politics", limit: 100 }
+      pg-indexed:
+        template: pg_idx_boolean
+        params: { tsquery_expr: "climate & !politics", limit: 100 }
+      elasticsearch: |
+        {
+          "query": {
+            "bool": {
+              "must": [
+                { "match": { "content": "climate" } }
+              ],
+              "must_not": [
+                { "match": { "content": "politics" } }
+              ]
+            }
+          },
+          "size": 100
+        }
+    judgments: []
+
+  - id: bool-complex
+    description: "Boolean: (technology OR science) AND innovation"
+    engines:
+      pg-native:
+        template: pg_fts_boolean
+        params: { fields: "title || ' ' || coalesce(content,'')", tsquery_expr: "(technology | science) & innovation", limit: 100 }
+      pg-indexed:
+        template: pg_idx_boolean
+        params: { tsquery_expr: "(technology | science) & innovation", limit: 100 }
+      elasticsearch: |
+        {
+          "query": {
+            "bool": {
+              "must": [
+                { "match": { "content": "innovation" } },
+                {
+                  "bool": {
+                    "should": [
+                      { "match": { "content": "technology" } },
+                      { "match": { "content": "science" } }
+                    ],
+                    "minimum_should_match": 1
+                  }
+                }
+              ]
+            }
+          },
+          "size": 100
+        }
+    judgments: []
+
+  # --- Multi-field with boosting ---
+  - id: mm-renewable-energy
+    description: "Multi-field search for renewable energy with title boost"
+    engines:
+      pg-native:
+        template: pg_fts_weighted
+        params: { terms: "renewable energy solar", limit: 100 }
+      pg-indexed:
+        template: pg_idx_weighted
+        params: { terms: "renewable energy solar", limit: 100 }
+      elasticsearch: |
+        {
+          "query": {
+            "multi_match": {
+              "query": "renewable energy solar",
+              "fields": ["title^3", "description^2", "content"]
+            }
+          },
+          "size": 100
+        }
+    judgments: []
+
+  - id: mm-tech-innovation
+    description: "Multi-field search for technology innovation"
+    engines:
+      pg-native:
+        template: pg_fts_weighted
+        params: { terms: "technology innovation startup", limit: 100 }
+      pg-indexed:
+        template: pg_idx_weighted
+        params: { terms: "technology innovation startup", limit: 100 }
+      elasticsearch: |
+        {
+          "query": {
+            "multi_match": {
+              "query": "technology innovation startup",
+              "fields": ["title^3", "description^2", "content"]
+            }
+          },
+          "size": 100
+        }
+    judgments: []

@@ -4,22 +4,72 @@ import (
 	"time"
 
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/runner"
+	"github.com/DjordjeVuckovic/news-hunter/internal/bench/spec"
 )
 
-func Generate(br *runner.BenchmarkResult) *Report {
+const Version = "1.0.0"
+
+type GenerateOptions struct {
+	Spec   *spec.BenchSpec
+	Corpus CorpusInfo
+}
+
+func Generate(br *runner.BenchmarkResult, opts *GenerateOptions) *Report {
 	r := &Report{
+		Meta: BenchMeta{
+			Version:     Version,
+			Timestamp:   time.Now().UTC(),
+			Engines:     make(map[string]EngineInfo),
+			Environment: NewEnvironmentInfo(),
+		},
 		Config: ReportConfig{
 			KValues:            br.Config.KValues,
 			RelevanceThreshold: br.Config.RelevanceThreshold,
 		},
 	}
 
-	for _, qID := range br.QueryOrder {
-		engineResults := br.Results[qID]
-		for _, engName := range br.EngineNames {
-			qr := engineResults[engName]
+	if opts != nil {
+		if opts.Spec != nil {
+			for name, eng := range opts.Spec.Engines {
+				r.Meta.Engines[name] = EngineInfo{
+					Type:       eng.Type,
+					Connection: maskConnection(eng.Connection),
+				}
+			}
+		}
+		r.Meta.Corpus = opts.Corpus
+	}
+
+	for _, jr := range br.Jobs {
+		jobReport := generateJobReport(jr, br.Config.KValues)
+		r.Jobs = append(r.Jobs, jobReport)
+	}
+
+	return r
+}
+
+func maskConnection(conn string) string {
+	if len(conn) > 50 {
+		return conn[:20] + "..." + conn[len(conn)-20:]
+	}
+	return conn
+}
+
+func generateJobReport(jr *runner.JobResult, kValues []int) JobReport {
+	report := JobReport{
+		JobName: jr.JobName,
+	}
+
+	for _, qID := range jr.QueryOrder {
+		engineResults := jr.Results[qID]
+		for _, engName := range jr.EngineNames {
+			qr, ok := engineResults[engName]
+			if !ok {
+				continue
+			}
 			entry := Entry{
 				QueryID:      qr.QueryID,
+				JobName:      qr.JobName,
 				EngineName:   qr.EngineName,
 				NDCG:         qr.Scores.NDCG,
 				Precision:    qr.Scores.Precision,
@@ -28,37 +78,39 @@ func Generate(br *runner.BenchmarkResult) *Report {
 				AP:           qr.Scores.AP,
 				RR:           qr.Scores.RR,
 				TotalMatches: qr.TotalMatches,
-				Latency:      qr.Latency,
+				Latency:      fromRunnerLatencyStats(qr.Latency),
 			}
 			if qr.Error != nil {
 				entry.Error = qr.Error.Error()
 			}
-			r.PerQuery = append(r.PerQuery, entry)
+			report.PerQuery = append(report.PerQuery, entry)
 		}
 	}
 
-	r.Aggregated = aggregate(br)
-
-	return r
+	report.Aggregated = aggregate(jr, kValues)
+	return report
 }
 
-func aggregate(br *runner.BenchmarkResult) []AggregatedEntry {
-	entries := make([]AggregatedEntry, 0, len(br.EngineNames))
+func aggregate(jr *runner.JobResult, kValues []int) []AggregatedEntry {
+	entries := make([]AggregatedEntry, 0, len(jr.EngineNames))
 
-	for _, engName := range br.EngineNames {
+	for _, engName := range jr.EngineNames {
 		agg := AggregatedEntry{
 			EngineName: engName,
-			NDCG:       make(map[int]float64, len(br.Config.KValues)),
-			Precision:  make(map[int]float64, len(br.Config.KValues)),
-			Recall:     make(map[int]float64, len(br.Config.KValues)),
-			F1:         make(map[int]float64, len(br.Config.KValues)),
+			NDCG:       make(map[int]float64, len(kValues)),
+			Precision:  make(map[int]float64, len(kValues)),
+			Recall:     make(map[int]float64, len(kValues)),
+			F1:         make(map[int]float64, len(kValues)),
 		}
 
-		var totalLatency time.Duration
+		var allStats []runner.LatencyStats
 		counted := 0
 
-		for _, qID := range br.QueryOrder {
-			qr := br.Results[qID][engName]
+		for _, qID := range jr.QueryOrder {
+			qr, ok := jr.Results[qID][engName]
+			if !ok {
+				continue
+			}
 			agg.QueryCount++
 
 			if qr.Error != nil {
@@ -69,9 +121,9 @@ func aggregate(br *runner.BenchmarkResult) []AggregatedEntry {
 			counted++
 			agg.MAP += qr.Scores.AP
 			agg.MRR += qr.Scores.RR
-			totalLatency += qr.Latency
+			allStats = append(allStats, qr.Latency)
 
-			for _, k := range br.Config.KValues {
+			for _, k := range kValues {
 				agg.NDCG[k] += qr.Scores.NDCG[k]
 				agg.Precision[k] += qr.Scores.Precision[k]
 				agg.Recall[k] += qr.Scores.Recall[k]
@@ -83,14 +135,16 @@ func aggregate(br *runner.BenchmarkResult) []AggregatedEntry {
 			n := float64(counted)
 			agg.MAP /= n
 			agg.MRR /= n
-			agg.MeanLatency = totalLatency / time.Duration(counted)
 
-			for _, k := range br.Config.KValues {
+			for _, k := range kValues {
 				agg.NDCG[k] /= n
 				agg.Precision[k] /= n
 				agg.Recall[k] /= n
 				agg.F1[k] /= n
 			}
+
+			aggregatedStats := runner.AggregateLatencyStats(allStats)
+			agg.Latency = fromRunnerLatencyStats(aggregatedStats)
 		}
 
 		entries = append(entries, agg)

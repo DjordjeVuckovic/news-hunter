@@ -1,0 +1,39 @@
+engines:
+  pg-native:
+    type: postgres
+    connection: "postgresql://news_user:news_password@localhost:54320/news_db"
+  pg-indexed:
+    type: postgres
+    connection: "postgresql://news_user:news_password@localhost:54320/news_db"
+  paradedb:
+    type: postgres
+    connection: "postgresql://news_user:news_password@localhost:54321/news_db"
+  elasticsearch:
+    type: elasticsearch
+    connection: "http://localhost:9200"
+    index: news
+  api:
+    type: api
+    connection: "http://localhost:8080"
+
+metrics:
+  k_values: [3, 5, 10]
+  max_k: 100
+  relevance_threshold: 1
+
+runs:
+  warmup: 1
+  iterations: 3
+
+jobs:
+  - name: "pg-onthefly-vs-indexed"
+    suite: configs/bench/fts_quality_v1.yaml
+    engines: [pg-native, pg-indexed]
+
+  - name: "all-engines"
+    suite: configs/bench/fts_quality_v1.yaml
+    engines: [pg-native, pg-indexed, elasticsearch]
+
+  - name: "api-layer"
+    suite: configs/bench/fts_quality_v1.yaml
+    engines: [api]

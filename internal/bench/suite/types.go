@@ -1,27 +1,68 @@
 package suite
 
 import (
-	"github.com/DjordjeVuckovic/news-hunter/internal/types/query"
+	"fmt"
+	"os"
+	"path/filepath"
+
 	"github.com/google/uuid"
+	"gopkg.in/yaml.v3"
 )
 
 type TestSuite struct {
 	Name        string           `yaml:"name"`
 	Description string           `yaml:"description"`
 	Version     string           `yaml:"version"`
-	Queries     []BenchmarkQuery `yaml:"queries"`
+	Templates   []*QueryTemplate `yaml:"templates,omitempty"`
+	Queries     []Query          `yaml:"queries"`
 }
 
-type BenchmarkQuery struct {
-	ID          string              `yaml:"id"`
-	Description string              `yaml:"description"`
-	Kind        query.Kind          `yaml:"kind"`
-	QueryString *QueryStringSpec    `yaml:"query_string,omitempty"`
-	Match       *MatchSpec          `yaml:"match,omitempty"`
-	MultiMatch  *MultiMatchSpec     `yaml:"multi_match,omitempty"`
-	Phrase      *PhraseSpec         `yaml:"phrase,omitempty"`
-	Boolean     *BooleanSpec        `yaml:"boolean,omitempty"`
-	Judgments   []RelevanceJudgment `yaml:"judgments"`
+type Query struct {
+	ID          string                 `yaml:"id"`
+	Description string                 `yaml:"description"`
+	Engines     map[string]EngineQuery `yaml:"engines"`
+	Judgments   []RelevanceJudgment    `yaml:"judgments"`
+}
+
+type EngineQuery struct {
+	Query    string         `yaml:"query,omitempty"`
+	File     string         `yaml:"file,omitempty"`
+	Template string         `yaml:"template,omitempty"`
+	Params   TemplateParams `yaml:"params,omitempty"`
+}
+
+func (eq *EngineQuery) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind == yaml.ScalarNode {
+		eq.Query = value.Value
+		return nil
+	}
+	type plain EngineQuery
+	return value.Decode((*plain)(eq))
+}
+
+func (eq *EngineQuery) Resolve(registry *TemplateRegistry, suiteDir string) (*ResolvedQuery, error) {
+	if eq.Template != "" {
+		if registry == nil {
+			return nil, fmt.Errorf("template %q referenced but no registry available", eq.Template)
+		}
+		return registry.RenderQuery(eq.Template, eq.Params, suiteDir)
+	}
+	if eq.File != "" {
+		path := eq.File
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(suiteDir, path)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("read query file %q: %w", eq.File, err)
+		}
+		return &ResolvedQuery{Query: string(data)}, nil
+	}
+	return &ResolvedQuery{Query: eq.Query}, nil
+}
+
+type ResolvedQuery struct {
+	Query string
 }
 
 type RelevanceJudgment struct {
@@ -29,44 +70,18 @@ type RelevanceJudgment struct {
 	Relevance int       `yaml:"relevance"`
 }
 
-type QueryStringSpec struct {
-	Query    string `yaml:"query"`
-	Language string `yaml:"language,omitempty"`
-	Operator string `yaml:"operator,omitempty"`
-}
-
-type MatchSpec struct {
-	Query     string `yaml:"query"`
-	Field     string `yaml:"field"`
-	Language  string `yaml:"language,omitempty"`
-	Operator  string `yaml:"operator,omitempty"`
-	Fuzziness string `yaml:"fuzziness,omitempty"`
-}
-
-type MultiMatchSpec struct {
-	Query    string   `yaml:"query"`
-	Fields   []string `yaml:"fields"`
-	Language string   `yaml:"language,omitempty"`
-	Operator string   `yaml:"operator,omitempty"`
-}
-
-type PhraseSpec struct {
-	Query    string   `yaml:"query"`
-	Fields   []string `yaml:"fields"`
-	Slop     int      `yaml:"slop,omitempty"`
-	Language string   `yaml:"language,omitempty"`
-}
-
-type BooleanSpec struct {
-	Expression string `yaml:"expression"`
-	Language   string `yaml:"language,omitempty"`
-}
-
-// JudgmentMap converts the judgments slice to a map keyed by doc ID.
-func (bq *BenchmarkQuery) JudgmentMap() map[uuid.UUID]int {
-	m := make(map[uuid.UUID]int, len(bq.Judgments))
-	for _, j := range bq.Judgments {
+func (q *Query) JudgmentMap() map[uuid.UUID]int {
+	m := make(map[uuid.UUID]int, len(q.Judgments))
+	for _, j := range q.Judgments {
 		m[j.DocID] = j.Relevance
 	}
 	return m
+}
+
+func (q *Query) ResolveEngineQuery(engine string, registry *TemplateRegistry, suiteDir string) (*ResolvedQuery, error) {
+	eq, ok := q.Engines[engine]
+	if !ok {
+		return nil, nil
+	}
+	return eq.Resolve(registry, suiteDir)
 }
