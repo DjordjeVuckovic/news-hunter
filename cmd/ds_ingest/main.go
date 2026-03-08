@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"path/filepath"
 
 	"github.com/DjordjeVuckovic/news-hunter/internal/embedding"
 	"github.com/DjordjeVuckovic/news-hunter/internal/ingest"
@@ -36,7 +37,13 @@ func main() {
 		slog.Error("failed to read configuration file", "error", err)
 		os.Exit(1)
 	}
-	articleReader := reader.NewCSVReader(dataFile)
+	var articleReader reader.RawParallelReader
+	switch filepath.Ext(cfg.DatasetPath) {
+	case ".jsonl":
+		articleReader = reader.NewJSONLReader(dataFile)
+	default:
+		articleReader = reader.NewCSVReader(dataFile)
+	}
 
 	mappingCfg, err := loader.Load(true)
 	if err != nil {

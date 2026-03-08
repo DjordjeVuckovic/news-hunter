@@ -81,12 +81,12 @@ run-schemagen: build-schemagen
 # Run data ds-ingest with default config
 run-ds-ingest-pg: build-ds-ingest
 	@echo "Running data ds-ingest..."
-	@ENV_PATHS="cmd/ds_ingest/pg.env" ./$(BIN_DIR)/ds-ingest
+	@ENV_PATHS="cmd/ds_ingest/.env,cmd/ds_ingest/pg.env" ./$(BIN_DIR)/ds-ingest
 
 # Run data ds-ingest with default config
 run-ds-ingest-es: build-ds-ingest
 	@echo "Running data ds-ingest..."
-	@ENV_PATHS="cmd/ds_ingest/es.env" ./$(BIN_DIR)/ds-ingest
+	@ENV_PATHS="cmd/ds_ingest/.env, cmd/ds_ingest/es.env" ./$(BIN_DIR)/ds-ingest
 
 run-search: build-news-api
 	@echo "Running news search service..."
