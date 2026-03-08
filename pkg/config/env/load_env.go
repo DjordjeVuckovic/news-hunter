@@ -19,6 +19,9 @@ func LoadDotEnv(env string, paths ...string) error {
 	}
 
 	decodedPaths := strings.Split(envPath, ",")
+	for i, path := range decodedPaths {
+		decodedPaths[i] = strings.TrimSpace(path)
+	}
 
 	err := godotenv.Load(append(decodedPaths, paths...)...)
 	if err != nil {

@@ -86,19 +86,19 @@ run-ds-ingest-pg: build-ds-ingest
 # Run data ds-ingest with default config
 run-ds-ingest-es: build-ds-ingest
 	@echo "Running data ds-ingest..."
-	@ENV_PATHS="cmd/ds_ingest/.env, cmd/ds_ingest/es.env" ./$(BIN_DIR)/ds-ingest
+	@ENV_PATHS="cmd/ds_ingest/.env,cmd/ds_ingest/es.env" ./$(BIN_DIR)/ds-ingest
 
-run-search: build-news-api
+run-api: build-news-api
 	@echo "Running news search service..."
 	@ENV_PATHS="cmd/news_api/.env" ./$(BIN_DIR)/news-api
 
-run-search-pg: build-news-api
+run-api-pg: build-news-api
 	@echo "Running news search service..."
-	@ENV_PATHS="cmd/news_api/pg.env" ./$(BIN_DIR)/news-api
+	@ENV_PATHS="cmd/news_api/.env,cmd/news_api/pg.env" ./$(BIN_DIR)/news-api
 
-run-search-es: build-news-api
+run-api-es: build-news-api
 	@echo "Running news search service..."
-	@ENV_PATHS="cmd/news_api/es.env" ./$(BIN_DIR)/news-api
+	@ENV_PATHS="cmd/news_api/.env,cmd/news_api/es.env" ./$(BIN_DIR)/news-api
 # Benchmark commands
 build-bench:
 	@echo "Building bench..."

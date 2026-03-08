@@ -1,11 +1,11 @@
-@host = http://localhost:8080
+@baseUrl = {{ baseUrl }}
 
 ### Simple query string search
-GET {{host}}/v1/articles/search?q=climate%20change&size=50
+GET {{baseUrl}}/v1/articles/search?q=climate%20change&size=50
 Accept: application/json
 
 ### Match - single field
-POST {{host}}/v1/articles/_search
+POST {{baseUrl}}/v1/articles/_search
 Content-Type: application/json
 
 {
@@ -14,14 +14,14 @@ Content-Type: application/json
     "match": {
       "field": "title",
       "query": "climate change",
-      "operator": "and",
+      "operator": "or",
       "language": "english"
     }
   }
 }
 
 ### Match - with fuzziness
-POST {{host}}/v1/articles/_search
+POST {{baseUrl}}/v1/articles/_search
 Content-Type: application/json
 
 {
@@ -36,7 +36,7 @@ Content-Type: application/json
 }
 
 ### Multi-match - multiple fields with weights
-POST {{host}}/v1/articles/_search
+POST {{baseUrl}}/v1/articles/_search
 Content-Type: application/json
 
 {
@@ -56,7 +56,7 @@ Content-Type: application/json
 }
 
 ### Phrase - exact phrase
-POST {{host}}/v1/articles/_search
+POST {{baseUrl}}/v1/articles/_search
 Content-Type: application/json
 
 {
@@ -71,7 +71,7 @@ Content-Type: application/json
 }
 
 ### Phrase - with slop
-POST {{host}}/v1/articles/_search
+POST {{baseUrl}}/v1/articles/_search
 Content-Type: application/json
 
 {
@@ -86,7 +86,7 @@ Content-Type: application/json
 }
 
 ### Boolean - simple AND
-POST {{host}}/v1/articles/_search
+POST {{baseUrl}}/v1/articles/_search
 Content-Type: application/json
 
 {
@@ -100,7 +100,7 @@ Content-Type: application/json
 }
 
 ### Boolean - OR with parentheses
-POST {{host}}/v1/articles/_search
+POST {{baseUrl}}/v1/articles/_search
 Content-Type: application/json
 
 {
@@ -113,7 +113,7 @@ Content-Type: application/json
 }
 
 ### Boolean - NOT exclusion
-POST {{host}}/v1/articles/_search
+POST {{baseUrl}}/v1/articles/_search
 Content-Type: application/json
 
 {
@@ -126,7 +126,7 @@ Content-Type: application/json
 }
 
 ### Boolean - complex nested
-POST {{host}}/v1/articles/_search
+POST {{baseUrl}}/v1/articles/_search
 Content-Type: application/json
 
 {
@@ -139,7 +139,7 @@ Content-Type: application/json
 }
 
 ### Boolean - quoted phrase within boolean
-POST {{host}}/v1/articles/_search
+POST {{baseUrl}}/v1/articles/_search
 Content-Type: application/json
 
 {
@@ -152,7 +152,7 @@ Content-Type: application/json
 }
 
 ### Boolean - invalid (empty parens, expect 400)
-POST {{host}}/v1/articles/_search
+POST {{baseUrl}}/v1/articles/_search
 Content-Type: application/json
 
 {
@@ -165,7 +165,7 @@ Content-Type: application/json
 }
 
 ### Boolean - invalid (unbalanced parens, expect 400)
-POST {{host}}/v1/articles/_search
+POST {{baseUrl}}/v1/articles/_search
 Content-Type: application/json
 
 {
