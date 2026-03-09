@@ -1,6 +1,7 @@
 name: "FTS Quality Benchmark v1"
 description: "Starter suite with ~10 queries across search paradigms for end-to-end verification"
 version: "1.0"
+judgments_file: configs/bench/trec/annotations_v1.yaml
 
 templates:
   - id: pg_fts_multi_field
@@ -56,6 +57,51 @@ templates:
       ) DESC
       LIMIT {{limit}}
 
+  # --- ParadeDB BM25 templates (pdb.* operators) ---
+  # pdb_multi_field: single Tantivy scan across all indexed fields via key_field
+  - id: pdb_multi_field
+    query: |
+      SELECT id FROM articles
+      WHERE id @@@ paradedb.parse('{{terms}}')
+      ORDER BY pdb.score(id) DESC
+      LIMIT {{limit}}
+
+  # pdb_multi_field_boosted: per-field boost, single BM25 scan
+  - id: pdb_multi_field_boosted
+    query: |
+      SELECT id FROM articles
+      WHERE id @@@ paradedb.boolean(
+        should => ARRAY[
+          paradedb.boost(3.0, paradedb.match('title', '{{terms}}')),
+          paradedb.boost(2.0, paradedb.match('description', '{{terms}}')),
+          paradedb.match('content', '{{terms}}')
+        ]
+      )
+      ORDER BY pdb.score(id) DESC
+      LIMIT {{limit}}
+
+  - id: pdb_single_field
+    query: |
+      SELECT id FROM articles
+      WHERE id @@@ paradedb.match('{{field}}', '{{terms}}')
+      ORDER BY pdb.score(id) DESC
+      LIMIT {{limit}}
+
+  # pdb_phrase: Lucene quoted phrase syntax, searches all indexed fields
+  - id: pdb_phrase
+    query: |
+      SELECT id FROM articles
+      WHERE id @@@ paradedb.parse('"{{terms}}"')
+      ORDER BY pdb.score(id) DESC
+      LIMIT {{limit}}
+
+  - id: pdb_phrase_slop
+    query: |
+      SELECT id FROM articles
+      WHERE id @@@ paradedb.parse('"{{terms}}"~{{slop}}')
+      ORDER BY pdb.score(id) DESC
+      LIMIT {{limit}}
+
   # --- Pre-computed search_vector (GIN-indexed) templates ---
   - id: pg_idx_multi_field
     query: |
@@ -90,11 +136,14 @@ queries:
   - id: qs-climate
     description: "Simple keyword search for climate change articles"
     engines:
-      pg-native:
+      pg-seq:
         template: pg_fts_multi_field
         params: { terms: "climate change", limit: 100 }
-      pg-indexed:
+      pg-gin:
         template: pg_idx_multi_field
+        params: { terms: "climate change", limit: 100 }
+      paradedb:
+        template: pdb_multi_field
         params: { terms: "climate change", limit: 100 }
       elasticsearch: |
         {
@@ -115,16 +164,18 @@ queries:
             "size": "100"
           }
         }
-    judgments: []
 
   - id: qs-election
     description: "Simple keyword search for election coverage"
     engines:
-      pg-native:
+      pg-seq:
         template: pg_fts_multi_field
         params: { terms: "presidential election results", limit: 100 }
-      pg-indexed:
+      pg-gin:
         template: pg_idx_multi_field
+        params: { terms: "presidential election results", limit: 100 }
+      paradedb:
+        template: pdb_multi_field
         params: { terms: "presidential election results", limit: 100 }
       elasticsearch: |
         {
@@ -136,18 +187,20 @@ queries:
           },
           "size": 100
         }
-    judgments: []
 
   # --- Single-field match ---
   - id: match-title-economy
     description: "Title-only search for economy articles"
     engines:
-      pg-native:
+      pg-seq:
         template: pg_fts_single_field
         params: { field: "title", tsquery_fn: "plainto_tsquery", terms: "economy recession", limit: 100 }
-      pg-indexed:
+      pg-gin:
         template: pg_idx_multi_field
         params: { terms: "economy recession", limit: 100 }
+      paradedb:
+        template: pdb_single_field
+        params: { field: "title", terms: "economy recession", limit: 100 }
       elasticsearch: |
         {
           "query": {
@@ -166,17 +219,19 @@ queries:
           "path": "/v1/articles/_search",
           "body": "{\"size\":100,\"query\":{\"match\":{\"field\":\"title\",\"query\":\"economy recession\",\"operator\":\"or\"}}}"
         }
-    judgments: []
 
   - id: match-content-ai
     description: "Content-field search for AI technology"
     engines:
-      pg-native:
+      pg-seq:
         template: pg_fts_single_field
         params: { field: "content", tsquery_fn: "phraseto_tsquery", terms: "artificial intelligence", limit: 100 }
-      pg-indexed:
+      pg-gin:
         template: pg_idx_phrase
         params: { terms: "artificial intelligence", limit: 100 }
+      paradedb:
+        template: pdb_single_field
+        params: { field: "content", terms: "artificial intelligence", limit: 100 }
       elasticsearch: |
         {
           "query": {
@@ -189,17 +244,19 @@ queries:
           },
           "size": 100
         }
-    judgments: []
 
   # --- Phrase matching ---
   - id: phrase-global-warming
     description: "Exact phrase search for 'global warming'"
     engines:
-      pg-native:
+      pg-seq:
         template: pg_fts_phrase
         params: { fields: "title || ' ' || coalesce(content,'')", terms: "global warming", limit: 100 }
-      pg-indexed:
+      pg-gin:
         template: pg_idx_phrase
+        params: { terms: "global warming", limit: 100 }
+      paradedb:
+        template: pdb_phrase
         params: { terms: "global warming", limit: 100 }
       elasticsearch: |
         {
@@ -212,17 +269,19 @@ queries:
           },
           "size": 100
         }
-    judgments: []
 
   - id: phrase-trade-war-slop
     description: "Phrase search with slop for 'trade war'"
     engines:
-      pg-native:
+      pg-seq:
         template: pg_fts_phrase
         params: { fields: "title || ' ' || coalesce(description,'')", terms: "trade war", limit: 100 }
-      pg-indexed:
+      pg-gin:
         template: pg_idx_phrase
         params: { terms: "trade war", limit: 100 }
+      paradedb:
+        template: pdb_phrase_slop
+        params: { terms: "trade war", slop: 2, limit: 100 }
       elasticsearch: |
         {
           "query": {
@@ -235,18 +294,25 @@ queries:
           },
           "size": 100
         }
-    judgments: []
 
   # --- Boolean / structured ---
   - id: bool-climate-not-politics
     description: "Boolean: climate articles excluding politics"
     engines:
-      pg-native:
+      pg-seq:
         template: pg_fts_boolean
         params: { fields: "title || ' ' || coalesce(content,'')", tsquery_expr: "climate & !politics", limit: 100 }
-      pg-indexed:
+      pg-gin:
         template: pg_idx_boolean
         params: { tsquery_expr: "climate & !politics", limit: 100 }
+      paradedb: |
+        SELECT id FROM articles
+        WHERE id @@@ paradedb.boolean(
+          must => ARRAY[paradedb.match('title', 'climate')],
+          must_not => ARRAY[paradedb.match('title', 'politics')]
+        )
+        ORDER BY pdb.score(id) DESC
+        LIMIT 100
       elasticsearch: |
         {
           "query": {
@@ -261,17 +327,29 @@ queries:
           },
           "size": 100
         }
-    judgments: []
 
   - id: bool-complex
     description: "Boolean: (technology OR science) AND innovation"
     engines:
-      pg-native:
+      pg-seq:
         template: pg_fts_boolean
         params: { fields: "title || ' ' || coalesce(content,'')", tsquery_expr: "(technology | science) & innovation", limit: 100 }
-      pg-indexed:
+      pg-gin:
         template: pg_idx_boolean
         params: { tsquery_expr: "(technology | science) & innovation", limit: 100 }
+      paradedb: |
+        SELECT id FROM articles
+        WHERE id @@@ paradedb.boolean(
+          must => ARRAY[
+            paradedb.boolean(should => ARRAY[
+              paradedb.match('title', 'technology'),
+              paradedb.match('title', 'science')
+            ]),
+            paradedb.match('title', 'innovation')
+          ]
+        )
+        ORDER BY pdb.score(id) DESC
+        LIMIT 100
       elasticsearch: |
         {
           "query": {
@@ -292,17 +370,19 @@ queries:
           },
           "size": 100
         }
-    judgments: []
 
   # --- Multi-field with boosting ---
   - id: mm-renewable-energy
     description: "Multi-field search for renewable energy with title boost"
     engines:
-      pg-native:
+      pg-seq:
         template: pg_fts_weighted
         params: { terms: "renewable energy solar", limit: 100 }
-      pg-indexed:
+      pg-gin:
         template: pg_idx_weighted
+        params: { terms: "renewable energy solar", limit: 100 }
+      paradedb:
+        template: pdb_multi_field_boosted
         params: { terms: "renewable energy solar", limit: 100 }
       elasticsearch: |
         {
@@ -314,16 +394,18 @@ queries:
           },
           "size": 100
         }
-    judgments: []
 
   - id: mm-tech-innovation
     description: "Multi-field search for technology innovation"
     engines:
-      pg-native:
+      pg-seq:
         template: pg_fts_weighted
         params: { terms: "technology innovation startup", limit: 100 }
-      pg-indexed:
+      pg-gin:
         template: pg_idx_weighted
+        params: { terms: "technology innovation startup", limit: 100 }
+      paradedb:
+        template: pdb_multi_field_boosted
         params: { terms: "technology innovation startup", limit: 100 }
       elasticsearch: |
         {
@@ -335,4 +417,3 @@ queries:
           },
           "size": 100
         }
-    judgments: []

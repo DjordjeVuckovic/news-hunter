@@ -15,16 +15,31 @@ func WriteTable(r *Report, w io.Writer) {
 
 	for _, jr := range r.Jobs {
 		fmt.Fprintf(tw, "\n--- Job: %s ---\n\n", jr.JobName)
-		writeAggregatedTable(tw, &jr, r.Config.KValues)
-		writeLatencyTable(tw, &jr)
-		writePerQueryTable(tw, &jr, r.Config.KValues)
+		if !hasAnyJudgments(&jr) {
+			fmt.Fprintf(tw, "WARNING: No relevance judgments found. Showing latency only.\n")
+			fmt.Fprintf(tw, "         Run pool mode first, annotate, then merge judgments into the suite.\n\n")
+			writeLatencyTable(tw, &jr)
+		} else {
+			writeAggregatedTable(tw, &jr, r.Config.KValues)
+			writeLatencyTable(tw, &jr)
+			writePerQueryTable(tw, &jr, r.Config.KValues)
+		}
 	}
 
 	tw.Flush()
 }
 
+func hasAnyJudgments(jr *JobReport) bool {
+	for _, e := range jr.PerQuery {
+		if e.Judged {
+			return true
+		}
+	}
+	return false
+}
+
 func writeAggregatedTable(tw *tabwriter.Writer, jr *JobReport, kValues []int) {
-	fmt.Fprintf(tw, "Aggregated Results (mean across %d queries)\n\n", countQueries(jr))
+	fmt.Fprintf(tw, "Aggregated Results (mean across judged queries)\n\n")
 
 	header := []string{"Engine"}
 	for _, k := range kValues {
@@ -33,7 +48,7 @@ func writeAggregatedTable(tw *tabwriter.Writer, jr *JobReport, kValues []int) {
 	for _, k := range kValues {
 		header = append(header, fmt.Sprintf("P@%d", k))
 	}
-	header = append(header, "MAP", "MRR", "Errors")
+	header = append(header, "MAP", "MRR", "Bpref", "Judged", "Errors")
 	fmt.Fprintln(tw, strings.Join(header, "\t"))
 
 	sep := make([]string, len(header))
@@ -44,15 +59,26 @@ func writeAggregatedTable(tw *tabwriter.Writer, jr *JobReport, kValues []int) {
 
 	for _, agg := range jr.Aggregated {
 		row := []string{agg.EngineName}
-		for _, k := range kValues {
-			row = append(row, fmt.Sprintf("%.4f", agg.NDCG[k]))
-		}
-		for _, k := range kValues {
-			row = append(row, fmt.Sprintf("%.4f", agg.Precision[k]))
+		if agg.JudgedCount > 0 {
+			for _, k := range kValues {
+				row = append(row, fmt.Sprintf("%.4f", agg.NDCG[k]))
+			}
+			for _, k := range kValues {
+				row = append(row, fmt.Sprintf("%.4f", agg.Precision[k]))
+			}
+			row = append(row,
+				fmt.Sprintf("%.4f", agg.MAP),
+				fmt.Sprintf("%.4f", agg.MRR),
+				fmt.Sprintf("%.4f", agg.MBpref),
+			)
+		} else {
+			naCount := len(kValues)*2 + 3
+			for i := 0; i < naCount; i++ {
+				row = append(row, "N/A")
+			}
 		}
 		row = append(row,
-			fmt.Sprintf("%.4f", agg.MAP),
-			fmt.Sprintf("%.4f", agg.MRR),
+			fmt.Sprintf("%d/%d", agg.JudgedCount, agg.QueryCount),
 			fmt.Sprintf("%d/%d", agg.ErrorCount, agg.QueryCount),
 		)
 		fmt.Fprintln(tw, strings.Join(row, "\t"))
@@ -99,7 +125,7 @@ func writePerQueryTable(tw *tabwriter.Writer, jr *JobReport, kValues []int) {
 
 	k := primaryK(kValues)
 
-	header := []string{"Query", "Engine", fmt.Sprintf("NDCG@%d", k), fmt.Sprintf("P@%d", k), "AP", "RR", "Hits", "p50", "p95", "Status"}
+	header := []string{"Query", "Engine", fmt.Sprintf("NDCG@%d", k), fmt.Sprintf("P@%d", k), "AP", "RR", "Bpref", "Hits", "p50", "p95", "Status"}
 	fmt.Fprintln(tw, strings.Join(header, "\t"))
 
 	sep := make([]string, len(header))
@@ -113,13 +139,22 @@ func writePerQueryTable(tw *tabwriter.Writer, jr *JobReport, kValues []int) {
 		if e.Error != "" {
 			status = "ERR"
 		}
+
+		apStr, rrStr, bprefStr := "N/A", "N/A", "N/A"
+		if e.Judged {
+			apStr = fmt.Sprintf("%.4f", e.AP)
+			rrStr = fmt.Sprintf("%.4f", e.RR)
+			bprefStr = fmt.Sprintf("%.4f", e.Bpref)
+		}
+
 		row := []string{
 			e.QueryID,
 			e.EngineName,
 			fmtScore(e.NDCG, k),
 			fmtScore(e.Precision, k),
-			fmt.Sprintf("%.4f", e.AP),
-			fmt.Sprintf("%.4f", e.RR),
+			apStr,
+			rrStr,
+			bprefStr,
 			fmt.Sprintf("%d", e.TotalMatches),
 			fmtDuration(e.Latency.P50()),
 			fmtDuration(e.Latency.P95()),
@@ -136,13 +171,6 @@ func primaryK(kValues []int) int {
 		return kValues[len(kValues)-1]
 	}
 	return 10
-}
-
-func countQueries(jr *JobReport) int {
-	if len(jr.Aggregated) == 0 {
-		return 0
-	}
-	return jr.Aggregated[0].QueryCount
 }
 
 func fmtScore(scores map[int]float64, k int) string {

@@ -71,12 +71,14 @@ func generateJobReport(jr *runner.JobResult, kValues []int) JobReport {
 				QueryID:      qr.QueryID,
 				JobName:      qr.JobName,
 				EngineName:   qr.EngineName,
+				Judged:       qr.Scores.Judged,
 				NDCG:         qr.Scores.NDCG,
 				Precision:    qr.Scores.Precision,
 				Recall:       qr.Scores.Recall,
 				F1:           qr.Scores.F1,
 				AP:           qr.Scores.AP,
 				RR:           qr.Scores.RR,
+				Bpref:        qr.Scores.Bpref,
 				TotalMatches: qr.TotalMatches,
 				Latency:      fromRunnerLatencyStats(qr.Latency),
 			}
@@ -104,7 +106,6 @@ func aggregate(jr *runner.JobResult, kValues []int) []AggregatedEntry {
 		}
 
 		var allStats []runner.LatencyStats
-		counted := 0
 
 		for _, qID := range jr.QueryOrder {
 			qr, ok := jr.Results[qID][engName]
@@ -118,10 +119,16 @@ func aggregate(jr *runner.JobResult, kValues []int) []AggregatedEntry {
 				continue
 			}
 
-			counted++
+			allStats = append(allStats, qr.Latency)
+
+			if !qr.Scores.Judged {
+				continue
+			}
+
+			agg.JudgedCount++
 			agg.MAP += qr.Scores.AP
 			agg.MRR += qr.Scores.RR
-			allStats = append(allStats, qr.Latency)
+			agg.MBpref += qr.Scores.Bpref
 
 			for _, k := range kValues {
 				agg.NDCG[k] += qr.Scores.NDCG[k]
@@ -131,10 +138,16 @@ func aggregate(jr *runner.JobResult, kValues []int) []AggregatedEntry {
 			}
 		}
 
-		if counted > 0 {
-			n := float64(counted)
+		if len(allStats) > 0 {
+			aggregatedStats := runner.AggregateLatencyStats(allStats)
+			agg.Latency = fromRunnerLatencyStats(aggregatedStats)
+		}
+
+		if agg.JudgedCount > 0 {
+			n := float64(agg.JudgedCount)
 			agg.MAP /= n
 			agg.MRR /= n
+			agg.MBpref /= n
 
 			for _, k := range kValues {
 				agg.NDCG[k] /= n
@@ -142,9 +155,6 @@ func aggregate(jr *runner.JobResult, kValues []int) []AggregatedEntry {
 				agg.Recall[k] /= n
 				agg.F1[k] /= n
 			}
-
-			aggregatedStats := runner.AggregateLatencyStats(allStats)
-			agg.Latency = fromRunnerLatencyStats(aggregatedStats)
 		}
 
 		entries = append(entries, agg)

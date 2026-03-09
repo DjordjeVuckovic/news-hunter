@@ -8,18 +8,19 @@ import (
 )
 
 type cliConfig struct {
-	SpecPath    string
-	SuitePath   string
-	PgConnStr   string
-	EsAddresses string
-	EsIndex     string
-	KValues     string
-	MaxK        int
-	Warmup      int
-	Runs        int
-	Output      string
-	Mode        string
-	PoolPath    string
+	SpecPath      string
+	SuitePath     string
+	PgConnStr     string
+	EsAddresses   string
+	EsIndex       string
+	KValues       string
+	MaxK          int
+	Warmup        int
+	Runs          int
+	Output        string
+	Mode          string
+	PoolPath      string
+	JudgmentsPath string
 }
 
 func parseFlags() cliConfig {
@@ -35,8 +36,9 @@ func parseFlags() cliConfig {
 	flag.IntVar(&cfg.Warmup, "warmup", 0, "Number of warmup runs before measurement")
 	flag.IntVar(&cfg.Runs, "runs", 1, "Number of measured iterations (median latency used)")
 	flag.StringVar(&cfg.Output, "output", "", "Output path for results (JSON file or pool YAML)")
-	flag.StringVar(&cfg.Mode, "mode", "bench", "Run mode: bench, pool, or judge")
+	flag.StringVar(&cfg.Mode, "mode", "bench", "Run mode: bench, pool, judge, qrels")
 	flag.StringVar(&cfg.PoolPath, "pool", "", "Path to pool file (for judge mode)")
+	flag.StringVar(&cfg.JudgmentsPath, "judgments", "", "Path to annotations YAML (for qrels mode)")
 
 	flag.Parse()
 	return cfg

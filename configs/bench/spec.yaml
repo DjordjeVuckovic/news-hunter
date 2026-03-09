@@ -1,8 +1,8 @@
 engines:
-  pg-native:
+  pg-seq:
     type: postgres
     connection: "postgresql://news_user:news_password@localhost:54320/news_db"
-  pg-indexed:
+  pg-gin:
     type: postgres
     connection: "postgresql://news_user:news_password@localhost:54320/news_db"
   paradedb:
@@ -11,29 +11,33 @@ engines:
   elasticsearch:
     type: elasticsearch
     connection: "http://localhost:9200"
-    index: news
+    index: articles
   api:
     type: api
     connection: "http://localhost:8080"
 
-metrics:
-  k_values: [3, 5, 10]
-  max_k: 100
-  relevance_threshold: 1
+#metrics:
+#  k_values: [3, 5, 10]
+#  max_k: 100
+#  relevance_threshold: 1
 
 runs:
   warmup: 1
-  iterations: 3
+  iterations: 1
 
 jobs:
-  - name: "pg-onthefly-vs-indexed"
+#  - name: "pg-seq-vs-gin"
+#    suite: configs/bench/fts_quality_v1.yaml
+#    engines: [pg-seq, pg-gin]
+
+  - name: "pg-gin-vs-paradedb-vs-es"
     suite: configs/bench/fts_quality_v1.yaml
-    engines: [pg-native, pg-indexed]
+    engines: [pg-gin, paradedb, elasticsearch]
 
   - name: "all-engines"
     suite: configs/bench/fts_quality_v1.yaml
-    engines: [pg-native, pg-indexed, elasticsearch]
+    engines: [pg-seq, pg-gin, paradedb, elasticsearch]
 
-  - name: "api-layer"
-    suite: configs/bench/fts_quality_v1.yaml
-    engines: [api]
+#  - name: "api-layer"
+#    suite: configs/bench/fts_quality_v1.yaml
+#    engines: [api]

@@ -24,6 +24,8 @@ func main() {
 		runPool(ctx, cfg)
 	case "judge":
 		runJudge(cfg)
+	case "qrels":
+		runQrels(cfg)
 	default:
 		slog.Error("Unknown mode", "mode", cfg.Mode)
 		os.Exit(1)
@@ -102,9 +104,9 @@ func runQuickMode(ctx context.Context, cfg cliConfig, runCfg runner.Config) {
 	var engineNames []string
 
 	if cfg.PgConnStr != "" {
-		engines["pg-native"] = spec.Engine{Type: "postgres", Connection: cfg.PgConnStr}
-		engines["pg-indexed"] = spec.Engine{Type: "postgres", Connection: cfg.PgConnStr}
-		engineNames = append(engineNames, "pg-native", "pg-indexed")
+		engines["pg-seq"] = spec.Engine{Type: "postgres", Connection: cfg.PgConnStr}
+		engines["pg-gin"] = spec.Engine{Type: "postgres", Connection: cfg.PgConnStr}
+		engineNames = append(engineNames, "pg-seq", "pg-gin")
 	}
 	if cfg.EsAddresses != "" {
 		engines["elasticsearch"] = spec.Engine{Type: "elasticsearch", Connection: cfg.EsAddresses, Index: cfg.EsIndex}
@@ -253,14 +255,37 @@ func runJudge(cfg cliConfig) {
 	slog.Info("Annotation template written", "path", cfg.Output)
 }
 
+func runQrels(cfg cliConfig) {
+	if cfg.JudgmentsPath == "" {
+		slog.Error("Qrels mode requires --judgments")
+		os.Exit(1)
+	}
+	if cfg.Output == "" {
+		slog.Error("Qrels mode requires --output")
+		os.Exit(1)
+	}
+
+	jf, err := judgment.ImportAnnotations(cfg.JudgmentsPath)
+	if err != nil {
+		slog.Error("Failed to read judgments", "error", err)
+		os.Exit(1)
+	}
+
+	if err := judgment.WriteQrels(jf, cfg.Output); err != nil {
+		slog.Error("Failed to write qrels", "error", err)
+		os.Exit(1)
+	}
+	slog.Info("TREC qrels written", "path", cfg.Output)
+}
+
 func buildQuickSpec(cfg cliConfig) *spec.BenchSpec {
 	engines := make(map[string]spec.Engine)
 	var engineNames []string
 
 	if cfg.PgConnStr != "" {
-		engines["pg-native"] = spec.Engine{Type: "postgres", Connection: cfg.PgConnStr}
-		engines["pg-indexed"] = spec.Engine{Type: "postgres", Connection: cfg.PgConnStr}
-		engineNames = append(engineNames, "pg-native", "pg-indexed")
+		engines["pg-seq"] = spec.Engine{Type: "postgres", Connection: cfg.PgConnStr}
+		engines["pg-gin"] = spec.Engine{Type: "postgres", Connection: cfg.PgConnStr}
+		engineNames = append(engineNames, "pg-seq", "pg-gin")
 	}
 	if cfg.EsAddresses != "" {
 		engines["elasticsearch"] = spec.Engine{Type: "elasticsearch", Connection: cfg.EsAddresses, Index: cfg.EsIndex}

@@ -64,28 +64,32 @@ type Entry struct {
 	QueryID      string
 	JobName      string
 	EngineName   string
+	Judged       bool
 	NDCG         map[int]float64
 	Precision    map[int]float64
 	Recall       map[int]float64
 	F1           map[int]float64
 	AP           float64
 	RR           float64
+	Bpref        float64
 	TotalMatches int64
 	Latency      LatencyStats
 	Error        string
 }
 
 type AggregatedEntry struct {
-	EngineName string
-	NDCG       map[int]float64
-	Precision  map[int]float64
-	Recall     map[int]float64
-	F1         map[int]float64
-	MAP        float64
-	MRR        float64
-	Latency    LatencyStats
-	QueryCount int
-	ErrorCount int
+	EngineName  string
+	NDCG        map[int]float64
+	Precision   map[int]float64
+	Recall      map[int]float64
+	F1          map[int]float64
+	MAP         float64
+	MRR         float64
+	MBpref      float64
+	Latency     LatencyStats
+	QueryCount  int
+	JudgedCount int
+	ErrorCount  int
 }
 
 type LatencyStats struct {
