@@ -48,11 +48,22 @@ type BatchStrategy interface {
 
 type StrategyKind string
 
+// Strategy taxonomy. Heuristic strategies derive grades from algorithmic
+// signals; LLM strategies call out to a model; manual is a placeholder for
+// human grading.
 const (
-	StrategyKeyword   StrategyKind = "keyword"
+	// Heuristic.
+	StrategyLexical StrategyKind = "lexical" // token-overlap baseline
+	StrategyBM25    StrategyKind = "bm25"    // reserved (not implemented)
+	StrategyVector  StrategyKind = "vector"  // reserved (not implemented)
+	StrategyHybrid  StrategyKind = "hybrid"  // reserved (not implemented)
+
+	// LLM.
 	StrategyClaudeCLI StrategyKind = "claude-cli"
 	StrategyClaudeAPI StrategyKind = "claude-api"
-	StrategyStub      StrategyKind = "stub"
+
+	// Human.
+	StrategyManual StrategyKind = "manual"
 )
 
 type StrategyOptions struct {
@@ -65,15 +76,17 @@ type StrategyOptions struct {
 
 func NewStrategy(kind StrategyKind, opts StrategyOptions) (Strategy, error) {
 	switch kind {
-	case StrategyKeyword:
-		return NewKeywordStrategy(), nil
+	case StrategyLexical:
+		return NewLexicalStrategy(), nil
 	case StrategyClaudeCLI:
 		return NewClaudeCLIStrategy(opts), nil
 	case StrategyClaudeAPI:
 		return NewClaudeAPIStrategy(opts)
-	case StrategyStub:
-		return NewStubStrategy(), nil
+	case StrategyManual:
+		return NewManualStrategy(), nil
+	case StrategyBM25, StrategyVector, StrategyHybrid:
+		return nil, fmt.Errorf("strategy %q is reserved but not yet implemented", kind)
 	default:
-		return nil, fmt.Errorf("unknown strategy %q", kind)
+		return nil, fmt.Errorf("unknown strategy %q (known: lexical, claude-cli, claude-api, manual)", kind)
 	}
 }

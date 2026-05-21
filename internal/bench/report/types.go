@@ -4,14 +4,25 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/DjordjeVuckovic/news-hunter/internal/bench/meta"
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/runner"
 )
 
+// metaAlias keeps report.Report's embedded provenance distinct from the
+// existing BenchMeta type while sharing the meta.Meta schema across artifacts.
+type metaAlias = meta.Meta
+
 type Report struct {
-	Meta   BenchMeta    `json:"meta"`
-	Jobs   []JobReport  `json:"jobs"`
-	Config ReportConfig `json:"config"`
+	SchemaVersion int            `json:"schema_version"`
+	Provenance    provenanceMeta `json:"provenance"`
+	Meta          BenchMeta      `json:"meta"`
+	Jobs          []JobReport    `json:"jobs"`
+	Config        ReportConfig   `json:"config"`
 }
+
+// provenanceMeta wraps meta.Meta to keep the existing BenchMeta type untouched
+// while still embedding the standard run-id/tool/timestamp block.
+type provenanceMeta = metaAlias
 
 type BenchMeta struct {
 	Version     string                `json:"version"`

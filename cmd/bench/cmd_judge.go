@@ -5,7 +5,9 @@ import (
 	"strings"
 
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/judgment"
+	"github.com/DjordjeVuckovic/news-hunter/internal/bench/meta"
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/pool"
+	"github.com/DjordjeVuckovic/news-hunter/internal/bench/trackctx"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage/factory"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage/pg"
@@ -13,6 +15,7 @@ import (
 )
 
 type judgeFlags struct {
+	trackArg    string
 	poolPath    string
 	output      string
 	strategy    string
@@ -29,62 +32,82 @@ type judgeFlags struct {
 func newJudgeCmd() *cobra.Command {
 	var f judgeFlags
 	cmd := &cobra.Command{
-		Use:   "judge",
+		Use:   "judge [track]",
 		Short: "Grade a pool file with the chosen strategy",
-		Long: `Grades every (query, doc) pair in a pool file using one of:
+		Long: `Grades every (query, doc) pair in the track's pool using one of:
 
-  keyword     — deterministic token-overlap baseline (no network, no LLM)
+  lexical     — deterministic token-overlap baseline (no network, no LLM)
   claude-cli  — invokes 'claude -p' per batch (Anthropic LLM-as-judge batched)
   claude-api  — Anthropic Messages API in batches (set ANTHROPIC_API_KEY)
-  stub        — writes grade:-1 placeholders for manual human filling
+  manual      — writes grade:-1 placeholders for hand grading
 
-Articles are fetched in batch per query and never leave memory — no large
-intermediate "enriched pool" file is produced.
+Reserved (not implemented): bm25, vector, hybrid
 
-LLM strategies grade N candidates per call (Anthropic's "judge N candidates"
-cookbook pattern) so wall-clock time drops ~10x vs one-by-one. Partial batch
-responses are auto-retried per-doc.
+Output goes to tracks/<name>/trec/annotations.<strategy>.yaml by default.
+Multiple strategies live side-by-side; switch which one bench run scores
+against via --judgments <name>.
 
-The judge is resumable: re-running with the same --output appends to the
-existing file, skipping (query_id, doc_id) pairs already graded. Output is
-written atomically after every query — safe to Ctrl-C.`,
-		Example: `  bench judge --pool pool_v1.yaml --strategy keyword --output annotations_kw.yaml
-  bench judge --pool pool_v1.yaml --strategy claude-api --batch 20 --output annotations_llm.yaml
-  bench judge --pool pool_v1.yaml --strategy claude-api --output annotations_llm.yaml --resume`,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			return executeJudge(cmd, f)
+Resumable: re-run with the same --strategy and --resume to skip docs already
+graded. Atomic writes mean Ctrl-C is safe.`,
+		Example: `  bench judge fts_quality --strategy lexical
+  bench judge fts_quality --strategy claude-api --batch 20 --resume
+  bench judge --pool /tmp/p.yaml --strategy lexical --output /tmp/a.yaml`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return executeJudge(cmd, f, args)
 		},
 	}
-	cmd.Flags().StringVar(&f.poolPath, "pool", "", "Path to pool YAML (required)")
-	cmd.Flags().StringVar(&f.output, "output", "", "Output judgment YAML path (required)")
-	cmd.Flags().StringVar(&f.strategy, "strategy", string(judgment.StrategyKeyword), "Judge strategy: keyword | claude-cli | claude-api | stub")
-	cmd.Flags().StringVar(&f.pg, "pg", "", "Postgres connection string (or set PG_CONNECTION_STRING)")
-	cmd.Flags().IntVar(&f.concurrency, "concurrency", 4, "Parallel Grade calls for per-doc strategies (1-32)")
-	cmd.Flags().IntVar(&f.batchSize, "batch", 0, "Override LLM batch size (0 = strategy default: api=20, cli=10)")
-	cmd.Flags().BoolVar(&f.resume, "resume", false, "Resume from existing --output file, skip already-graded docs")
-	cmd.Flags().StringVar(&f.apiKey, "api-key", "", "Anthropic API key for claude-api (or set ANTHROPIC_API_KEY)")
-	cmd.Flags().StringVar(&f.apiModel, "api-model", "", "Anthropic model id (default: haiku-4.5)")
-	cmd.Flags().StringVar(&f.apiBaseURL, "api-base", "", "Anthropic API base URL (advanced)")
-	cmd.Flags().StringVar(&f.cliBinary, "cli-binary", "", "claude CLI binary path (default: claude)")
-	_ = cmd.MarkFlagRequired("pool")
-	_ = cmd.MarkFlagRequired("output")
+	cmd.Flags().StringVar(&f.trackArg, "track", "", "Track name or path")
+	cmd.Flags().StringVar(&f.poolPath, "pool", "", "Override pool YAML path")
+	cmd.Flags().StringVar(&f.output, "output", "", "Override annotations output path")
+	cmd.Flags().StringVar(&f.strategy, "strategy", string(judgment.StrategyLexical), "Judge strategy")
+	cmd.Flags().StringVar(&f.pg, "pg", "", "Postgres connection (or set PG_CONNECTION_STRING)")
+	cmd.Flags().IntVar(&f.concurrency, "concurrency", 4, "Parallel Grade calls (per-doc strategies)")
+	cmd.Flags().IntVar(&f.batchSize, "batch", 0, "Override LLM batch size (0 = strategy default)")
+	cmd.Flags().BoolVar(&f.resume, "resume", false, "Skip docs already graded in --output")
+	cmd.Flags().StringVar(&f.apiKey, "api-key", "", "Anthropic API key (or set ANTHROPIC_API_KEY)")
+	cmd.Flags().StringVar(&f.apiModel, "api-model", "", "Anthropic model id")
+	cmd.Flags().StringVar(&f.apiBaseURL, "api-base", "", "Anthropic API base URL")
+	cmd.Flags().StringVar(&f.cliBinary, "cli-binary", "", "claude CLI binary path")
 	return cmd
 }
 
-func executeJudge(cmd *cobra.Command, f judgeFlags) error {
-	pf, err := pool.ReadPoolFile(f.poolPath)
+func executeJudge(cmd *cobra.Command, f judgeFlags, args []string) error {
+	tr, err := trackctx.Resolve(trackctx.Inputs{
+		TrackArg:   trackArg(f.trackArg, args),
+		PoolPath:   f.poolPath,
+		OutputPath: f.output,
+	})
+	if err != nil {
+		return err
+	}
+
+	poolPath := f.poolPath
+	if poolPath == "" {
+		poolPath = tr.Pool
+	}
+	pf, err := pool.ReadPoolFile(poolPath)
 	if err != nil {
 		return fmt.Errorf("read pool: %w", err)
 	}
 
 	kind := judgment.StrategyKind(f.strategy)
+	outPath := f.output
+	if outPath == "" {
+		outPath = tr.JudgmentsPath(string(kind))
+	}
 
-	if kind == judgment.StrategyStub {
-		jf := buildStubJudgments(pf)
-		if err := judgment.WriteFile(jf, f.output); err != nil {
+	// Stub-equivalent shortcut: manual strategy doesn't need PG or any
+	// network. Just emit grade:-1 placeholders so a human can edit.
+	if kind == judgment.StrategyManual {
+		jf := buildManualJudgments(pf)
+		jf.Meta = meta.New("judge")
+		jf.Meta.Strategy = string(kind)
+		jf.Meta.PoolRef = poolPath
+		if err := judgment.WriteFile(jf, outPath); err != nil {
 			return fmt.Errorf("write judgments: %w", err)
 		}
-		cmd.Printf("Stub judgments written: %s (queries=%d)\n", f.output, len(jf.Queries))
+		cmd.Printf("Manual template written: %s (queries=%d)\n", outPath, len(jf.Queries))
 		return nil
 	}
 
@@ -99,27 +122,24 @@ func executeJudge(cmd *cobra.Command, f judgeFlags) error {
 		return err
 	}
 
-	conn := envOrFlag("PG_CONNECTION_STRING", f.pg)
-	if conn == "" {
-		return fmt.Errorf("judge requires --pg or PG_CONNECTION_STRING for article enrichment")
-	}
-	reader, err := factory.NewReader(cmd.Context(), factory.StorageConfig{
-		Type: storage.PG,
-		Pg:   &pg.PoolConfig{ConnStr: conn},
-	})
+	reader, err := openArticleReader(cmd, f.pg)
 	if err != nil {
-		return fmt.Errorf("create reader: %w", err)
+		return err
 	}
 
-	writer := judgment.NewIncrementalWriter(f.output, strat.Name())
+	writer := judgment.NewIncrementalWriter(outPath, strat.Name())
 	var prior *judgment.JudgmentFile
 	if f.resume {
 		prior, err = writer.LoadPrior()
 		if err != nil {
 			return fmt.Errorf("load prior judgments: %w", err)
 		}
+		if prior != nil && prior.Strategy != "" && prior.Strategy != strat.Name() {
+			return fmt.Errorf("--resume strategy mismatch: existing file is %q, --strategy is %q",
+				prior.Strategy, strat.Name())
+		}
 		if prior != nil {
-			cmd.Printf("Resume: loaded %d prior queries from %s\n", len(prior.Queries), f.output)
+			cmd.Printf("Resume: loaded %d prior queries from %s\n", len(prior.Queries), outPath)
 		}
 	}
 
@@ -132,7 +152,7 @@ func executeJudge(cmd *cobra.Command, f judgeFlags) error {
 		Sink:        writer.Append,
 		OnQueryStart: func(qid string, total, skipped int) {
 			if skipped > 0 {
-				cmd.Printf("[%s] grading %d docs (%d already done, skipping)\n", qid, total-skipped, skipped)
+				cmd.Printf("[%s] grading %d docs (%d already done)\n", qid, total-skipped, skipped)
 			} else {
 				cmd.Printf("[%s] grading %d docs\n", qid, total)
 			}
@@ -151,14 +171,43 @@ func executeJudge(cmd *cobra.Command, f judgeFlags) error {
 		return fmt.Errorf("judge run: %w", err)
 	}
 
+	// Final write with completed meta block.
 	final := writer.Snapshot()
-	cmd.Printf("Judgments written: %s (strategy=%s, queries=%d)\n", f.output, final.Strategy, len(final.Queries))
+	final.Meta = meta.New("judge")
+	final.Meta.Strategy = strat.Name()
+	final.Meta.PoolRef = poolPath
+	final.Meta.JudgeModel = f.apiModel
+	final.Meta.RelevanceScale = []int{0, 1, 2, 3}
+	final.Meta.GradedCount = countGraded(final)
+	if err := judgment.WriteFile(final, outPath); err != nil {
+		return fmt.Errorf("finalise judgments: %w", err)
+	}
+
+	cmd.Printf("Judgments written: %s (strategy=%s, queries=%d, run_id=%s)\n",
+		outPath, final.Strategy, len(final.Queries), final.Meta.RunID)
 	return nil
 }
 
-func buildStubJudgments(pf *pool.PoolFile) *judgment.JudgmentFile {
+// openArticleReader creates a PG reader for article enrichment. Centralised so
+// the no-key-needed case (manual strategy) can skip it cleanly.
+func openArticleReader(cmd *cobra.Command, pgConn string) (storage.Reader, error) {
+	conn := envOrFlag("PG_CONNECTION_STRING", pgConn)
+	if conn == "" {
+		return nil, fmt.Errorf("judge requires --pg or PG_CONNECTION_STRING for article enrichment")
+	}
+	reader, err := factory.NewReader(cmd.Context(), factory.StorageConfig{
+		Type: storage.PG,
+		Pg:   &pg.PoolConfig{ConnStr: conn},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create reader: %w", err)
+	}
+	return reader, nil
+}
+
+func buildManualJudgments(pf *pool.PoolFile) *judgment.JudgmentFile {
 	jf := &judgment.JudgmentFile{
-		Strategy: string(judgment.StrategyStub),
+		Strategy: string(judgment.StrategyManual),
 		Queries:  make([]judgment.JudgmentEntry, 0, len(pf.Queries)),
 	}
 	for _, entry := range pf.Queries {
@@ -169,6 +218,18 @@ func buildStubJudgments(pf *pool.PoolFile) *judgment.JudgmentFile {
 		jf.Queries = append(jf.Queries, judgment.JudgmentEntry{QueryID: entry.QueryID, Docs: docs})
 	}
 	return jf
+}
+
+func countGraded(jf *judgment.JudgmentFile) int {
+	n := 0
+	for _, qe := range jf.Queries {
+		for _, d := range qe.Docs {
+			if d.Grade >= 0 {
+				n++
+			}
+		}
+	}
+	return n
 }
 
 func formatHistogram(h map[int]int) string {

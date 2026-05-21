@@ -11,7 +11,7 @@ GOOS ?= $(shell go env GOOS)
 GOARCH ?= $(shell go env GOARCH)
 
 # Build commands
-.PHONY: build build-all clean test fmt vet schema-gen build-bench bench-validate bench-run bench-pool bench-judge-keyword bench-judge-cli bench-judge-api bench-qrels bench-show-pool bench-show-judgments
+.PHONY: build build-all clean test fmt vet schema-gen build-bench bench-validate bench-run bench-pool bench-judge-lexical bench-judge-cli bench-judge-api bench-qrels bench-show-spec bench-show-pool bench-show-judgments
 
 migrate-up:
 	@echo "Running database migrations up..."
@@ -105,39 +105,37 @@ build-bench:
 	@mkdir -p $(BIN_DIR)
 	@go build -o $(BIN_DIR)/bench $(CMD_DIR)/bench
 
-SPEC      ?= configs/bench/spec.yaml
-SUITE     ?= configs/bench/fts_quality_v1.yaml
-POOL      ?= configs/bench/trec/pool_v1.yaml
-ANN       ?= configs/bench/trec/annotations_v1.yaml
-ANN_LLM   ?= configs/bench/trec/annotations_llm_v1.yaml
-QRELS     ?= configs/bench/trec/qrels_v1.tsv
+TRACK ?= fts_quality
 
 bench-validate: build-bench
-	@./$(BIN_DIR)/bench validate --spec $(SPEC)
+	@./$(BIN_DIR)/bench validate $(TRACK)
 
 bench-run: build-bench
-	@./$(BIN_DIR)/bench run --spec $(SPEC)
+	@./$(BIN_DIR)/bench run $(TRACK)
 
 bench-pool: build-bench
-	@./$(BIN_DIR)/bench pool --spec $(SPEC) --output $(POOL)
+	@./$(BIN_DIR)/bench pool $(TRACK)
 
-bench-judge-keyword: build-bench
-	@./$(BIN_DIR)/bench judge --pool $(POOL) --strategy keyword --pg $(DB_CONN) --output $(ANN)
+bench-judge-lexical: build-bench
+	@./$(BIN_DIR)/bench judge $(TRACK) --strategy lexical
 
 bench-judge-cli: build-bench
-	@./$(BIN_DIR)/bench judge --pool $(POOL) --strategy claude-cli --pg $(DB_CONN) --output $(ANN_LLM) --resume
+	@./$(BIN_DIR)/bench judge $(TRACK) --strategy claude-cli --resume
 
 bench-judge-api: build-bench
-	@./$(BIN_DIR)/bench judge --pool $(POOL) --strategy claude-api --pg $(DB_CONN) --output $(ANN_LLM) --resume
+	@./$(BIN_DIR)/bench judge $(TRACK) --strategy claude-api --resume
+
+bench-show-spec: build-bench
+	@./$(BIN_DIR)/bench show spec $(TRACK)
 
 bench-show-pool: build-bench
-	@./$(BIN_DIR)/bench show pool $(POOL)
+	@./$(BIN_DIR)/bench show pool $(TRACK)
 
 bench-show-judgments: build-bench
-	@./$(BIN_DIR)/bench show judgments $(ANN)
+	@./$(BIN_DIR)/bench show judgments $(TRACK) --strategy lexical
 
 bench-qrels: build-bench
-	@./$(BIN_DIR)/bench qrels --judgments $(ANN) --output $(QRELS)
+	@./$(BIN_DIR)/bench qrels $(TRACK) --strategy lexical
 
 # Development workflow
 dev: fmt vet test build-all

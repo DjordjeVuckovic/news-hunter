@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/DjordjeVuckovic/news-hunter/internal/bench/version"
 	"gopkg.in/yaml.v3"
 )
 
@@ -15,6 +16,9 @@ func ReadPoolFile(path string) (*PoolFile, error) {
 	var pf PoolFile
 	if err := yaml.Unmarshal(data, &pf); err != nil {
 		return nil, fmt.Errorf("parse pool file: %w", err)
+	}
+	if err := version.CheckSchema(pf.SchemaVersion, "pool"); err != nil {
+		return nil, err
 	}
 	return &pf, nil
 }

@@ -29,16 +29,17 @@ func newInitCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init <track>",
 		Short: "Scaffold a new evaluation track folder",
-		Long: `Creates a self-contained evaluation track (TREC convention):
+		Long: `Creates a self-contained evaluation track under tracks/<name>/:
 
-  <track>/
-    spec.yaml          # engines + jobs
-    suite.yaml         # query suite
+  tracks/<name>/
+    spec.yaml          # engines + jobs + defaults
+    suite.yaml         # query templates + queries
     trec/              # generated pool, annotations, qrels live here
+    reports/           # one JSON per bench run
     README.md          # workflow notes
 
-The folder IS the track — no hidden state, no selector. Swap tracks by
-pointing 'bench run' at a different --spec.`,
+The folder IS the track — no hidden state, no selector. Run any subcommand
+either by name (bench run my_track) or path (bench run --track ./elsewhere).`,
 		Example: "  bench init fts_quality_v2",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -54,21 +55,29 @@ func executeInit(cmd *cobra.Command, f initFlags, name string) error {
 		return err
 	}
 
+	// Bare name → tracks/<name>/. A path-shaped arg is used verbatim, so power
+	// users can drop a track anywhere.
 	root := name
+	if !pathLike(name) {
+		root = filepath.Join("tracks", name)
+	}
+
 	if info, err := os.Stat(root); err == nil && info.IsDir() && !f.force {
 		entries, _ := os.ReadDir(root)
 		if len(entries) > 0 {
 			return fmt.Errorf("track %q already exists and is non-empty (use --force to overwrite)", root)
 		}
 	}
-	if err := os.MkdirAll(filepath.Join(root, "trec"), 0755); err != nil {
-		return fmt.Errorf("mkdir track: %w", err)
+	for _, sub := range []string{"trec", "reports"} {
+		if err := os.MkdirAll(filepath.Join(root, sub), 0755); err != nil {
+			return fmt.Errorf("mkdir %s: %w", filepath.Join(root, sub), err)
+		}
 	}
 
 	ctx := initContext{
-		Name:           name,
+		Name:           filepath.Base(root),
 		SuiteRel:       filepath.Join(root, "suite.yaml"),
-		AnnotationsRel: filepath.Join("trec", "annotations.yaml"),
+		AnnotationsRel: filepath.Join("trec", "annotations.lexical.yaml"),
 	}
 
 	files := []struct {
@@ -86,13 +95,29 @@ func executeInit(cmd *cobra.Command, f initFlags, name string) error {
 		}
 	}
 
-	// Drop a single .gitkeep so trec/ shows up under git status.
+	// Drop .gitkeep so trec/ and reports/ are visible to git from day 1.
 	_ = os.WriteFile(filepath.Join(root, "trec", ".gitkeep"), nil, 0644)
+	_ = os.WriteFile(filepath.Join(root, "reports", ".gitkeep"), nil, 0644)
 
 	cmd.Printf("Track created: %s/\n", root)
 	cmd.Printf("Next: edit %s/suite.yaml, then run:\n", root)
-	cmd.Printf("  bench validate --spec %s/spec.yaml\n", root)
+	cmd.Printf("  bench validate %s\n", filepath.Base(root))
 	return nil
+}
+
+func pathLike(s string) bool {
+	if s == "" {
+		return false
+	}
+	if s[0] == '/' || s[0] == '.' {
+		return true
+	}
+	for _, r := range s {
+		if r == '/' {
+			return true
+		}
+	}
+	return false
 }
 
 func renderTemplate(srcPath, destPath string, ctx initContext, force bool) error {

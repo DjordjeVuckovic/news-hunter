@@ -6,13 +6,16 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/DjordjeVuckovic/news-hunter/internal/bench/version"
 	"gopkg.in/yaml.v3"
 )
 
 // WriteFile writes a JudgmentFile atomically: marshals to a tmp file in the
 // same directory, fsyncs, then renames. Prevents readers from seeing a
-// half-written YAML if the process is killed mid-write.
+// half-written YAML if the process is killed mid-write. Stamps schema_version
+// every write so reloads always see a current artifact.
 func WriteFile(jf *JudgmentFile, path string) error {
+	jf.SchemaVersion = version.SchemaVersion
 	data, err := yaml.Marshal(jf)
 	if err != nil {
 		return fmt.Errorf("marshal judgment file: %w", err)
@@ -28,6 +31,9 @@ func ReadFile(path string) (*JudgmentFile, error) {
 	var jf JudgmentFile
 	if err := yaml.Unmarshal(data, &jf); err != nil {
 		return nil, fmt.Errorf("parse judgment file: %w", err)
+	}
+	if err := version.CheckSchema(jf.SchemaVersion, "annotations"); err != nil {
+		return nil, err
 	}
 	return &jf, nil
 }

@@ -1,3 +1,11 @@
+schema_version: 1
+id: fts_quality
+description: "FTS quality across PG sequential, PG GIN, ParadeDB, and Elasticsearch"
+
+defaults:
+  pool_depth: 50
+  judgments: lexical
+
 engines:
   pg-seq:
     type: postgres
@@ -16,28 +24,20 @@ engines:
     type: api
     connection: "http://localhost:8080"
 
-#metrics:
-#  k_values: [3, 5, 10]
-#  max_k: 100
-#  relevance_threshold: 1
+metrics:
+  k_values: [3, 5, 10]
+  max_k: 100
+  relevance_threshold: 1
 
 runs:
   warmup: 1
   iterations: 1
 
 jobs:
-  #  - name: "pg-seq-vs-gin"
-  #    suite: configs/bench/fts_quality_v1.yaml
-  #    engines: [pg-seq, pg-gin]
-
   - name: "pg-gin-vs-paradedb-vs-es"
-    suite: fts_quality/suite.yaml
+    suite: tracks/fts_quality/suite.yaml
     engines: [pg-gin, paradedb, elasticsearch]
 
   - name: "all-engines"
-    suite: fts_quality/suite.yaml
+    suite: tracks/fts_quality/suite.yaml
     engines: [pg-seq, pg-gin, paradedb, elasticsearch]
-
-#  - name: "api-layer"
-#    suite: configs/bench/fts_quality_v1.yaml
-#    engines: [api]

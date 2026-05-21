@@ -7,21 +7,25 @@ import (
 	"strings"
 )
 
-// KeywordStrategy is a deterministic baseline judge. It tokenises the query
+// LexicalStrategy is a deterministic baseline judge. It tokenises the query
 // description, then counts how many distinct query tokens appear in the
 // document's title, description, and content. The hit ratio is mapped to a
 // grade 0-3. It's not a substitute for human or LLM judgment, but it gives a
 // reproducible, no-network baseline against which LLM grades can be compared.
-type KeywordStrategy struct{}
+//
+// It is the simplest of the algorithmic judge family (lexical / bm25 / vector
+// / hybrid) — lexical because matching is purely on surface tokens, with no
+// IDF weighting or semantic embedding.
+type LexicalStrategy struct{}
 
-func NewKeywordStrategy() *KeywordStrategy { return &KeywordStrategy{} }
+func NewLexicalStrategy() *LexicalStrategy { return &LexicalStrategy{} }
 
-func (KeywordStrategy) Name() string { return string(StrategyKeyword) }
+func (LexicalStrategy) Name() string { return string(StrategyLexical) }
 
-func (KeywordStrategy) Grade(_ context.Context, q GradingQuery, doc GradingDoc) (int, error) {
+func (LexicalStrategy) Grade(_ context.Context, q GradingQuery, doc GradingDoc) (int, error) {
 	terms := tokenize(q.Description)
 	if len(terms) == 0 {
-		return 0, fmt.Errorf("keyword strategy: query %q has no usable description (regenerate the pool or set --strategy stub)", q.ID)
+		return 0, fmt.Errorf("lexical strategy: query %q has no usable description (regenerate the pool or set --strategy manual)", q.ID)
 	}
 
 	titleTokens := tokenSet(doc.Title)

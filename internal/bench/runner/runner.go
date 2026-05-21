@@ -89,7 +89,7 @@ func (r *Runner) runQueries(
 		q := &queries[i]
 		jr.QueryOrder = append(jr.QueryOrder, q.ID)
 		jr.Results[q.ID] = make(map[string]QueryResult)
-		judgments := q.JudgmentMap()
+		judgments := r.judgmentsFor(q)
 
 		for _, engName := range jr.EngineNames {
 			exec, ok := executors[engName]
@@ -132,6 +132,25 @@ func (r *Runner) runQueries(
 			}
 		}
 	}
+}
+
+// judgmentsFor returns the relevance grades for a query. Priority: the
+// runner-level Config.Judgments map (loaded by the CLI from the resolved
+// annotations file) takes precedence over any judgments embedded in the suite
+// (which is the case only when a suite is hand-edited — rare in v1).
+func (r *Runner) judgmentsFor(q *suite.Query) map[uuid.UUID]int {
+	if r.config.Judgments != nil {
+		if perQuery, ok := r.config.Judgments[q.ID]; ok {
+			out := make(map[uuid.UUID]int, len(perQuery))
+			for idStr, grade := range perQuery {
+				if id, err := uuid.Parse(idStr); err == nil {
+					out[id] = grade
+				}
+			}
+			return out
+		}
+	}
+	return q.JudgmentMap()
 }
 
 type execResult struct {

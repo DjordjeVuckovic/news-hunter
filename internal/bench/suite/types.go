@@ -10,12 +10,22 @@ import (
 )
 
 type TestSuite struct {
-	Name          string           `yaml:"name"`
-	Description   string           `yaml:"description"`
+	SchemaVersion int              `yaml:"schema_version"`
+	ID            string           `yaml:"id"`
+	Name          string           `yaml:"name,omitempty"`
+	Description   string           `yaml:"description,omitempty"`
 	Version       string           `yaml:"version"`
-	JudgmentsFile string           `yaml:"judgments_file,omitempty"`
+	Corpus        *Corpus          `yaml:"corpus,omitempty"`
 	Templates     []*QueryTemplate `yaml:"templates,omitempty"`
 	Queries       []Query          `yaml:"queries"`
+}
+
+// Corpus records the dataset the suite targets. Lets a report attest "this
+// was scored against the news_hunter_articles index, snapshot 2026-05-10".
+type Corpus struct {
+	Name       string `yaml:"name"`
+	Source     string `yaml:"source,omitempty"`
+	SnapshotAt string `yaml:"snapshot_at,omitempty"`
 }
 
 type Query struct {
@@ -77,6 +87,17 @@ func (q *Query) JudgmentMap() map[uuid.UUID]int {
 		m[j.DocID] = j.Relevance
 	}
 	return m
+}
+
+// InjectJudgments sets the per-query Judgments slice from a flat map produced
+// by the CLI layer after loading an annotations file. Replaces the loader-side
+// auto-injection of v0; keeps the suite YAML focused on queries only.
+func (ls *LoadedSuite) InjectJudgments(byQuery map[string][]RelevanceJudgment) {
+	for i := range ls.Suite.Queries {
+		if js, ok := byQuery[ls.Suite.Queries[i].ID]; ok {
+			ls.Suite.Queries[i].Judgments = js
+		}
+	}
 }
 
 func (q *Query) ResolveEngineQuery(engine string, registry *TemplateRegistry, suiteDir string) (*ResolvedQuery, error) {

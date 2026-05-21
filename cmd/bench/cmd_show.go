@@ -3,12 +3,14 @@ package main
 import (
 	"fmt"
 	"io"
+	"os"
 	"sort"
 	"text/tabwriter"
 
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/judgment"
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/pool"
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/spec"
+	"github.com/DjordjeVuckovic/news-hunter/internal/bench/trackctx"
 	"github.com/spf13/cobra"
 )
 
@@ -25,13 +27,15 @@ intermediates without grepping YAML.`,
 }
 
 func newShowPoolCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:     "pool <pool.yaml>",
+	var strategy string
+	cmd := &cobra.Command{
+		Use:     "pool [track|path]",
 		Short:   "Summarise a pool file",
-		Args:    cobra.ExactArgs(1),
-		Example: "  bench show pool configs/bench/trec/pool_v1.yaml",
+		Args:    cobra.MaximumNArgs(1),
+		Example: "  bench show pool fts_quality\n  bench show pool /path/to/pool.yaml",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			pf, err := pool.ReadPoolFile(args[0])
+			path := resolveArtifactPath(args, "pool", "")
+			pf, err := pool.ReadPoolFile(path)
 			if err != nil {
 				return err
 			}
@@ -39,16 +43,24 @@ func newShowPoolCmd() *cobra.Command {
 			return nil
 		},
 	}
+	_ = strategy
+	return cmd
 }
 
 func newShowJudgmentsCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:     "judgments <annotations.yaml>",
+	var strategy string
+	cmd := &cobra.Command{
+		Use:     "judgments [track|path]",
 		Short:   "Summarise a judgments file",
-		Args:    cobra.ExactArgs(1),
-		Example: "  bench show judgments configs/bench/trec/annotations_v1.yaml",
+		Args:    cobra.MaximumNArgs(1),
+		Example: "  bench show judgments fts_quality --strategy claude-api\n  bench show judgments /path/to/ann.yaml",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			jf, err := judgment.ReadFile(args[0])
+			s := strategy
+			if s == "" {
+				s = string(judgment.StrategyLexical)
+			}
+			path := resolveArtifactPath(args, "judgments", s)
+			jf, err := judgment.ReadFile(path)
 			if err != nil {
 				return err
 			}
@@ -56,16 +68,19 @@ func newShowJudgmentsCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().StringVar(&strategy, "strategy", "", "Strategy name when summarising by track (default: lexical)")
+	return cmd
 }
 
 func newShowSpecCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:     "spec <spec.yaml>",
+		Use:     "spec [track|path]",
 		Short:   "Summarise a bench spec",
-		Args:    cobra.ExactArgs(1),
-		Example: "  bench show spec configs/bench/spec.yaml",
+		Args:    cobra.MaximumNArgs(1),
+		Example: "  bench show spec fts_quality\n  bench show spec /path/to/spec.yaml",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			bs, err := spec.LoadFromFile(args[0])
+			path := resolveArtifactPath(args, "spec", "")
+			bs, err := spec.LoadFromFile(path)
 			if err != nil {
 				return err
 			}
@@ -73,6 +88,66 @@ func newShowSpecCmd() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+// resolveArtifactPath turns the positional arg (track name OR direct path)
+// into the on-disk artifact path. If args is empty, walk-up CWD detection
+// decides. kind is one of: spec, pool, judgments. strategy applies only to
+// judgments.
+func resolveArtifactPath(args []string, kind, strategy string) string {
+	if len(args) == 1 {
+		// Treat any YAML/JSON-extensioned arg as a direct path.
+		if looksLikePath(args[0]) {
+			return args[0]
+		}
+	}
+	in := trackctx.Inputs{}
+	if len(args) == 1 {
+		in.TrackArg = args[0]
+	}
+	tr, err := trackctx.Resolve(in)
+	if err != nil {
+		// Fall back to using the arg as-is so users can still pass paths.
+		if len(args) == 1 {
+			return args[0]
+		}
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	switch kind {
+	case "spec":
+		return tr.Spec
+	case "pool":
+		return tr.Pool
+	case "judgments":
+		return tr.JudgmentsPath(strategy)
+	}
+	return ""
+}
+
+func looksLikePath(s string) bool {
+	if s == "" {
+		return false
+	}
+	if len(s) > 0 && (s[0] == '/' || s[0] == '.') {
+		return true
+	}
+	for _, r := range s {
+		if r == '/' {
+			return true
+		}
+	}
+	// Treat anything with a recognised extension as a path.
+	for _, ext := range []string{".yaml", ".yml", ".tsv", ".json"} {
+		if hasSuffix(s, ext) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasSuffix(s, suffix string) bool {
+	return len(s) >= len(suffix) && s[len(s)-len(suffix):] == suffix
 }
 
 func showPool(w io.Writer, pf *pool.PoolFile) {

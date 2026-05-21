@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestKeywordStrategy_Grade(t *testing.T) {
-	s := NewKeywordStrategy()
+func TestLexicalStrategy_Grade(t *testing.T) {
+	s := NewLexicalStrategy()
 	ctx := context.Background()
 	q := GradingQuery{ID: "q1", Description: "climate change global warming"}
 

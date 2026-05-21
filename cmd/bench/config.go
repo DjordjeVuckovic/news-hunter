@@ -10,57 +10,6 @@ import (
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/spec"
 )
 
-// quickSpecFlags collects engine connection info from CLI flags when the user
-// hasn't supplied a --spec file. Lets users run a single-job benchmark without
-// authoring a full BenchSpec YAML.
-type quickSpecFlags struct {
-	suitePath   string
-	pgConnStr   string
-	esAddresses string
-	esIndex     string
-	apiBaseURL  string
-}
-
-func (q quickSpecFlags) build() (*spec.BenchSpec, error) {
-	if q.pgConnStr == "" && q.esAddresses == "" && q.apiBaseURL == "" {
-		return nil, fmt.Errorf("at least one of --pg, --es-addresses, --api must be set when --spec is not used")
-	}
-	engines := make(map[string]spec.Engine)
-	var names []string
-
-	if q.pgConnStr != "" {
-		engines["pg"] = spec.Engine{Type: "postgres", Connection: q.pgConnStr}
-		names = append(names, "pg")
-	}
-	if q.esAddresses != "" {
-		idx := q.esIndex
-		if idx == "" {
-			idx = "articles"
-		}
-		engines["elasticsearch"] = spec.Engine{Type: "elasticsearch", Connection: q.esAddresses, Index: idx}
-		names = append(names, "elasticsearch")
-	}
-	if q.apiBaseURL != "" {
-		engines["api"] = spec.Engine{Type: "api", Connection: q.apiBaseURL}
-		names = append(names, "api")
-	}
-	return &spec.BenchSpec{
-		Engines: engines,
-		Jobs: []spec.Job{{
-			Name:    "quick",
-			Suite:   q.suitePath,
-			Engines: names,
-		}},
-	}, nil
-}
-
-func loadBenchSpec(specPath string, quick quickSpecFlags) (*spec.BenchSpec, error) {
-	if specPath != "" {
-		return spec.LoadFromFile(specPath)
-	}
-	return quick.build()
-}
-
 func createExecutors(ctx context.Context, bs *spec.BenchSpec) (map[string]engine.Executor, func(), error) {
 	return engine.CreateFromSpec(ctx, bs.Engines)
 }
@@ -86,4 +35,16 @@ func envOrFlag(envKey, flagVal string) string {
 		return flagVal
 	}
 	return os.Getenv(envKey)
+}
+
+// trackArg picks up the track from a flag or first positional arg. The CLI
+// allows either form: `bench pool fts_quality` or `bench pool --track fts_quality`.
+func trackArg(flag string, args []string) string {
+	if flag != "" {
+		return flag
+	}
+	if len(args) > 0 {
+		return args[0]
+	}
+	return ""
 }

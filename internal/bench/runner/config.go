@@ -15,6 +15,10 @@ type Config struct {
 	RelevanceThreshold int
 	WarmupRuns         int
 	Runs               int
+	// Judgments[queryID][docID]grade — pre-loaded by the CLI from the
+	// resolved annotations file. When nil, queries are scored without
+	// relevance grades and the report flags them as unjudged.
+	Judgments map[string]map[string]int
 }
 
 func DefaultConfig() Config {

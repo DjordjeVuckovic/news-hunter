@@ -3,8 +3,10 @@ package report
 import (
 	"time"
 
+	"github.com/DjordjeVuckovic/news-hunter/internal/bench/meta"
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/runner"
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/spec"
+	"github.com/DjordjeVuckovic/news-hunter/internal/bench/version"
 )
 
 const Version = "1.0.0"
@@ -16,6 +18,8 @@ type GenerateOptions struct {
 
 func Generate(br *runner.BenchmarkResult, opts *GenerateOptions) *Report {
 	r := &Report{
+		SchemaVersion: version.SchemaVersion,
+		Provenance:    meta.New("run"),
 		Meta: BenchMeta{
 			Version:     Version,
 			Timestamp:   time.Now().UTC(),

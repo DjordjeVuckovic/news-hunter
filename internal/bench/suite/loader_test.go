@@ -10,11 +10,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const validHeader = `schema_version: 1
+id: test_suite
+version: "1.0.0"
+`
+
 func TestParse(t *testing.T) {
 	t.Run("valid suite with inline queries", func(t *testing.T) {
-		yaml := `
-name: test
-version: "1.0"
+		yaml := validHeader + `name: test
 queries:
   - id: q1
     description: basic query
@@ -26,16 +29,14 @@ queries:
 		loaded, err := Parse([]byte(yaml))
 		require.NoError(t, err)
 		assert.Equal(t, "test", loaded.Suite.Name)
+		assert.Equal(t, "test_suite", loaded.Suite.ID)
 		assert.Len(t, loaded.Suite.Queries, 1)
 		assert.Equal(t, "q1", loaded.Suite.Queries[0].ID)
 		assert.Len(t, loaded.Suite.Queries[0].Engines, 2)
 	})
 
 	t.Run("string engines unmarshal as EngineQuery", func(t *testing.T) {
-		yaml := `
-name: test
-version: "1.0"
-queries:
+		yaml := validHeader + `queries:
   - id: q1
     engines:
       pg: "SELECT 1"
@@ -49,10 +50,7 @@ queries:
 	})
 
 	t.Run("structured EngineQuery with file", func(t *testing.T) {
-		yaml := `
-name: test
-version: "1.0"
-queries:
+		yaml := validHeader + `queries:
   - id: q1
     engines:
       pg:
@@ -61,15 +59,11 @@ queries:
 `
 		loaded, err := Parse([]byte(yaml))
 		require.NoError(t, err)
-		eq := loaded.Suite.Queries[0].Engines["pg"]
-		assert.Equal(t, "queries/pg_search.sql", eq.File)
+		assert.Equal(t, "queries/pg_search.sql", loaded.Suite.Queries[0].Engines["pg"].File)
 	})
 
 	t.Run("structured EngineQuery with template", func(t *testing.T) {
-		yaml := `
-name: test
-version: "1.0"
-templates:
+		yaml := validHeader + `templates:
   - id: pg_fts
     query: "SELECT id FROM articles WHERE term = '{{term}}' LIMIT {{limit}}"
 queries:
@@ -88,44 +82,34 @@ queries:
 	})
 
 	t.Run("no queries", func(t *testing.T) {
-		yaml := `
-name: test
-queries: []
-`
-		_, err := Parse([]byte(yaml))
-		assert.Error(t, err)
+		_, err := Parse([]byte(validHeader + `queries: []`))
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "no queries")
 	})
 
 	t.Run("query missing id", func(t *testing.T) {
-		yaml := `
-name: test
-queries:
+		yaml := validHeader + `queries:
   - description: no id
     engines:
       pg: "SELECT 1"
 `
 		_, err := Parse([]byte(yaml))
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "no id")
 	})
 
 	t.Run("query missing engines", func(t *testing.T) {
-		yaml := `
-name: test
-queries:
+		yaml := validHeader + `queries:
   - id: q1
     engines: {}
 `
 		_, err := Parse([]byte(yaml))
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "no engines")
 	})
 
 	t.Run("engine references unknown template", func(t *testing.T) {
-		yaml := `
-name: test
-queries:
+		yaml := validHeader + `queries:
   - id: q1
     engines:
       pg:
@@ -133,17 +117,41 @@ queries:
         params: { term: test }
 `
 		_, err := Parse([]byte(yaml))
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "unknown template")
 	})
+}
+
+func TestParse_RejectsMissingSchemaVersion(t *testing.T) {
+	yaml := `id: test
+version: "1.0"
+queries:
+  - id: q1
+    engines:
+      pg: "SELECT 1"
+`
+	_, err := Parse([]byte(yaml))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "missing schema_version")
+}
+
+func TestParse_RejectsMissingID(t *testing.T) {
+	yaml := `schema_version: 1
+version: "1.0"
+queries:
+  - id: q1
+    engines:
+      pg: "SELECT 1"
+`
+	_, err := Parse([]byte(yaml))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "missing required field: id")
 }
 
 func TestParse_WithJudgments(t *testing.T) {
 	docID := uuid.New()
 
-	yaml := `
-name: judged suite
-version: "1.0"
+	yaml := validHeader + `name: judged suite
 queries:
   - id: q1
     description: query with judgments
@@ -208,9 +216,7 @@ func TestEngineQuery_Resolve_Template(t *testing.T) {
 func TestLoadFromFile_SetsDir(t *testing.T) {
 	dir := t.TempDir()
 	suiteFile := filepath.Join(dir, "suite.yaml")
-	content := `
-name: test
-version: "1.0"
+	content := validHeader + `name: test
 queries:
   - id: q1
     engines:
@@ -222,86 +228,4 @@ queries:
 	loaded, err := LoadFromFile(suiteFile)
 	require.NoError(t, err)
 	assert.Equal(t, dir, loaded.Dir)
-}
-
-func TestLoadFromFile_InjectsJudgmentsFile(t *testing.T) {
-	dir := t.TempDir()
-	docID := uuid.New()
-
-	judgmentsPath := filepath.Join(dir, "ann.yaml")
-	judgmentsYAML := `strategy: keyword
-queries:
-  - query_id: q1
-    docs:
-      - doc_id: ` + docID.String() + `
-        grade: 2
-      - doc_id: 00000000-0000-0000-0000-000000000001
-        grade: -1
-`
-	require.NoError(t, os.WriteFile(judgmentsPath, []byte(judgmentsYAML), 0644))
-
-	suitePath := filepath.Join(dir, "suite.yaml")
-	suiteYAML := `name: test
-judgments_file: ann.yaml
-queries:
-  - id: q1
-    description: test
-    engines:
-      pg: "SELECT 1"
-  - id: q2
-    description: no judgments here
-    engines:
-      pg: "SELECT 1"
-`
-	require.NoError(t, os.WriteFile(suitePath, []byte(suiteYAML), 0644))
-
-	loaded, err := LoadFromFile(suitePath)
-	require.NoError(t, err)
-	require.Len(t, loaded.Suite.Queries, 2)
-
-	q1 := loaded.Suite.Queries[0]
-	require.Len(t, q1.Judgments, 1, "unjudged (-1) entries should be filtered out")
-	assert.Equal(t, docID, q1.Judgments[0].DocID)
-	assert.Equal(t, 2, q1.Judgments[0].Relevance)
-
-	assert.Empty(t, loaded.Suite.Queries[1].Judgments)
-}
-
-func TestLoadFromFile_MissingJudgmentsFileWarnsButLoads(t *testing.T) {
-	dir := t.TempDir()
-	suitePath := filepath.Join(dir, "suite.yaml")
-	suiteYAML := `name: test
-judgments_file: nope.yaml
-queries:
-  - id: q1
-    engines:
-      pg: "SELECT 1"
-`
-	require.NoError(t, os.WriteFile(suitePath, []byte(suiteYAML), 0644))
-
-	loaded, err := LoadFromFile(suitePath)
-	require.NoError(t, err, "missing judgments file must NOT block validate/pool/judge")
-	require.Len(t, loaded.Suite.Queries, 1)
-	assert.Empty(t, loaded.Suite.Queries[0].Judgments,
-		"no judgments wired when the file doesn't exist yet")
-}
-
-func TestLoadFromFile_MalformedJudgmentsFileErrors(t *testing.T) {
-	dir := t.TempDir()
-	judgmentsPath := filepath.Join(dir, "ann.yaml")
-	require.NoError(t, os.WriteFile(judgmentsPath, []byte("not: valid: yaml: ["), 0644))
-
-	suitePath := filepath.Join(dir, "suite.yaml")
-	suiteYAML := `name: test
-judgments_file: ann.yaml
-queries:
-  - id: q1
-    engines:
-      pg: "SELECT 1"
-`
-	require.NoError(t, os.WriteFile(suitePath, []byte(suiteYAML), 0644))
-
-	_, err := LoadFromFile(suitePath)
-	require.Error(t, err, "malformed YAML should still surface as an error")
-	assert.Contains(t, err.Error(), "judgments_file")
 }

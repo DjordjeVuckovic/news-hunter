@@ -2,12 +2,15 @@ package pool
 
 import (
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/engine"
+	"github.com/DjordjeVuckovic/news-hunter/internal/bench/meta"
 	"github.com/google/uuid"
 )
 
 type PoolFile struct {
-	SuiteName string      `yaml:"suite_name"`
-	Queries   []PoolEntry `yaml:"queries"`
+	SchemaVersion int         `yaml:"schema_version"`
+	Meta          meta.Meta   `yaml:"meta"`
+	SuiteName     string      `yaml:"suite_name,omitempty"`
+	Queries       []PoolEntry `yaml:"queries"`
 }
 
 type PoolEntry struct {

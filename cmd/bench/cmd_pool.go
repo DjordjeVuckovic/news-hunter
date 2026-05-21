@@ -4,64 +4,75 @@ import (
 	"fmt"
 
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/engine"
+	"github.com/DjordjeVuckovic/news-hunter/internal/bench/meta"
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/pool"
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/runner"
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/spec"
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/suite"
+	"github.com/DjordjeVuckovic/news-hunter/internal/bench/trackctx"
 	"github.com/spf13/cobra"
 )
 
 type poolFlags struct {
+	trackArg string
 	specPath string
-	suite    string
-	pg       string
-	es       string
-	esIndex  string
-	api      string
-	depth    int
 	output   string
+	depth    int
 }
 
 func newPoolCmd() *cobra.Command {
 	var f poolFlags
 	cmd := &cobra.Command{
-		Use:     "pool",
-		Short:   "Run queries and collect a TREC-style candidate pool",
-		Long:    "Executes the suite against every engine and writes a deduplicated pool of doc IDs per query for downstream judging.",
-		Example: "  bench pool --spec configs/bench/spec.yaml --output configs/bench/trec/pool_v1.yaml",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			return executePool(cmd, f)
+		Use:   "pool [track]",
+		Short: "Run queries through all engines, write a TREC-style pool",
+		Long: `Generates a deduplicated pool of candidate docs per query, ready to be
+judged. Output goes to tracks/<name>/trec/pool.yaml by default; override
+with --output for ad-hoc files.
+
+The pool file carries a meta block (run_id, tool, engines, depth) so later
+artifacts can attest which pool they were derived from.`,
+		Example: `  bench pool fts_quality
+  bench pool fts_quality --depth 50
+  bench pool --track tracks/fts_quality --output /tmp/adhoc-pool.yaml`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return executePool(cmd, f, args)
 		},
 	}
-	cmd.Flags().StringVar(&f.specPath, "spec", "", "Path to bench spec YAML")
-	cmd.Flags().StringVar(&f.suite, "suite", "configs/bench/fts_quality_v1.yaml", "Suite YAML (quick mode)")
-	cmd.Flags().StringVar(&f.pg, "pg", "", "Postgres connection string (quick mode)")
-	cmd.Flags().StringVar(&f.es, "es-addresses", "", "Elasticsearch base URL (quick mode)")
-	cmd.Flags().StringVar(&f.esIndex, "es-index", "articles", "Elasticsearch index (quick mode)")
-	cmd.Flags().StringVar(&f.api, "api", "", "API base URL (quick mode)")
-	cmd.Flags().IntVar(&f.depth, "depth", 100, "Top-K per engine to pool")
-	cmd.Flags().StringVar(&f.output, "output", "", "Output pool YAML path (required)")
-	_ = cmd.MarkFlagRequired("output")
+	cmd.Flags().StringVar(&f.trackArg, "track", "", "Track name or path")
+	cmd.Flags().StringVar(&f.specPath, "spec", "", "Override spec.yaml path")
+	cmd.Flags().IntVar(&f.depth, "depth", 0, "Top-K per engine (0 = spec.defaults.pool_depth or 100)")
+	cmd.Flags().StringVar(&f.output, "output", "", "Override pool output path")
 	return cmd
 }
 
-func executePool(cmd *cobra.Command, f poolFlags) error {
-	bs, err := loadBenchSpec(f.specPath, quickSpecFlags{
-		suitePath:   f.suite,
-		pgConnStr:   f.pg,
-		esAddresses: f.es,
-		esIndex:     f.esIndex,
-		apiBaseURL:  f.api,
+func executePool(cmd *cobra.Command, f poolFlags, args []string) error {
+	tr, err := trackctx.Resolve(trackctx.Inputs{
+		TrackArg:   trackArg(f.trackArg, args),
+		SpecPath:   f.specPath,
+		OutputPath: f.output,
 	})
 	if err != nil {
 		return err
 	}
 
+	bs, err := spec.LoadFromFile(tr.Spec)
+	if err != nil {
+		return fmt.Errorf("load spec: %w", err)
+	}
+
+	depth := f.depth
+	if depth == 0 {
+		depth = bs.Defaults.PoolDepth
+	}
+	if depth == 0 {
+		depth = 100
+	}
+
 	runCfg := runner.Config{
-		KValues:            []int{f.depth},
-		MaxK:               f.depth,
-		RelevanceThreshold: runner.DefaultRelevanceThreshold,
-		Runs:               1,
+		KValues: []int{depth},
+		MaxK:    depth,
+		Runs:    1,
 	}
 
 	executors, cleanup, err := createExecutors(cmd.Context(), bs)
@@ -81,11 +92,20 @@ func executePool(cmd *cobra.Command, f poolFlags) error {
 		return fmt.Errorf("load query descriptions: %w", err)
 	}
 
-	pf := buildPoolFile(result, descs, f.depth)
-	if err := pool.WritePoolFile(pf, f.output); err != nil {
+	pf := buildPoolFile(result, descs, depth)
+	pf.Meta = meta.New("pool")
+	pf.Meta.SpecID = bs.ID
+	pf.Meta.PoolDepth = depth
+	pf.Meta.Engines = collectEngines(bs, result)
+
+	outPath := f.output
+	if outPath == "" {
+		outPath = tr.Pool
+	}
+	if err := pool.WritePoolFile(pf, outPath); err != nil {
 		return fmt.Errorf("write pool: %w", err)
 	}
-	cmd.Printf("Pool written: %s (queries=%d)\n", f.output, len(pf.Queries))
+	cmd.Printf("Pool written: %s (queries=%d, run_id=%s)\n", outPath, len(pf.Queries), pf.Meta.RunID)
 	return nil
 }
 
@@ -135,4 +155,19 @@ func collectQueryDescriptions(bs *spec.BenchSpec) (map[string]string, error) {
 		}
 	}
 	return descs, nil
+}
+
+func collectEngines(bs *spec.BenchSpec, _ *runner.BenchmarkResult) []string {
+	seen := make(map[string]struct{})
+	var out []string
+	for _, job := range bs.Jobs {
+		for _, eng := range job.Engines {
+			if _, ok := seen[eng]; ok {
+				continue
+			}
+			seen[eng] = struct{}{}
+			out = append(out, eng)
+		}
+	}
+	return out
 }

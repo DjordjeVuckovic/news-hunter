@@ -3,31 +3,30 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
+	"io"
 	"strings"
 	"text/tabwriter"
 
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/engine"
+	"github.com/DjordjeVuckovic/news-hunter/internal/bench/spec"
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/suite"
+	"github.com/DjordjeVuckovic/news-hunter/internal/bench/trackctx"
 	"github.com/spf13/cobra"
 )
 
 type validateFlags struct {
-	specPath string
-	suite    string
-	pg       string
-	es       string
-	esIndex  string
-	api      string
-	failFast bool
+	trackArg  string
+	specPath  string
+	suitePath string
+	failFast  bool
 }
 
 func newValidateCmd() *cobra.Command {
 	var f validateFlags
 	cmd := &cobra.Command{
-		Use:   "validate",
+		Use:   "validate [track]",
 		Short: "Dry-run every query through each engine and report broken ones",
-		Long: `Validates spec + suite ahead of a real run:
+		Long: `Validates spec + suite ahead of a real pool/run:
 
   - templates render with the params provided
   - postgres queries pass EXPLAIN (syntax, columns, operators)
@@ -35,38 +34,40 @@ func newValidateCmd() *cobra.Command {
   - api descriptors parse as {method, path, body?, params?}
 
 Returns non-zero exit if any query fails — wire it into CI.`,
-		Example: "  bench validate --spec configs/bench/spec.yaml",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			return executeValidate(cmd, f)
+		Example: `  bench validate fts_quality
+  bench validate --track tracks/fts_quality --fail-fast`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return executeValidate(cmd, f, args)
 		},
 	}
-	cmd.Flags().StringVar(&f.specPath, "spec", "", "Path to bench spec YAML")
-	cmd.Flags().StringVar(&f.suite, "suite", "configs/bench/fts_quality_v1.yaml", "Suite YAML (quick mode)")
-	cmd.Flags().StringVar(&f.pg, "pg", "", "Postgres connection (quick mode)")
-	cmd.Flags().StringVar(&f.es, "es-addresses", "", "Elasticsearch base URL (quick mode)")
-	cmd.Flags().StringVar(&f.esIndex, "es-index", "articles", "Elasticsearch index (quick mode)")
-	cmd.Flags().StringVar(&f.api, "api", "", "API base URL (quick mode)")
-	cmd.Flags().BoolVar(&f.failFast, "fail-fast", false, "Stop at first failure instead of reporting all")
+	cmd.Flags().StringVar(&f.trackArg, "track", "", "Track name or path")
+	cmd.Flags().StringVar(&f.specPath, "spec", "", "Override spec.yaml path")
+	cmd.Flags().StringVar(&f.suitePath, "suite", "", "Override suite.yaml path (all jobs share it)")
+	cmd.Flags().BoolVar(&f.failFast, "fail-fast", false, "Stop at first failure")
 	return cmd
 }
 
 type validateRow struct {
 	queryID string
 	engine  string
-	status  string // OK | TEMPLATE_ERR | UNSUPPORTED | INVALID
+	status  string
 	detail  string
 }
 
-func executeValidate(cmd *cobra.Command, f validateFlags) error {
-	bs, err := loadBenchSpec(f.specPath, quickSpecFlags{
-		suitePath:   f.suite,
-		pgConnStr:   f.pg,
-		esAddresses: f.es,
-		esIndex:     f.esIndex,
-		apiBaseURL:  f.api,
+func executeValidate(cmd *cobra.Command, f validateFlags, args []string) error {
+	tr, err := trackctx.Resolve(trackctx.Inputs{
+		TrackArg:  trackArg(f.trackArg, args),
+		SpecPath:  f.specPath,
+		SuitePath: f.suitePath,
 	})
 	if err != nil {
 		return err
+	}
+
+	bs, err := spec.LoadFromFile(tr.Spec)
+	if err != nil {
+		return fmt.Errorf("load spec: %w", err)
 	}
 
 	executors, cleanup, err := createExecutors(cmd.Context(), bs)
@@ -77,9 +78,8 @@ func executeValidate(cmd *cobra.Command, f validateFlags) error {
 
 	var rows []validateRow
 	failures := 0
-
-	// Multiple jobs often share the same suite. Load each path once.
 	suites := map[string]*suite.LoadedSuite{}
+
 	for _, job := range bs.Jobs {
 		ls, ok := suites[job.Suite]
 		if !ok {
@@ -95,7 +95,7 @@ func executeValidate(cmd *cobra.Command, f validateFlags) error {
 				row := validateRow{queryID: q.ID, engine: engName}
 				row = validateOne(cmd.Context(), row, q, engName, ls, executors[engName])
 				rows = append(rows, row)
-				if row.status != "OK" {
+				if row.status != "OK" && row.status != "SKIP" {
 					failures++
 					if f.failFast {
 						printValidateRows(cmd.OutOrStdout(), rows)
@@ -122,7 +122,6 @@ func validateOne(ctx context.Context, row validateRow, q suite.Query, engName st
 		return row
 	}
 	if resolved == nil {
-		// Engine not configured for this query — not a failure.
 		row.status = "SKIP"
 		row.detail = "no query for this engine"
 		return row
@@ -142,7 +141,7 @@ func validateOne(ctx context.Context, row validateRow, q suite.Query, engName st
 	return row
 }
 
-func printValidateRows(w interface{ Write(p []byte) (int, error) }, rows []validateRow) {
+func printValidateRows(w io.Writer, rows []validateRow) {
 	tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
 	fmt.Fprintln(tw, "QUERY\tENGINE\tSTATUS\tDETAIL")
 	fmt.Fprintln(tw, "-----\t------\t------\t------")
@@ -159,6 +158,3 @@ func truncate(s string, max int) string {
 	}
 	return s[:max-3] + "..."
 }
-
-// Ensure os is used (some builds elide imports otherwise; kept explicit).
-var _ = os.Stdout

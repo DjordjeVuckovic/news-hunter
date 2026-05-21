@@ -1,7 +1,12 @@
+schema_version: 1
+id: fts_quality_v1
 name: "FTS Quality Benchmark v1"
 description: "Starter suite with ~10 queries across search paradigms for end-to-end verification"
-version: "1.0"
-judgments_file: trec/annotations_kw.yaml
+version: "1.0.0"
+
+corpus:
+  name: news_hunter_articles
+  source: "postgres://localhost:54320/news_db (articles)"
 
 templates:
   - id: pg_fts_multi_field

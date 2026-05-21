@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/DjordjeVuckovic/news-hunter/internal/bench/version"
 	"gopkg.in/yaml.v3"
 )
 
@@ -33,6 +34,12 @@ var validEngineTypes = map[string]bool{
 }
 
 func validate(s *BenchSpec) error {
+	if err := version.CheckSchema(s.SchemaVersion, "spec"); err != nil {
+		return err
+	}
+	if s.ID == "" {
+		return fmt.Errorf("spec is missing required field: id")
+	}
 	if len(s.Jobs) == 0 {
 		return fmt.Errorf("spec has no jobs")
 	}

@@ -1,5 +1,10 @@
-# Bench spec for {{.Name}}.
-# Defines engines + jobs. Each job runs a suite against a subset of engines.
+schema_version: 1
+id: {{.Name}}
+description: "TODO: describe what this track measures"
+
+defaults:
+  pool_depth: 100
+  judgments: lexical   # short name → trec/annotations.lexical.yaml
 
 engines:
   pg:

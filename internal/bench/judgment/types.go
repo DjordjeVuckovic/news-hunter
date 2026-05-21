@@ -1,6 +1,7 @@
 package judgment
 
 import (
+	"github.com/DjordjeVuckovic/news-hunter/internal/bench/meta"
 	"github.com/google/uuid"
 )
 
@@ -18,8 +19,10 @@ type GradedDoc struct {
 }
 
 type JudgmentFile struct {
-	Strategy string          `yaml:"strategy"`
-	Queries  []JudgmentEntry `yaml:"queries"`
+	SchemaVersion int             `yaml:"schema_version"`
+	Meta          meta.Meta       `yaml:"meta"`
+	Strategy      string          `yaml:"strategy"`
+	Queries       []JudgmentEntry `yaml:"queries"`
 }
 
 type JudgmentEntry struct {

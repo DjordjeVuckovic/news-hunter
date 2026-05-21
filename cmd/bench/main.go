@@ -14,11 +14,15 @@ const (
 engines (Postgres, ParadeDB, Elasticsearch, the news-hunter API), produces
 IR-quality metrics (NDCG, MAP, MRR, Bpref, P/R/F1) and latency statistics.
 
-Typical pipeline:
+Typical pipeline (track-first; pass the track name or path as a positional arg):
 
-  1. pool   — run all queries through every engine, gather candidate docs
-  2. judge  — grade each pooled doc (keyword baseline, claude-cli, claude-api, stub)
-  3. run    — execute the suite with judgments wired in, produce the report
+  1. init <name>      — scaffold tracks/<name>/{spec,suite}.yaml + folders
+  2. validate <name>  — dry-run every query through each engine
+  3. pool <name>      — gather candidate docs into tracks/<name>/trec/pool.yaml
+  4. judge <name> --strategy lexical|claude-cli|claude-api|manual
+                      — produces annotations.<strategy>.yaml
+  5. run <name>       — execute the suite + report (auto-loads judgments per spec.defaults)
+  6. qrels <name>     — (optional) export TREC qrels for trec_eval
   4. qrels  — (optional) export TREC qrels for external validation
 `
 )

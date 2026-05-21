@@ -1,10 +1,22 @@
 package spec
 
 type BenchSpec struct {
-	Jobs    []Job             `yaml:"jobs"`
-	Engines map[string]Engine `yaml:"engines"`
-	Metrics MetricsConfig     `yaml:"metrics"`
-	Runs    RunsConfig        `yaml:"runs"`
+	SchemaVersion int               `yaml:"schema_version"`
+	ID            string            `yaml:"id"`
+	Description   string            `yaml:"description,omitempty"`
+	Defaults      Defaults          `yaml:"defaults,omitempty"`
+	Engines       map[string]Engine `yaml:"engines"`
+	Metrics       MetricsConfig     `yaml:"metrics"`
+	Runs          RunsConfig        `yaml:"runs"`
+	Jobs          []Job             `yaml:"jobs"`
+}
+
+// Defaults supply fallback values that the CLI flags can override. Lets users
+// set "this track defaults to lexical judgments and pool depth 100" in one
+// place instead of repeating flags.
+type Defaults struct {
+	PoolDepth int    `yaml:"pool_depth,omitempty"`
+	Judgments string `yaml:"judgments,omitempty"` // strategy name OR path
 }
 
 type Job struct {
