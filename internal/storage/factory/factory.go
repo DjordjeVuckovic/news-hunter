@@ -94,6 +94,19 @@ func NewSearcher(ctx context.Context, cfg StorageConfig) (storage.FtsSearcher, e
 	}
 }
 
+func NewReader(ctx context.Context, cfg StorageConfig) (storage.Reader, error) {
+	if cfg.Type != storage.PG {
+		return nil, fmt.Errorf("reader not supported for storage type %s", cfg.Type)
+	}
+
+	pool, err := pg.NewConnectionPool(ctx, *cfg.Pg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create PostgreSQL connection pool: %w", err)
+	}
+
+	return pg.NewArticleReader(pool), nil
+}
+
 func NewSemanticSearcher(ctx context.Context, cfg StorageConfig, client embedding.Client) (storage.SemanticSearcher, error) {
 	switch cfg.Type {
 	case storage.PG:

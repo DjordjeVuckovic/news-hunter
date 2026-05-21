@@ -7,7 +7,6 @@ import (
 
 type QueryResult struct {
 	QueryID      string
-	JobName      string
 	EngineName   string
 	Scores       metrics.ScoreSet
 	RankedDocIDs []uuid.UUID

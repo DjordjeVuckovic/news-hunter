@@ -11,3 +11,4 @@ dist
 coverage
 bin
 obj
+.local

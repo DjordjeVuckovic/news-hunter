@@ -1,15 +1,16 @@
 package judgment
 
 import (
-	"context"
-
-	"github.com/DjordjeVuckovic/news-hunter/internal/bench/pool"
 	"github.com/google/uuid"
 )
 
-type Judge interface {
-	Grade(ctx context.Context, entry pool.PoolEntry) ([]GradedDoc, error)
-}
+const (
+	GradeUnjudged   = -1
+	GradeNotRelev   = 0
+	GradeMarginally = 1
+	GradeRelevant   = 2
+	GradeHighly     = 3
+)
 
 type GradedDoc struct {
 	DocID uuid.UUID `yaml:"doc_id"`

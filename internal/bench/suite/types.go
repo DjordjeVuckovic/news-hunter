@@ -10,11 +10,12 @@ import (
 )
 
 type TestSuite struct {
-	Name        string           `yaml:"name"`
-	Description string           `yaml:"description"`
-	Version     string           `yaml:"version"`
-	Templates   []*QueryTemplate `yaml:"templates,omitempty"`
-	Queries     []Query          `yaml:"queries"`
+	Name          string           `yaml:"name"`
+	Description   string           `yaml:"description"`
+	Version       string           `yaml:"version"`
+	JudgmentsFile string           `yaml:"judgments_file,omitempty"`
+	Templates     []*QueryTemplate `yaml:"templates,omitempty"`
+	Queries       []Query          `yaml:"queries"`
 }
 
 type Query struct {

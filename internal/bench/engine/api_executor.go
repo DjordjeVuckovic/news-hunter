@@ -98,6 +98,23 @@ func (e *APIExecutor) Execute(ctx context.Context, rawQuery string, _ []any) (*E
 func (e *APIExecutor) Name() string { return e.name }
 func (e *APIExecutor) Close() error { return nil }
 
+// Validate parses the request descriptor. We can't validate against the live
+// API without firing a real request, so this just checks shape: method, path,
+// optional body/params.
+func (e *APIExecutor) Validate(_ context.Context, rawQuery string) error {
+	var req apiRequest
+	if err := json.Unmarshal([]byte(rawQuery), &req); err != nil {
+		return fmt.Errorf("api descriptor: %w", err)
+	}
+	if req.Method == "" {
+		return fmt.Errorf("api descriptor missing 'method'")
+	}
+	if req.Path == "" {
+		return fmt.Errorf("api descriptor missing 'path'")
+	}
+	return nil
+}
+
 type apiSearchResponse struct {
 	TotalMatches int64          `json:"total_matches"`
 	Hits         []apiSearchHit `json:"hits"`

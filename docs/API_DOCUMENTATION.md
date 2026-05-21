@@ -23,12 +23,12 @@ The Search Router provides two complementary search APIs following Elasticsearch
 
 **Parameters:**
 
-| Parameter | Type | Required | Description | Example |
-|-----------|------|----------|-------------|---------|
-| `q` | string | Yes | Search query text | `climate change` |
-| `size` | int | No | Results per page (default: 100, max: 10000) | `10` |
-| `cursor` | string | No | Pagination cursor from previous response | `eyJzY29yZSI6...` |
-| `lang` | string | No | Language: english, serbian (default: english) | `english` |
+| Parameter | Type   | Required | Description                                   | Example           |
+|-----------|--------|----------|-----------------------------------------------|-------------------|
+| `q`       | string | Yes      | Search query text                             | `climate change`  |
+| `size`    | int    | No       | Results per page (default: 100, max: 10000)   | `10`              |
+| `cursor`  | string | No       | Pagination cursor from previous response      | `eyJzY29yZSI6...` |
+| `lang`    | string | No       | Language: english, serbian (default: english) | `english`         |
 
 **Example Request:**
 ```bash
@@ -168,13 +168,13 @@ POST /v1/articles/_search
 
 **Parameters:**
 
-| Field | Type | Required | Description | Example |
-|-------|------|----------|-------------|---------|
-| `query` | string | Yes | Search text | `"renewable energy"` |
-| `fields` | array | Yes | Fields to search | `["title", "content"]` |
-| `field_weights` | object | No | Field boost multipliers (default: 1.0) | `{"title": 3.0}` |
-| `operator` | string | No | "and" or "or" (default: "or") | `"or"` |
-| `language` | string | No | english, serbian (default: english) | `"english"` |
+| Field           | Type   | Required | Description                            | Example                |
+|-----------------|--------|----------|----------------------------------------|------------------------|
+| `query`         | string | Yes      | Search text                            | `"renewable energy"`   |
+| `fields`        | array  | Yes      | Fields to search                       | `["title", "content"]` |
+| `field_weights` | object | No       | Field boost multipliers (default: 1.0) | `{"title": 3.0}`       |
+| `operator`      | string | No       | "and" or "or" (default: "or")          | `"or"`                 |
+| `language`      | string | No       | english, serbian (default: english)    | `"english"`            |
 
 **Example Request:**
 ```json

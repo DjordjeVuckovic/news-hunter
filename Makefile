@@ -11,7 +11,7 @@ GOOS ?= $(shell go env GOOS)
 GOARCH ?= $(shell go env GOARCH)
 
 # Build commands
-.PHONY: build build-all clean test fmt vet schema-gen build-bench run-bench run-bench-all
+.PHONY: build build-all clean test fmt vet schema-gen build-bench bench-validate bench-run bench-pool bench-judge-keyword bench-judge-cli bench-judge-api bench-qrels bench-show-pool bench-show-judgments
 
 migrate-up:
 	@echo "Running database migrations up..."
@@ -105,17 +105,39 @@ build-bench:
 	@mkdir -p $(BIN_DIR)
 	@go build -o $(BIN_DIR)/bench $(CMD_DIR)/bench
 
-run-bench: build-bench
-	@echo "Running FTS quality bench..."
-	@./$(BIN_DIR)/bench --pg $(DB_CONN) --suite configs/bench/fts_quality_v1.yaml
+SPEC      ?= configs/bench/spec.yaml
+SUITE     ?= configs/bench/fts_quality_v1.yaml
+POOL      ?= configs/bench/trec/pool_v1.yaml
+ANN       ?= configs/bench/trec/annotations_v1.yaml
+ANN_LLM   ?= configs/bench/trec/annotations_llm_v1.yaml
+QRELS     ?= configs/bench/trec/qrels_v1.tsv
 
-run-bench-all: build-bench
-	@echo "Running FTS quality bench (PG + ES)..."
-	@./$(BIN_DIR)/bench --pg $(DB_CONN) --es-addresses "http://localhost:9200" --suite configs/bench/fts_quality_v1.yaml
+bench-validate: build-bench
+	@./$(BIN_DIR)/bench validate --spec $(SPEC)
 
-run-bench-spec: build-bench
-	@echo "Running FTS quality bench via spec..."
-	@./$(BIN_DIR)/bench --spec configs/bench/spec.yaml
+bench-run: build-bench
+	@./$(BIN_DIR)/bench run --spec $(SPEC)
+
+bench-pool: build-bench
+	@./$(BIN_DIR)/bench pool --spec $(SPEC) --output $(POOL)
+
+bench-judge-keyword: build-bench
+	@./$(BIN_DIR)/bench judge --pool $(POOL) --strategy keyword --pg $(DB_CONN) --output $(ANN)
+
+bench-judge-cli: build-bench
+	@./$(BIN_DIR)/bench judge --pool $(POOL) --strategy claude-cli --pg $(DB_CONN) --output $(ANN_LLM) --resume
+
+bench-judge-api: build-bench
+	@./$(BIN_DIR)/bench judge --pool $(POOL) --strategy claude-api --pg $(DB_CONN) --output $(ANN_LLM) --resume
+
+bench-show-pool: build-bench
+	@./$(BIN_DIR)/bench show pool $(POOL)
+
+bench-show-judgments: build-bench
+	@./$(BIN_DIR)/bench show judgments $(ANN)
+
+bench-qrels: build-bench
+	@./$(BIN_DIR)/bench qrels --judgments $(ANN) --output $(QRELS)
 
 # Development workflow
 dev: fmt vet test build-all

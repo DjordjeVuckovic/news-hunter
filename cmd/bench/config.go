@@ -1,61 +1,89 @@
 package main
 
 import (
-	"flag"
+	"context"
 	"fmt"
-	"strconv"
+	"os"
 	"strings"
+
+	"github.com/DjordjeVuckovic/news-hunter/internal/bench/engine"
+	"github.com/DjordjeVuckovic/news-hunter/internal/bench/spec"
 )
 
-type cliConfig struct {
-	SpecPath      string
-	SuitePath     string
-	PgConnStr     string
-	EsAddresses   string
-	EsIndex       string
-	KValues       string
-	MaxK          int
-	Warmup        int
-	Runs          int
-	Output        string
-	Mode          string
-	PoolPath      string
-	JudgmentsPath string
+// quickSpecFlags collects engine connection info from CLI flags when the user
+// hasn't supplied a --spec file. Lets users run a single-job benchmark without
+// authoring a full BenchSpec YAML.
+type quickSpecFlags struct {
+	suitePath   string
+	pgConnStr   string
+	esAddresses string
+	esIndex     string
+	apiBaseURL  string
 }
 
-func parseFlags() cliConfig {
-	cfg := cliConfig{}
+func (q quickSpecFlags) build() (*spec.BenchSpec, error) {
+	if q.pgConnStr == "" && q.esAddresses == "" && q.apiBaseURL == "" {
+		return nil, fmt.Errorf("at least one of --pg, --es-addresses, --api must be set when --spec is not used")
+	}
+	engines := make(map[string]spec.Engine)
+	var names []string
 
-	flag.StringVar(&cfg.SpecPath, "spec", "", "Path to bench spec YAML (multi-job mode)")
-	flag.StringVar(&cfg.SuitePath, "suite", "configs/bench/fts_quality_v1.yaml", "Path to bench suite YAML (quick single-job mode)")
-	flag.StringVar(&cfg.PgConnStr, "pg", "", "PostgreSQL connection string")
-	flag.StringVar(&cfg.EsAddresses, "es-addresses", "", "Elasticsearch addresses, comma-separated")
-	flag.StringVar(&cfg.EsIndex, "es-index", "news", "Elasticsearch index name")
-	flag.StringVar(&cfg.KValues, "k", "3,5,10", "K values for metrics, comma-separated")
-	flag.IntVar(&cfg.MaxK, "max-k", 100, "Maximum number of results to retrieve per query")
-	flag.IntVar(&cfg.Warmup, "warmup", 0, "Number of warmup runs before measurement")
-	flag.IntVar(&cfg.Runs, "runs", 1, "Number of measured iterations (median latency used)")
-	flag.StringVar(&cfg.Output, "output", "", "Output path for results (JSON file or pool YAML)")
-	flag.StringVar(&cfg.Mode, "mode", "bench", "Run mode: bench, pool, judge, qrels")
-	flag.StringVar(&cfg.PoolPath, "pool", "", "Path to pool file (for judge mode)")
-	flag.StringVar(&cfg.JudgmentsPath, "judgments", "", "Path to annotations YAML (for qrels mode)")
-
-	flag.Parse()
-	return cfg
+	if q.pgConnStr != "" {
+		engines["pg"] = spec.Engine{Type: "postgres", Connection: q.pgConnStr}
+		names = append(names, "pg")
+	}
+	if q.esAddresses != "" {
+		idx := q.esIndex
+		if idx == "" {
+			idx = "articles"
+		}
+		engines["elasticsearch"] = spec.Engine{Type: "elasticsearch", Connection: q.esAddresses, Index: idx}
+		names = append(names, "elasticsearch")
+	}
+	if q.apiBaseURL != "" {
+		engines["api"] = spec.Engine{Type: "api", Connection: q.apiBaseURL}
+		names = append(names, "api")
+	}
+	return &spec.BenchSpec{
+		Engines: engines,
+		Jobs: []spec.Job{{
+			Name:    "quick",
+			Suite:   q.suitePath,
+			Engines: names,
+		}},
+	}, nil
 }
 
-func (c cliConfig) parseKValues() ([]int, error) {
-	parts := strings.Split(c.KValues, ",")
-	vals := make([]int, 0, len(parts))
+func loadBenchSpec(specPath string, quick quickSpecFlags) (*spec.BenchSpec, error) {
+	if specPath != "" {
+		return spec.LoadFromFile(specPath)
+	}
+	return quick.build()
+}
+
+func createExecutors(ctx context.Context, bs *spec.BenchSpec) (map[string]engine.Executor, func(), error) {
+	return engine.CreateFromSpec(ctx, bs.Engines)
+}
+
+func parseKList(raw string) ([]int, error) {
+	parts := strings.Split(raw, ",")
+	out := make([]int, 0, len(parts))
 	for _, p := range parts {
-		v, err := strconv.Atoi(strings.TrimSpace(p))
-		if err != nil {
+		var v int
+		if _, err := fmt.Sscanf(strings.TrimSpace(p), "%d", &v); err != nil {
 			return nil, fmt.Errorf("invalid k value %q: %w", p, err)
 		}
 		if v <= 0 {
 			return nil, fmt.Errorf("k value must be positive, got %d", v)
 		}
-		vals = append(vals, v)
+		out = append(out, v)
 	}
-	return vals, nil
+	return out, nil
+}
+
+func envOrFlag(envKey, flagVal string) string {
+	if flagVal != "" {
+		return flagVal
+	}
+	return os.Getenv(envKey)
 }

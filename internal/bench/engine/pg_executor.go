@@ -51,6 +51,16 @@ func (e *PgExecutor) Execute(ctx context.Context, rawQuery string, params []any)
 func (e *PgExecutor) Name() string { return e.name }
 func (e *PgExecutor) Close() error { return nil }
 
+// Validate runs EXPLAIN on the query. This catches syntax errors and missing
+// columns/tables/operators without scanning data. ParadeDB's pdb.* functions
+// also surface here, so it's a real correctness check for those queries too.
+func (e *PgExecutor) Validate(ctx context.Context, query string) error {
+	if _, err := e.executor.Exec(ctx, "EXPLAIN "+query, nil, nil); err != nil {
+		return fmt.Errorf("pg explain: %w", err)
+	}
+	return nil
+}
+
 func extractUUID(val interface{}) (uuid.UUID, error) {
 	switch v := val.(type) {
 	case [16]byte:

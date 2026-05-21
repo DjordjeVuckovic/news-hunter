@@ -1,7 +1,7 @@
 name: "FTS Quality Benchmark v1"
 description: "Starter suite with ~10 queries across search paradigms for end-to-end verification"
 version: "1.0"
-judgments_file: configs/bench/trec/annotations_v1.yaml
+judgments_file: trec/annotations_v1.yaml
 
 templates:
   - id: pg_fts_multi_field

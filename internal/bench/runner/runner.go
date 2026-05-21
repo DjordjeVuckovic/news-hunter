@@ -28,10 +28,17 @@ func (r *Runner) RunAll(
 ) (*BenchmarkResult, error) {
 	br := &BenchmarkResult{Config: r.config}
 
+	// Cache suite loads — multiple jobs commonly share a suite.
+	suiteCache := map[string]*suite.LoadedSuite{}
 	for _, job := range bs.Jobs {
-		loaded, err := suite.LoadFromFile(job.Suite)
-		if err != nil {
-			return nil, fmt.Errorf("load suite for job %q: %w", job.Name, err)
+		loaded, ok := suiteCache[job.Suite]
+		if !ok {
+			ls, err := suite.LoadFromFile(job.Suite)
+			if err != nil {
+				return nil, fmt.Errorf("load suite for job %q: %w", job.Name, err)
+			}
+			suiteCache[job.Suite] = ls
+			loaded = ls
 		}
 
 		jr, err := r.RunJob(ctx, job, loaded, executors)
@@ -84,16 +91,18 @@ func (r *Runner) runQueries(
 		jr.Results[q.ID] = make(map[string]QueryResult)
 		judgments := q.JudgmentMap()
 
-		for engName, exec := range executors {
+		for _, engName := range jr.EngineNames {
+			exec, ok := executors[engName]
+			if !ok {
+				continue
+			}
 			resolved, err := q.ResolveEngineQuery(engName, registry, suiteDir)
 			if err != nil {
-				qr := QueryResult{
+				jr.Results[q.ID][engName] = QueryResult{
 					QueryID:    q.ID,
-					JobName:    jr.JobName,
 					EngineName: engName,
 					Error:      fmt.Errorf("resolve query: %w", err),
 				}
-				jr.Results[q.ID][engName] = qr
 				slog.Warn("resolve query failed", "query", q.ID, "engine", engName, "error", err)
 				continue
 			}
@@ -108,9 +117,8 @@ func (r *Runner) runQueries(
 				scores = metrics.ComputeAll(result.rankedIDs, judgments, r.config.KValues, r.config.RelevanceThreshold)
 			}
 
-			qr := QueryResult{
+			jr.Results[q.ID][engName] = QueryResult{
 				QueryID:      q.ID,
-				JobName:      jr.JobName,
 				EngineName:   engName,
 				Scores:       scores,
 				RankedDocIDs: result.rankedIDs,
@@ -118,7 +126,6 @@ func (r *Runner) runQueries(
 				Latency:      result.latencyStats,
 				Error:        result.err,
 			}
-			jr.Results[q.ID][engName] = qr
 
 			if result.err != nil {
 				slog.Warn("query failed", "query", q.ID, "engine", engName, "error", result.err)

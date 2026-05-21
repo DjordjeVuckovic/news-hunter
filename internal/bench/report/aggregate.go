@@ -69,7 +69,7 @@ func generateJobReport(jr *runner.JobResult, kValues []int) JobReport {
 			}
 			entry := Entry{
 				QueryID:      qr.QueryID,
-				JobName:      qr.JobName,
+				JobName:      jr.JobName,
 				EngineName:   qr.EngineName,
 				Judged:       qr.Scores.Judged,
 				NDCG:         qr.Scores.NDCG,

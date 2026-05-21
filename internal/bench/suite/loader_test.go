@@ -223,3 +223,85 @@ queries:
 	require.NoError(t, err)
 	assert.Equal(t, dir, loaded.Dir)
 }
+
+func TestLoadFromFile_InjectsJudgmentsFile(t *testing.T) {
+	dir := t.TempDir()
+	docID := uuid.New()
+
+	judgmentsPath := filepath.Join(dir, "ann.yaml")
+	judgmentsYAML := `strategy: keyword
+queries:
+  - query_id: q1
+    docs:
+      - doc_id: ` + docID.String() + `
+        grade: 2
+      - doc_id: 00000000-0000-0000-0000-000000000001
+        grade: -1
+`
+	require.NoError(t, os.WriteFile(judgmentsPath, []byte(judgmentsYAML), 0644))
+
+	suitePath := filepath.Join(dir, "suite.yaml")
+	suiteYAML := `name: test
+judgments_file: ann.yaml
+queries:
+  - id: q1
+    description: test
+    engines:
+      pg: "SELECT 1"
+  - id: q2
+    description: no judgments here
+    engines:
+      pg: "SELECT 1"
+`
+	require.NoError(t, os.WriteFile(suitePath, []byte(suiteYAML), 0644))
+
+	loaded, err := LoadFromFile(suitePath)
+	require.NoError(t, err)
+	require.Len(t, loaded.Suite.Queries, 2)
+
+	q1 := loaded.Suite.Queries[0]
+	require.Len(t, q1.Judgments, 1, "unjudged (-1) entries should be filtered out")
+	assert.Equal(t, docID, q1.Judgments[0].DocID)
+	assert.Equal(t, 2, q1.Judgments[0].Relevance)
+
+	assert.Empty(t, loaded.Suite.Queries[1].Judgments)
+}
+
+func TestLoadFromFile_MissingJudgmentsFileWarnsButLoads(t *testing.T) {
+	dir := t.TempDir()
+	suitePath := filepath.Join(dir, "suite.yaml")
+	suiteYAML := `name: test
+judgments_file: nope.yaml
+queries:
+  - id: q1
+    engines:
+      pg: "SELECT 1"
+`
+	require.NoError(t, os.WriteFile(suitePath, []byte(suiteYAML), 0644))
+
+	loaded, err := LoadFromFile(suitePath)
+	require.NoError(t, err, "missing judgments file must NOT block validate/pool/judge")
+	require.Len(t, loaded.Suite.Queries, 1)
+	assert.Empty(t, loaded.Suite.Queries[0].Judgments,
+		"no judgments wired when the file doesn't exist yet")
+}
+
+func TestLoadFromFile_MalformedJudgmentsFileErrors(t *testing.T) {
+	dir := t.TempDir()
+	judgmentsPath := filepath.Join(dir, "ann.yaml")
+	require.NoError(t, os.WriteFile(judgmentsPath, []byte("not: valid: yaml: ["), 0644))
+
+	suitePath := filepath.Join(dir, "suite.yaml")
+	suiteYAML := `name: test
+judgments_file: ann.yaml
+queries:
+  - id: q1
+    engines:
+      pg: "SELECT 1"
+`
+	require.NoError(t, os.WriteFile(suitePath, []byte(suiteYAML), 0644))
+
+	_, err := LoadFromFile(suitePath)
+	require.Error(t, err, "malformed YAML should still surface as an error")
+	assert.Contains(t, err.Error(), "judgments_file")
+}
