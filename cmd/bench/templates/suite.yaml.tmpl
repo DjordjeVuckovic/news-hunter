@@ -1,0 +1,27 @@
+name: "{{.Name}}"
+description: "TODO: describe what this suite tests"
+version: "0.1"
+
+# Judgments live in a separate file so the suite stays clean.
+# `bench judge` writes here; `bench run` auto-loads it.
+judgments_file: {{.AnnotationsRel}}
+
+templates:
+  - id: pg_fts_multi_field
+    query: |
+      SELECT id FROM articles
+      WHERE to_tsvector('english', title || ' ' || coalesce(description,'') || ' ' || coalesce(content,''))
+            @@ plainto_tsquery('english', '{{`{{terms}}`}}')
+      ORDER BY ts_rank(
+        to_tsvector('english', title || ' ' || coalesce(description,'') || ' ' || coalesce(content,'')),
+        plainto_tsquery('english', '{{`{{terms}}`}}')
+      ) DESC
+      LIMIT {{`{{limit}}`}}
+
+queries:
+  - id: example-q1
+    description: "Replace with a real search intent — e.g. 'climate change effects on biodiversity'"
+    engines:
+      pg:
+        template: pg_fts_multi_field
+        params: { terms: "climate change", limit: 100 }

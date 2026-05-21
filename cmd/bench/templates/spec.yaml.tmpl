@@ -1,0 +1,31 @@
+# Bench spec for {{.Name}}.
+# Defines engines + jobs. Each job runs a suite against a subset of engines.
+
+engines:
+  pg:
+    type: postgres
+    connection: "postgresql://news_user:news_password@localhost:54320/news_db"
+  # paradedb:
+  #   type: postgres
+  #   connection: "postgresql://news_user:news_password@localhost:54321/news_db"
+  # elasticsearch:
+  #   type: elasticsearch
+  #   connection: "http://localhost:9200"
+  #   index: articles
+  # api:
+  #   type: api
+  #   connection: "http://localhost:8080"
+
+metrics:
+  k_values: [3, 5, 10]
+  max_k: 100
+  relevance_threshold: 1
+
+runs:
+  warmup: 1
+  iterations: 3
+
+jobs:
+  - name: "{{.Name}}"
+    suite: {{.SuiteRel}}
+    engines: [pg]
