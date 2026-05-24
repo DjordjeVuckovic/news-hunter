@@ -3,17 +3,46 @@ package spec
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/version"
 	"gopkg.in/yaml.v3"
 )
 
+// LoadFromFile reads, parses, and validates a spec YAML. Relative paths in
+// jobs[].suite are rewritten to be absolute and rooted at the spec file's
+// directory — so downstream loaders work regardless of process CWD.
+//
+// This is the only place that does the path rewrite; runner/cmd_pool/
+// cmd_validate consume the resolved spec and never need to know where the
+// spec was loaded from.
 func LoadFromFile(path string) (*BenchSpec, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read spec file: %w", err)
 	}
-	return Parse(data)
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return nil, fmt.Errorf("abs spec path: %w", err)
+	}
+	bs, err := Parse(data)
+	if err != nil {
+		return nil, err
+	}
+	resolveJobSuitePaths(bs, filepath.Dir(abs))
+	return bs, nil
+}
+
+// resolveJobSuitePaths rewrites every job's relative Suite path to absolute,
+// anchored at the spec file's directory. Absolute paths are left alone.
+func resolveJobSuitePaths(bs *BenchSpec, specDir string) {
+	for i := range bs.Jobs {
+		s := bs.Jobs[i].Suite
+		if s == "" || filepath.IsAbs(s) {
+			continue
+		}
+		bs.Jobs[i].Suite = filepath.Join(specDir, s)
+	}
 }
 
 func Parse(data []byte) (*BenchSpec, error) {
@@ -73,6 +102,9 @@ func validate(s *BenchSpec) error {
 			return fmt.Errorf("engine %q has no connection", name)
 		}
 	}
+	if err := validateDefaults(s); err != nil {
+		return err
+	}
 	if s.Metrics.MaxK <= 0 {
 		s.Metrics.MaxK = 100
 	}
@@ -86,4 +118,46 @@ func validate(s *BenchSpec) error {
 		s.Runs.Iterations = 1
 	}
 	return nil
+}
+
+// KnownStrategies is set at startup by the cmd layer (which has the registry).
+// Keeping spec free of a hard dep on judgment avoids an upstream import cycle
+// risk if judgment ever needs spec types. Nil means "skip validation".
+var KnownStrategies func() []string
+
+// validateDefaults checks defaults.judgments shape:
+//   - empty → ok (CLI must supply --judgments)
+//   - path-like (contains "/" or ends in .yaml/.yml) → trusted, validated at load
+//   - bare name → must be a known strategy
+func validateDefaults(s *BenchSpec) error {
+	v := s.Defaults.Judgments
+	if v == "" {
+		return nil
+	}
+	if looksLikeJudgmentsPath(v) {
+		return nil
+	}
+	if KnownStrategies == nil {
+		return nil // CLI didn't wire the registry; defer to runtime
+	}
+	for _, k := range KnownStrategies() {
+		if k == v {
+			return nil
+		}
+	}
+	return fmt.Errorf("spec.defaults.judgments=%q is not a known strategy and not a path (expected one of: %v, or a path to an annotations YAML)",
+		v, KnownStrategies())
+}
+
+func looksLikeJudgmentsPath(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r == '/' || r == filepath.Separator {
+			return true
+		}
+	}
+	ext := filepath.Ext(s)
+	return ext == ".yaml" || ext == ".yml"
 }

@@ -4,8 +4,16 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/DjordjeVuckovic/news-hunter/internal/bench/judgment"
+	"github.com/DjordjeVuckovic/news-hunter/internal/bench/spec"
 	"github.com/spf13/cobra"
 )
+
+func init() {
+	// Let the spec loader query the strategy registry without importing
+	// judgment directly (keeps spec package dep-free of judgment).
+	spec.KnownStrategies = judgment.KnownStrategies
+}
 
 const (
 	cliName  = "bench"

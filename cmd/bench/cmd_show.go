@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"os"
 	"sort"
 	"text/tabwriter"
 
@@ -27,14 +26,16 @@ intermediates without grepping YAML.`,
 }
 
 func newShowPoolCmd() *cobra.Command {
-	var strategy string
-	cmd := &cobra.Command{
+	return &cobra.Command{
 		Use:     "pool [track|path]",
 		Short:   "Summarise a pool file",
 		Args:    cobra.MaximumNArgs(1),
 		Example: "  bench show pool fts_quality\n  bench show pool /path/to/pool.yaml",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			path := resolveArtifactPath(args, "pool", "")
+			path, err := resolveArtifactPath(args, "pool", "")
+			if err != nil {
+				return err
+			}
 			pf, err := pool.ReadPoolFile(path)
 			if err != nil {
 				return err
@@ -43,8 +44,6 @@ func newShowPoolCmd() *cobra.Command {
 			return nil
 		},
 	}
-	_ = strategy
-	return cmd
 }
 
 func newShowJudgmentsCmd() *cobra.Command {
@@ -59,7 +58,10 @@ func newShowJudgmentsCmd() *cobra.Command {
 			if s == "" {
 				s = string(judgment.StrategyLexical)
 			}
-			path := resolveArtifactPath(args, "judgments", s)
+			path, err := resolveArtifactPath(args, "judgments", s)
+			if err != nil {
+				return err
+			}
 			jf, err := judgment.ReadFile(path)
 			if err != nil {
 				return err
@@ -79,7 +81,10 @@ func newShowSpecCmd() *cobra.Command {
 		Args:    cobra.MaximumNArgs(1),
 		Example: "  bench show spec fts_quality\n  bench show spec /path/to/spec.yaml",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			path := resolveArtifactPath(args, "spec", "")
+			path, err := resolveArtifactPath(args, "spec", "")
+			if err != nil {
+				return err
+			}
 			bs, err := spec.LoadFromFile(path)
 			if err != nil {
 				return err
@@ -94,12 +99,12 @@ func newShowSpecCmd() *cobra.Command {
 // into the on-disk artifact path. If args is empty, walk-up CWD detection
 // decides. kind is one of: spec, pool, judgments. strategy applies only to
 // judgments.
-func resolveArtifactPath(args []string, kind, strategy string) string {
-	if len(args) == 1 {
-		// Treat any YAML/JSON-extensioned arg as a direct path.
-		if looksLikePath(args[0]) {
-			return args[0]
-		}
+func resolveArtifactPath(args []string, kind, strategy string) (string, error) {
+	if len(args) == 1 && looksLikePath(args[0]) {
+		// Treat any path-shaped arg as a direct path. trackctx.Resolve would
+		// reject it as non-track-shaped, but for `show` we don't care — the
+		// caller just wants to read whatever file the user pointed at.
+		return args[0], nil
 	}
 	in := trackctx.Inputs{}
 	if len(args) == 1 {
@@ -107,22 +112,18 @@ func resolveArtifactPath(args []string, kind, strategy string) string {
 	}
 	tr, err := trackctx.Resolve(in)
 	if err != nil {
-		// Fall back to using the arg as-is so users can still pass paths.
-		if len(args) == 1 {
-			return args[0]
-		}
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		return "", err
 	}
 	switch kind {
 	case "spec":
-		return tr.Spec
+		return tr.Spec, nil
 	case "pool":
-		return tr.Pool
+		return tr.Pool, nil
 	case "judgments":
-		return tr.JudgmentsPath(strategy)
+		return tr.JudgmentsPath(strategy), nil
+	default:
+		return "", fmt.Errorf("unknown artifact kind %q", kind)
 	}
-	return ""
 }
 
 func looksLikePath(s string) bool {

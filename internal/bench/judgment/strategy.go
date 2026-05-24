@@ -66,6 +66,21 @@ const (
 	StrategyManual StrategyKind = "manual"
 )
 
+// KnownStrategies returns every strategy kind the runner can instantiate
+// (including reserved ones). Used by the spec validator to reject
+// spec.defaults.judgments typos at load time.
+func KnownStrategies() []string {
+	return []string{
+		string(StrategyLexical),
+		string(StrategyBM25),
+		string(StrategyVector),
+		string(StrategyHybrid),
+		string(StrategyClaudeCLI),
+		string(StrategyClaudeAPI),
+		string(StrategyManual),
+	}
+}
+
 type StrategyOptions struct {
 	APIKey      string
 	APIModel    string

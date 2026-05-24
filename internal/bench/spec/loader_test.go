@@ -1,6 +1,8 @@
 package spec
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -169,6 +171,10 @@ jobs:
 }
 
 func TestParse_DefaultsBlock(t *testing.T) {
+	prev := KnownStrategies
+	KnownStrategies = func() []string { return []string{"lexical", "claude-api"} }
+	defer func() { KnownStrategies = prev }()
+
 	yaml := validSpecHeader + `defaults:
   pool_depth: 50
   judgments: lexical
@@ -185,4 +191,79 @@ jobs:
 	require.NoError(t, err)
 	assert.Equal(t, 50, s.Defaults.PoolDepth)
 	assert.Equal(t, "lexical", s.Defaults.Judgments)
+}
+
+func TestParse_RejectsUnknownDefaultsJudgments(t *testing.T) {
+	prev := KnownStrategies
+	KnownStrategies = func() []string { return []string{"lexical", "claude-api"} }
+	defer func() { KnownStrategies = prev }()
+
+	yaml := validSpecHeader + `defaults:
+  judgments: calude-api
+engines:
+  pg:
+    type: postgres
+    connection: "postgresql://localhost/test"
+jobs:
+  - name: test
+    suite: suite.yaml
+    engines: [pg]
+`
+	_, err := Parse([]byte(yaml))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not a known strategy")
+}
+
+func TestParse_PathLikeDefaultsJudgmentsAllowed(t *testing.T) {
+	prev := KnownStrategies
+	KnownStrategies = func() []string { return []string{"lexical"} }
+	defer func() { KnownStrategies = prev }()
+
+	yaml := validSpecHeader + `defaults:
+  judgments: /tmp/some/ad-hoc.yaml
+engines:
+  pg:
+    type: postgres
+    connection: "postgresql://localhost/test"
+jobs:
+  - name: test
+    suite: suite.yaml
+    engines: [pg]
+`
+	s, err := Parse([]byte(yaml))
+	require.NoError(t, err)
+	assert.Equal(t, "/tmp/some/ad-hoc.yaml", s.Defaults.Judgments)
+}
+
+func TestLoadFromFile_ResolvesJobSuitePathsAgainstSpecDir(t *testing.T) {
+	dir := t.TempDir()
+	specPath := filepath.Join(dir, "spec.yaml")
+	yaml := `schema_version: 1
+id: t
+engines:
+  pg:
+    type: postgres
+    connection: "postgresql://localhost/test"
+jobs:
+  - name: rel
+    suite: suite.yaml
+    engines: [pg]
+  - name: abs
+    suite: /abs/path/suite.yaml
+    engines: [pg]
+`
+	require.NoError(t, os.WriteFile(specPath, []byte(yaml), 0644))
+
+	cwd, _ := os.Getwd()
+	defer func() { _ = os.Chdir(cwd) }()
+	// Move CWD elsewhere — proves resolution is anchored to spec dir, not CWD.
+	require.NoError(t, os.Chdir(os.TempDir()))
+
+	s, err := LoadFromFile(specPath)
+	require.NoError(t, err)
+
+	assert.Equal(t, filepath.Join(dir, "suite.yaml"), s.Jobs[0].Suite,
+		"relative suite path must be anchored at the spec file's dir")
+	assert.Equal(t, "/abs/path/suite.yaml", s.Jobs[1].Suite,
+		"absolute suite paths must be left alone")
 }

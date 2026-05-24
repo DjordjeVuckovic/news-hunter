@@ -80,13 +80,17 @@ func executeRun(cmd *cobra.Command, f runFlags, args []string) error {
 	}
 
 	// Wire judgments: --judgments wins, else spec.defaults.judgments, else nothing.
+	// "Explicit" (CLI flag) → missing file is a hard error so typos surface
+	// loudly. "Default" (from spec) → missing is silent so validate/pool can
+	// run before any judging has happened.
 	judgmentsValue := f.judgments
-	if judgmentsValue == "" {
+	explicit := judgmentsValue != ""
+	if !explicit {
 		judgmentsValue = bs.Defaults.Judgments
 	}
 	jPath := tr.JudgmentsPath(judgmentsValue)
 
-	judgmentsMap, err := loadJudgmentsMap(jPath)
+	judgmentsMap, err := loadJudgmentsMap(jPath, explicit)
 	if err != nil {
 		return err
 	}
@@ -144,14 +148,23 @@ func executeRun(cmd *cobra.Command, f runFlags, args []string) error {
 }
 
 // loadJudgmentsMap reads a judgments YAML and flattens to a runner-friendly
-// map[queryID][docID]grade. Returns nil if the path is empty or missing — the
-// runner treats nil as "no judgments", and the report prints the appropriate
-// warning. Filters out unjudged entries (grade < 0).
-func loadJudgmentsMap(path string) (map[string]map[string]int, error) {
+// map[queryID][docID]grade. Filters out unjudged entries (grade < 0).
+//
+// Missing-file semantics depend on explicit:
+//   - explicit=true (user passed --judgments) → error, so typos surface loud.
+//   - explicit=false (spec.defaults.judgments) → return nil, runner reports
+//     "no judgments" in the table. This lets validate/pool run on a fresh
+//     track that hasn't been judged yet.
+func loadJudgmentsMap(path string, explicit bool) (map[string]map[string]int, error) {
 	if path == "" {
 		return nil, nil
 	}
 	if _, err := os.Stat(path); os.IsNotExist(err) {
+		if explicit {
+			return nil, fmt.Errorf("--judgments file not found: %s\n"+
+				"  • check the strategy name (lexical, claude-cli, claude-api, manual)\n"+
+				"  • or pass an explicit path to an existing YAML", path)
+		}
 		return nil, nil
 	}
 	jf, err := judgment.ReadFile(path)
