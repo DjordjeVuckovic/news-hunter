@@ -36,7 +36,7 @@ The project follows a layered architecture pattern:
   - `ds_ingest/`: Imports News datasets into the database
   - `news_api/`: HTTP API server for search functionality
   - `schemagen/`: Schema generation utilities
-  - `bench/`: Search engine benchmarking tools
+  - `bench/`: IR benchmark CLI — see [docs/bench.md](docs/bench.md)
 
 - **internal/**: Core business logic organized by domain
   - `types/`: Core type definitions organized by bounded contexts
@@ -59,10 +59,10 @@ The project follows a layered architecture pattern:
   - Data mapping configuration examples and JSON schemas
 
 
+- **tracks/**: Benchmark tracks — each a self-contained folder with `spec.yaml`, `suite.yaml`, `trec/` (pool + judgments), and `reports/`
 - **configs/**: Configuration files
   - `mappings/`: YAML configuration files for data field mappings
   - `elasticsearch/`: Elasticsearch configuration (index templates, ILM policies)
-  - `benchmark/`: Benchmarking configuration files
 - **db/**: Database-related files
   - `migrations/`: SQL migration files for database schema
   - `query/`: SQL query files for database operations
@@ -111,6 +111,28 @@ Uses a pipeline pattern for data processing with common interfaces:
 3. Collector orchestrates the process
 4. Factory creates storage instances based on configuration
 5. Storage persists the articles with bulk operations support
+
+### Bench CLI (`cmd/bench/`)
+
+TREC-style IR evaluation pipeline. Full docs: [docs/bench.md](docs/bench.md).
+
+**Package layout** (`internal/bench/`):
+- `trackctx/` — resolves track folder + all artifact paths; single source of truth for every subcommand
+- `spec/` — `BenchSpec` YAML: engines, jobs, metrics config, `defaults.judgments`
+- `suite/` — `TestSuite` YAML: queries, per-engine templates
+- `pool/` — TREC-style candidate pooling
+- `judgment/` — strategy taxonomy (lexical / claude-cli / claude-api / manual); batched grading; incremental writer
+- `runner/` — orchestration: warmup + measured iterations, per-query metrics
+- `report/` — aggregation, JSON output, `bench show report`
+- `metrics/` — NDCG, MAP, MRR, Bpref, P/R/F1
+- `meta/` — provenance block embedded in every artifact (run_id, tool, generated_at, sources)
+- `version/` — schema version constant + checker
+
+**Track convention**: `tracks/<name>/spec.yaml` + `suite.yaml` + `trec/` + `reports/`. Every subcommand resolves paths from a track name, `--track` flag, or walk-up from CWD.
+
+**Strategy taxonomy**: `lexical` (token-overlap), `claude-cli` / `claude-api` (LLM batched), `manual` (human placeholders). Reserved: `bm25`, `vector`, `hybrid`.
+
+**Schema v1**: every artifact has `schema_version: 1` + `meta:` block. Loading without it is a hard error — no backward-compat tolerance.
 
 ### HTTP API Server
 Built with Echo framework providing:

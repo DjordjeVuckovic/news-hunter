@@ -114,6 +114,9 @@ func validate(s *BenchSpec) error {
 	if s.Metrics.RelevanceThreshold <= 0 {
 		s.Metrics.RelevanceThreshold = 1
 	}
+	if s.Runs.Warmup <= 0 {
+		s.Runs.Warmup = 1
+	}
 	if s.Runs.Iterations <= 0 {
 		s.Runs.Iterations = 1
 	}

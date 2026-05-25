@@ -100,7 +100,7 @@ func executeRun(cmd *cobra.Command, f runFlags, args []string) error {
 		MaxK:               firstNonZero(f.maxK, bs.Metrics.MaxK),
 		RelevanceThreshold: bs.Metrics.RelevanceThreshold,
 		WarmupRuns:         firstNonZero(f.warmup, bs.Runs.Warmup),
-		Runs:               max(firstNonZero(f.iters, bs.Runs.Iterations), 1),
+		Runs:               firstNonZero(f.iters, bs.Runs.Iterations),
 		Judgments:          judgmentsMap,
 	}
 	if len(bs.Metrics.KValues) > 0 && !cmd.Flags().Changed("k") {

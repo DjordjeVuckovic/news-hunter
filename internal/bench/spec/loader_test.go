@@ -103,7 +103,8 @@ jobs:
 		assert.Equal(t, 100, s.Metrics.MaxK)
 		assert.Equal(t, []int{3, 5, 10}, s.Metrics.KValues)
 		assert.Equal(t, 1, s.Metrics.RelevanceThreshold)
-		assert.Equal(t, 1, s.Runs.Iterations)
+		assert.Equal(t, 1, s.Runs.Warmup)
+		assert.Equal(t, 3, s.Runs.Iterations)
 	})
 
 	t.Run("invalid engine type", func(t *testing.T) {

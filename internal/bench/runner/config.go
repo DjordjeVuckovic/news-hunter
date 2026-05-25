@@ -5,8 +5,9 @@ var DefaultKValues = []int{3, 5, 10}
 const (
 	DefaultMaxK               = 10
 	DefaultRelevanceThreshold = 1
-	DefaultWarmupRuns         = 0
-	DefaultRuns               = 1
+	DefaultWarmupRuns         = 1
+	DefaultRuns               = 3
+	DefaultEngineParallelism  = 4
 )
 
 type Config struct {
@@ -15,6 +16,9 @@ type Config struct {
 	RelevanceThreshold int
 	WarmupRuns         int
 	Runs               int
+	// EngineParallelism is the max number of engines queried concurrently for
+	// a single query. 0 means unlimited (fan out to all engines at once).
+	EngineParallelism int
 	// Judgments[queryID][docID]grade — pre-loaded by the CLI from the
 	// resolved annotations file. When nil, queries are scored without
 	// relevance grades and the report flags them as unjudged.
@@ -28,5 +32,6 @@ func DefaultConfig() Config {
 		RelevanceThreshold: DefaultRelevanceThreshold,
 		WarmupRuns:         DefaultWarmupRuns,
 		Runs:               DefaultRuns,
+		EngineParallelism:  DefaultEngineParallelism,
 	}
 }

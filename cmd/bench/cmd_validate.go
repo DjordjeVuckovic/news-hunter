@@ -79,6 +79,10 @@ func executeValidate(cmd *cobra.Command, f validateFlags, args []string) error {
 	var rows []validateRow
 	failures := 0
 	suites := map[string]*suite.LoadedSuite{}
+	// seen deduplicates (suitePath, queryID, engineName) triples — two jobs
+	// that share the same suite and engines would otherwise re-validate the
+	// same pairs, doubling traffic and output noise.
+	seen := map[string]struct{}{}
 
 	for _, job := range bs.Jobs {
 		ls, ok := suites[job.Suite]
@@ -92,6 +96,12 @@ func executeValidate(cmd *cobra.Command, f validateFlags, args []string) error {
 		}
 		for _, q := range ls.Suite.Queries {
 			for _, engName := range job.Engines {
+				key := job.Suite + "\x00" + q.ID + "\x00" + engName
+				if _, done := seen[key]; done {
+					continue
+				}
+				seen[key] = struct{}{}
+
 				row := validateRow{queryID: q.ID, engine: engName}
 				row = validateOne(cmd.Context(), row, q, engName, ls, executors[engName])
 				rows = append(rows, row)
