@@ -56,7 +56,8 @@ func NewClaudeAPIStrategy(opts StrategyOptions) (*ClaudeAPIStrategy, error) {
 	}, nil
 }
 
-func (s *ClaudeAPIStrategy) Name() string { return string(StrategyClaudeAPI) }
+func (s *ClaudeAPIStrategy) Name() string    { return string(StrategyClaudeAPI) }
+func (s *ClaudeAPIStrategy) ModelID() string { return s.model }
 
 type messagesRequest struct {
 	Model     string          `json:"model"`

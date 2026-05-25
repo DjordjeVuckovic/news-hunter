@@ -28,6 +28,11 @@ func NewClaudeCLIStrategy(opts StrategyOptions) *ClaudeCLIStrategy {
 
 func (s *ClaudeCLIStrategy) Name() string { return string(StrategyClaudeCLI) }
 
+// ModelID returns the CLI binary name. The claude CLI's model is determined
+// by its own runtime configuration (--model flag / user defaults) — we cannot
+// reliably introspect it, so we record the binary identifier instead.
+func (s *ClaudeCLIStrategy) ModelID() string { return s.binary }
+
 func (s *ClaudeCLIStrategy) Grade(ctx context.Context, q GradingQuery, doc GradingDoc) (int, error) {
 	out, err := s.runCLI(ctx, BuildGradingPrompt(q, doc))
 	if err != nil {

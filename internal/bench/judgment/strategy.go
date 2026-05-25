@@ -28,6 +28,14 @@ type Strategy interface {
 	Grade(ctx context.Context, q GradingQuery, doc GradingDoc) (int, error)
 }
 
+// ModelIdentifier is an optional capability for strategies that know which
+// specific model they used. cmd_judge checks this via type assertion to
+// populate meta.JudgeModel accurately without relying on the --api-model flag.
+// Deterministic strategies (lexical, manual) do not implement this interface.
+type ModelIdentifier interface {
+	ModelID() string
+}
+
 // BatchStrategy is an optional capability: strategies that can grade N docs
 // in a single LLM call should implement it. The runner detects it via type
 // assertion and prefers GradeBatch over Grade when present.

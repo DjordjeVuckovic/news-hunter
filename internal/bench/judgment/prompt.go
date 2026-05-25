@@ -82,6 +82,12 @@ func truncateRunes(s string, max int) string {
 	return string(runes[:max]) + "..."
 }
 
+// PromptVersion identifies the grading rubric. Bump this manually whenever the
+// system prompt or grading scale changes in a way that could shift grades.
+// bench judge embeds this in the annotations meta block so you can tell which
+// prompt version produced a given judgment file and catch rubric drift on resume.
+const PromptVersion = "v1"
+
 const batchContentSnippetRunes = 600
 
 // BuildBatchGradingPrompt produces the user-turn payload for batched grading.

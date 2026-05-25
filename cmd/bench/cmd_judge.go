@@ -134,11 +134,29 @@ func executeJudge(cmd *cobra.Command, f judgeFlags, args []string) error {
 		if err != nil {
 			return fmt.Errorf("load prior judgments: %w", err)
 		}
-		if prior != nil && prior.Strategy != "" && prior.Strategy != strat.Name() {
-			return fmt.Errorf("--resume strategy mismatch: existing file is %q, --strategy is %q",
-				prior.Strategy, strat.Name())
-		}
 		if prior != nil {
+			if prior.Strategy != "" && prior.Strategy != strat.Name() {
+				return fmt.Errorf("--resume strategy mismatch: existing file is %q, --strategy is %q",
+					prior.Strategy, strat.Name())
+			}
+			// Refuse if the prior file was produced by a different model —
+			// mixing grades from different models in one file corrupts the judgment set.
+			if mi, ok := strat.(judgment.ModelIdentifier); ok {
+				if prior.Meta.JudgeModel != mi.ModelID() {
+					return fmt.Errorf(
+						"--resume model mismatch: existing file used %q, current strategy uses %q\n"+
+							"  • re-run without --resume to start fresh with the new model",
+						prior.Meta.JudgeModel, mi.ModelID())
+				}
+			}
+			// Refuse if the grading rubric changed — shifted rubric + old grades
+			// in the same file means the scale is internally inconsistent.
+			if prior.Meta.JudgePromptVersion != judgment.PromptVersion {
+				return fmt.Errorf(
+					"--resume prompt version mismatch: existing file used prompt %q, current is %q\n"+
+						"  • the grading rubric changed; re-run without --resume to re-grade cleanly",
+					prior.Meta.JudgePromptVersion, judgment.PromptVersion)
+			}
 			cmd.Printf("Resume: loaded %d prior queries from %s\n", len(prior.Queries), outPath)
 		}
 	}
@@ -176,9 +194,15 @@ func executeJudge(cmd *cobra.Command, f judgeFlags, args []string) error {
 	final.Meta = meta.New("judge")
 	final.Meta.Strategy = strat.Name()
 	final.Meta.PoolRef = poolPath
-	final.Meta.JudgeModel = f.apiModel
 	final.Meta.RelevanceScale = []int{0, 1, 2, 3}
 	final.Meta.GradedCount = countGraded(final)
+	// G6: capture the actual model the strategy used, not the CLI flag (which
+	// is empty when the user relied on the default model).
+	if mi, ok := strat.(judgment.ModelIdentifier); ok {
+		final.Meta.JudgeModel = mi.ModelID()
+	}
+	// G7: stamp the prompt version so rubric drift is detectable on resume.
+	final.Meta.JudgePromptVersion = judgment.PromptVersion
 	if err := judgment.WriteFile(final, outPath); err != nil {
 		return fmt.Errorf("finalise judgments: %w", err)
 	}
