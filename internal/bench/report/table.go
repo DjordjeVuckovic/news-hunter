@@ -11,7 +11,11 @@ import (
 func WriteTable(r *Report, w io.Writer) {
 	tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
 
-	fmt.Fprintf(tw, "\n=== FTS Quality Benchmark ===\n")
+	title := r.Provenance.SpecID
+	if title == "" {
+		title = "Benchmark"
+	}
+	fmt.Fprintf(tw, "\n=== %s  run_id=%s ===\n", title, r.Provenance.RunID)
 
 	for _, jr := range r.Jobs {
 		fmt.Fprintf(tw, "\n--- Job: %s ---\n\n", jr.JobName)

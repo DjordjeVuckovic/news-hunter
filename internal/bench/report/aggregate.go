@@ -1,15 +1,11 @@
 package report
 
 import (
-	"time"
-
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/meta"
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/runner"
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/spec"
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/version"
 )
-
-const Version = "1.0.0"
 
 type GenerateOptions struct {
 	Spec   *spec.BenchSpec
@@ -20,11 +16,9 @@ func Generate(br *runner.BenchmarkResult, opts *GenerateOptions) *Report {
 	r := &Report{
 		SchemaVersion: version.SchemaVersion,
 		Provenance:    meta.New("run"),
-		Meta: BenchMeta{
-			Version:     Version,
-			Timestamp:   time.Now().UTC(),
-			Engines:     make(map[string]EngineInfo),
-			Environment: NewEnvironmentInfo(),
+		Environment: RunEnvironment{
+			Engines:  make(map[string]EngineInfo),
+			Platform: NewPlatformInfo(),
 		},
 		Config: ReportConfig{
 			KValues:            br.Config.KValues,
@@ -35,18 +29,17 @@ func Generate(br *runner.BenchmarkResult, opts *GenerateOptions) *Report {
 	if opts != nil {
 		if opts.Spec != nil {
 			for name, eng := range opts.Spec.Engines {
-				r.Meta.Engines[name] = EngineInfo{
+				r.Environment.Engines[name] = EngineInfo{
 					Type:       eng.Type,
 					Connection: maskConnection(eng.Connection),
 				}
 			}
 		}
-		r.Meta.Corpus = opts.Corpus
+		r.Environment.Corpus = opts.Corpus
 	}
 
 	for _, jr := range br.Jobs {
-		jobReport := generateJobReport(jr, br.Config.KValues)
-		r.Jobs = append(r.Jobs, jobReport)
+		r.Jobs = append(r.Jobs, generateJobReport(jr, br.Config.KValues))
 	}
 
 	return r
@@ -60,9 +53,7 @@ func maskConnection(conn string) string {
 }
 
 func generateJobReport(jr *runner.JobResult, kValues []int) JobReport {
-	report := JobReport{
-		JobName: jr.JobName,
-	}
+	report := JobReport{JobName: jr.JobName}
 
 	for _, qID := range jr.QueryOrder {
 		engineResults := jr.Results[qID]
@@ -143,8 +134,7 @@ func aggregate(jr *runner.JobResult, kValues []int) []AggregatedEntry {
 		}
 
 		if len(allStats) > 0 {
-			aggregatedStats := runner.AggregateLatencyStats(allStats)
-			agg.Latency = fromRunnerLatencyStats(aggregatedStats)
+			agg.Latency = fromRunnerLatencyStats(runner.AggregateLatencyStats(allStats))
 		}
 
 		if agg.JudgedCount > 0 {
@@ -152,7 +142,6 @@ func aggregate(jr *runner.JobResult, kValues []int) []AggregatedEntry {
 			agg.MAP /= n
 			agg.MRR /= n
 			agg.MBpref /= n
-
 			for _, k := range kValues {
 				agg.NDCG[k] /= n
 				agg.Precision[k] /= n

@@ -8,6 +8,7 @@ import (
 
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/judgment"
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/pool"
+	"github.com/DjordjeVuckovic/news-hunter/internal/bench/report"
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/spec"
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/trackctx"
 	"github.com/spf13/cobra"
@@ -21,7 +22,7 @@ func newShowCmd() *cobra.Command {
 histograms, engine coverage, dedup ratios. The single best way to sanity-check
 intermediates without grepping YAML.`,
 	}
-	cmd.AddCommand(newShowPoolCmd(), newShowJudgmentsCmd(), newShowSpecCmd())
+	cmd.AddCommand(newShowPoolCmd(), newShowJudgmentsCmd(), newShowSpecCmd(), newShowReportCmd())
 	return cmd
 }
 
@@ -90,6 +91,44 @@ func newShowSpecCmd() *cobra.Command {
 				return err
 			}
 			showSpec(cmd.OutOrStdout(), bs)
+			return nil
+		},
+	}
+}
+
+func newShowReportCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "report [track|path]",
+		Short: "Summarise the latest (or given) report",
+		Long: `Pretty-prints a one-page summary of a report JSON file: provenance block
+(run_id, tool, spec_id, sources) followed by the aggregated metrics and latency
+tables for each job.
+
+With a track name or path, follows reports/latest.json to the actual report.
+With a direct .json path, reads that file.`,
+		Args:    cobra.MaximumNArgs(1),
+		Example: "  bench show report fts_quality\n  bench show report /path/to/report.json",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			var rpt *report.Report
+			var err error
+
+			if len(args) == 1 && looksLikePath(args[0]) {
+				rpt, err = report.ReadJSON(args[0])
+			} else {
+				in := trackctx.Inputs{}
+				if len(args) == 1 {
+					in.TrackArg = args[0]
+				}
+				tr, rerr := trackctx.Resolve(in)
+				if rerr != nil {
+					return rerr
+				}
+				rpt, err = report.ReadLatestReport(tr.LatestReportPath())
+			}
+			if err != nil {
+				return err
+			}
+			showReport(cmd.OutOrStdout(), rpt)
 			return nil
 		},
 	}
@@ -245,6 +284,33 @@ func showSpec(w io.Writer, bs *spec.BenchSpec) {
 	fmt.Fprintf(w, "\nMetrics: k=%v max_k=%d threshold=%d\n",
 		bs.Metrics.KValues, bs.Metrics.MaxK, bs.Metrics.RelevanceThreshold)
 	fmt.Fprintf(w, "Runs: warmup=%d iterations=%d\n", bs.Runs.Warmup, bs.Runs.Iterations)
+}
+
+func showReport(w io.Writer, rpt *report.Report) {
+	p := rpt.Provenance
+	fmt.Fprintf(w, "Run ID:    %s\n", p.RunID)
+	fmt.Fprintf(w, "Tool:      %s\n", p.Tool)
+	fmt.Fprintf(w, "Generated: %s\n", p.GeneratedAt.Format("2006-01-02 15:04:05 UTC"))
+	if p.SpecID != "" {
+		fmt.Fprintf(w, "Spec:      %s\n", p.SpecID)
+	}
+	if p.Sources != nil {
+		fmt.Fprintln(w, "\nSources:")
+		if p.Sources.Spec != "" {
+			fmt.Fprintf(w, "  spec:      %s\n", p.Sources.Spec)
+		}
+		if p.Sources.Suite != "" {
+			fmt.Fprintf(w, "  suite:     %s\n", p.Sources.Suite)
+		}
+		if p.Sources.Pool != "" {
+			fmt.Fprintf(w, "  pool:      %s\n", p.Sources.Pool)
+		}
+		if p.Sources.Judgments != "" {
+			fmt.Fprintf(w, "  judgments: %s\n", p.Sources.Judgments)
+		}
+	}
+	fmt.Fprintln(w)
+	report.WriteTable(rpt, w)
 }
 
 func formatSources(sources map[string]int) string {

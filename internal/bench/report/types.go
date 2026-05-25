@@ -8,28 +8,31 @@ import (
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/runner"
 )
 
-// metaAlias keeps report.Report's embedded provenance distinct from the
-// existing BenchMeta type while sharing the meta.Meta schema across artifacts.
-type metaAlias = meta.Meta
-
+// Report is the root artifact produced by bench run. It has exactly two
+// identity blocks:
+//
+//   - Provenance (meta.Meta) — who/what/when produced this report and which
+//     source artifacts it consumed (spec, suite, pool, judgments).
+//   - Environment (RunEnvironment) — runtime context: engines tested, corpus
+//     shape, and host platform.
+//
+// There is no legacy "meta" block — Version and Timestamp lived there but are
+// already in Provenance.Tool and Provenance.GeneratedAt.
 type Report struct {
 	SchemaVersion int            `json:"schema_version"`
-	Provenance    provenanceMeta `json:"provenance"`
-	Meta          BenchMeta      `json:"meta"`
+	Provenance    meta.Meta      `json:"provenance"`
+	Environment   RunEnvironment `json:"environment"`
 	Jobs          []JobReport    `json:"jobs"`
 	Config        ReportConfig   `json:"config"`
 }
 
-// provenanceMeta wraps meta.Meta to keep the existing BenchMeta type untouched
-// while still embedding the standard run-id/tool/timestamp block.
-type provenanceMeta = metaAlias
-
-type BenchMeta struct {
-	Version     string                `json:"version"`
-	Timestamp   time.Time             `json:"timestamp"`
-	Engines     map[string]EngineInfo `json:"engines"`
-	Corpus      CorpusInfo            `json:"corpus,omitempty"`
-	Environment EnvironmentInfo       `json:"environment"`
+// RunEnvironment captures the runtime context of a bench run — engines tested,
+// corpus shape, and host platform. Distinct from Provenance (identity/sources)
+// and from Jobs (the measured outcomes).
+type RunEnvironment struct {
+	Engines  map[string]EngineInfo `json:"engines"`
+	Corpus   CorpusInfo            `json:"corpus,omitempty"`
+	Platform PlatformInfo          `json:"platform"`
 }
 
 type EngineInfo struct {
@@ -44,15 +47,15 @@ type CorpusInfo struct {
 	IndexName string `json:"index_name,omitempty"`
 }
 
-type EnvironmentInfo struct {
+type PlatformInfo struct {
 	GoVersion string `json:"go_version"`
 	OS        string `json:"os"`
 	Arch      string `json:"arch"`
 	NumCPU    int    `json:"num_cpu"`
 }
 
-func NewEnvironmentInfo() EnvironmentInfo {
-	return EnvironmentInfo{
+func NewPlatformInfo() PlatformInfo {
+	return PlatformInfo{
 		GoVersion: runtime.Version(),
 		OS:        runtime.GOOS,
 		Arch:      runtime.GOARCH,
