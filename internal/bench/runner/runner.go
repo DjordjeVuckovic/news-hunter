@@ -86,89 +86,126 @@ func (r *Runner) runQueries(
 	executors map[string]engine.Executor,
 	suiteDir string,
 ) {
-	// sem bounds concurrent engine calls per query. 0 = unlimited.
-	parallelism := r.config.EngineParallelism
-	if parallelism <= 0 {
-		parallelism = len(jr.EngineNames)
+	// Pre-populate order and result maps sequentially before launching any
+	// goroutines. Goroutines only READ the outer jr.Results map (to get their
+	// inner map pointer) and write only to their own inner map — no races.
+	for i := range queries {
+		jr.QueryOrder = append(jr.QueryOrder, queries[i].ID)
+		jr.Results[queries[i].ID] = make(map[string]QueryResult)
 	}
-	sem := make(chan struct{}, parallelism)
 
+	// querySem controls how many queries execute concurrently.
+	// QueryParallelismSerial (1) = one at a time → clean latency numbers.
+	// QueryParallelismUnlimited (0) → all queries in parallel → faster pool/validate.
+	qp := r.config.QueryParallelism
+	if qp <= 0 {
+		qp = len(queries)
+	}
+	querySem := make(chan struct{}, qp)
+
+	// engineSem is shared across all query goroutines — it bounds total
+	// concurrent engine calls globally, not just per query.
+	ep := r.config.EngineParallelism
+	if ep <= 0 {
+		ep = len(jr.EngineNames)
+	}
+	engineSem := make(chan struct{}, ep)
+
+	var wg sync.WaitGroup
 	for i := range queries {
 		q := &queries[i]
-		jr.QueryOrder = append(jr.QueryOrder, q.ID)
-		jr.Results[q.ID] = make(map[string]QueryResult)
-		judgments := r.judgmentsFor(q)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			querySem <- struct{}{}
+			defer func() { <-querySem }()
+			r.runEnginesForQuery(ctx, jr, q, registry, executors, suiteDir, engineSem)
+		}()
+	}
+	wg.Wait()
+}
 
-		// Fan out to all engines concurrently. Each goroutine writes only to
-		// its own index in the slots slice, so no mutex is needed there.
-		type slot struct {
-			engName string
-			qr      QueryResult
-			present bool
+// runEnginesForQuery fans out to all engines for a single query concurrently.
+// Each goroutine writes only to its own index in the slots slice (no mutex),
+// and the merge into jr.Results happens after all goroutines finish.
+func (r *Runner) runEnginesForQuery(
+	ctx context.Context,
+	jr *JobResult,
+	q *suite.Query,
+	registry *suite.TemplateRegistry,
+	executors map[string]engine.Executor,
+	suiteDir string,
+	engineSem chan struct{},
+) {
+	judgments := r.judgmentsFor(q)
+
+	type slot struct {
+		engName string
+		qr      QueryResult
+		present bool
+	}
+	slots := make([]slot, len(jr.EngineNames))
+	for idx, name := range jr.EngineNames {
+		slots[idx].engName = name
+	}
+
+	var wg sync.WaitGroup
+	for idx, engName := range jr.EngineNames {
+		exec, ok := executors[engName]
+		if !ok {
+			continue
 		}
-		slots := make([]slot, len(jr.EngineNames))
-		for idx, name := range jr.EngineNames {
-			slots[idx].engName = name
-		}
+		idx, engName := idx, engName
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			engineSem <- struct{}{}
+			defer func() { <-engineSem }()
 
-		var wg sync.WaitGroup
-		for idx, engName := range jr.EngineNames {
-			exec, ok := executors[engName]
-			if !ok {
-				continue
-			}
-			idx, engName := idx, engName
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				sem <- struct{}{}
-				defer func() { <-sem }()
-
-				resolved, err := q.ResolveEngineQuery(engName, registry, suiteDir)
-				if err != nil {
-					slots[idx] = slot{
-						engName: engName,
-						qr:      QueryResult{QueryID: q.ID, EngineName: engName, Error: fmt.Errorf("resolve query: %w", err)},
-						present: true,
-					}
-					slog.Warn("resolve query failed", "query", q.ID, "engine", engName, "error", err)
-					return
-				}
-				if resolved == nil {
-					return
-				}
-
-				result := r.executeWithRetries(ctx, exec, resolved.Query, nil, r.config.WarmupRuns, r.config.Runs)
-
-				var scores metrics.ScoreSet
-				if result.err == nil && len(judgments) > 0 {
-					scores = metrics.ComputeAll(result.rankedIDs, judgments, r.config.KValues, r.config.RelevanceThreshold)
-				}
-				if result.err != nil {
-					slog.Warn("query failed", "query", q.ID, "engine", engName, "error", result.err)
-				}
-
+			resolved, err := q.ResolveEngineQuery(engName, registry, suiteDir)
+			if err != nil {
 				slots[idx] = slot{
 					engName: engName,
-					qr: QueryResult{
-						QueryID:      q.ID,
-						EngineName:   engName,
-						Scores:       scores,
-						RankedDocIDs: result.rankedIDs,
-						TotalMatches: result.totalMatches,
-						Latency:      result.latencyStats,
-						Error:        result.err,
-					},
+					qr:      QueryResult{QueryID: q.ID, EngineName: engName, Error: fmt.Errorf("resolve query: %w", err)},
 					present: true,
 				}
-			}()
-		}
-		wg.Wait()
-
-		for _, s := range slots {
-			if s.present {
-				jr.Results[q.ID][s.engName] = s.qr
+				slog.Warn("resolve query failed", "query", q.ID, "engine", engName, "error", err)
+				return
 			}
+			if resolved == nil {
+				return
+			}
+
+			result := r.executeWithRetries(ctx, exec, resolved.Query, nil, r.config.WarmupRuns, r.config.Runs)
+
+			var scores metrics.ScoreSet
+			if result.err == nil && len(judgments) > 0 {
+				scores = metrics.ComputeAll(result.rankedIDs, judgments, r.config.KValues, r.config.RelevanceThreshold)
+			}
+			if result.err != nil {
+				slog.Warn("query failed", "query", q.ID, "engine", engName, "error", result.err)
+			}
+
+			slots[idx] = slot{
+				engName: engName,
+				qr: QueryResult{
+					QueryID:      q.ID,
+					EngineName:   engName,
+					Scores:       scores,
+					RankedDocIDs: result.rankedIDs,
+					TotalMatches: result.totalMatches,
+					Latency:      result.latencyStats,
+					Error:        result.err,
+				},
+				present: true,
+			}
+		}()
+	}
+	wg.Wait()
+
+	for _, s := range slots {
+		if s.present {
+			jr.Results[q.ID][s.engName] = s.qr
 		}
 	}
 }

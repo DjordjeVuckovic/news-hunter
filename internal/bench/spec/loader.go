@@ -118,7 +118,7 @@ func validate(s *BenchSpec) error {
 		s.Runs.Warmup = 1
 	}
 	if s.Runs.Iterations <= 0 {
-		s.Runs.Iterations = 1
+		s.Runs.Iterations = 3
 	}
 	return nil
 }

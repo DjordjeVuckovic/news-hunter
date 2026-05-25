@@ -70,9 +70,10 @@ func executePool(cmd *cobra.Command, f poolFlags, args []string) error {
 	}
 
 	runCfg := runner.Config{
-		KValues: []int{depth},
-		MaxK:    depth,
-		Runs:    1,
+		KValues:          []int{depth},
+		MaxK:             depth,
+		Runs:             1,
+		QueryParallelism: runner.QueryParallelismUnlimited,
 	}
 
 	executors, cleanup, err := createExecutors(cmd.Context(), bs)

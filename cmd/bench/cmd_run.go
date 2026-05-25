@@ -102,6 +102,7 @@ func executeRun(cmd *cobra.Command, f runFlags, args []string) error {
 		WarmupRuns:         firstNonZero(f.warmup, bs.Runs.Warmup),
 		Runs:               firstNonZero(f.iters, bs.Runs.Iterations),
 		Judgments:          judgmentsMap,
+		QueryParallelism:   runner.QueryParallelismSerial,
 	}
 	if len(bs.Metrics.KValues) > 0 && !cmd.Flags().Changed("k") {
 		runCfg.KValues = bs.Metrics.KValues

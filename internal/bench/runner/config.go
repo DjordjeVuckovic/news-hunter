@@ -8,6 +8,16 @@ const (
 	DefaultWarmupRuns         = 1
 	DefaultRuns               = 3
 	DefaultEngineParallelism  = 4
+
+	// QueryParallelismSerial runs one query at a time. Use for bench run so
+	// each query gets the engine's undivided attention and latency numbers are
+	// clean (no cross-query resource contention).
+	QueryParallelismSerial = 1
+
+	// QueryParallelismUnlimited fans out all queries concurrently. Use for
+	// bench pool and bench validate where latency measurement doesn't matter
+	// and throughput does.
+	QueryParallelismUnlimited = 0
 )
 
 type Config struct {
@@ -16,8 +26,11 @@ type Config struct {
 	RelevanceThreshold int
 	WarmupRuns         int
 	Runs               int
-	// EngineParallelism is the max number of engines queried concurrently for
-	// a single query. 0 means unlimited (fan out to all engines at once).
+	// QueryParallelism bounds concurrent queries. QueryParallelismSerial (1)
+	// = one at a time; QueryParallelismUnlimited (0) = all at once.
+	QueryParallelism int
+	// EngineParallelism bounds concurrent engine calls within a single query.
+	// 0 = unlimited (fan out to all engines simultaneously).
 	EngineParallelism int
 	// Judgments[queryID][docID]grade — pre-loaded by the CLI from the
 	// resolved annotations file. When nil, queries are scored without
@@ -32,6 +45,7 @@ func DefaultConfig() Config {
 		RelevanceThreshold: DefaultRelevanceThreshold,
 		WarmupRuns:         DefaultWarmupRuns,
 		Runs:               DefaultRuns,
+		QueryParallelism:   QueryParallelismSerial,
 		EngineParallelism:  DefaultEngineParallelism,
 	}
 }
