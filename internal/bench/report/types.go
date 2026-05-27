@@ -64,9 +64,22 @@ func NewPlatformInfo() PlatformInfo {
 }
 
 type JobReport struct {
-	JobName    string
-	Aggregated []AggregatedEntry
-	PerQuery   []Entry
+	JobName      string
+	Aggregated   []AggregatedEntry
+	PerQuery     []Entry
+	Significance []PairwiseSignificance
+}
+
+// PairwiseSignificance is the result of a Wilcoxon signed-rank test comparing
+// two engines on one metric across all judged queries in this job. Populated by
+// Generate() when ≥4 non-tied paired observations are available.
+type PairwiseSignificance struct {
+	EngineA string  // reference engine (listed first in spec jobs[].engines)
+	EngineB string  // comparison engine
+	Metric  string  // e.g. "NDCG@10", "MAP", "MRR"
+	W       float64 // Wilcoxon W statistic
+	P       float64 // two-tailed p-value
+	Stars   string  // "**" p<0.01 | "*" p<0.05 | "" not significant
 }
 
 type ReportConfig struct {
@@ -94,6 +107,7 @@ type Entry struct {
 type AggregatedEntry struct {
 	EngineName  string
 	NDCG        map[int]float64
+	NDCGStddev  map[int]float64 // sample stddev of per-query NDCG — measures consistency
 	Precision   map[int]float64
 	Recall      map[int]float64
 	F1          map[int]float64

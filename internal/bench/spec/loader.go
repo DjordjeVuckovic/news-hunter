@@ -9,6 +9,17 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// expandConnectionEnvVars substitutes ${VAR} / $VAR references in every
+// engine's connection string. This keeps secrets out of spec.yaml — authors
+// write connection: "${PG_DSN}" and the value is pulled from the environment
+// at load time, so it never appears in committed YAML or in report provenance.
+func expandConnectionEnvVars(bs *BenchSpec) {
+	for name, eng := range bs.Engines {
+		eng.Connection = os.ExpandEnv(eng.Connection)
+		bs.Engines[name] = eng
+	}
+}
+
 // LoadFromFile reads, parses, and validates a spec YAML. Relative paths in
 // jobs[].suite are rewritten to be absolute and rooted at the spec file's
 // directory — so downstream loaders work regardless of process CWD.
@@ -30,6 +41,7 @@ func LoadFromFile(path string) (*BenchSpec, error) {
 		return nil, err
 	}
 	resolveJobSuitePaths(bs, filepath.Dir(abs))
+	expandConnectionEnvVars(bs)
 	return bs, nil
 }
 

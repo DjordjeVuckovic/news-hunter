@@ -14,6 +14,41 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// newReportCmd exposes "bench report" as a top-level shortcut for the common
+// case of "bench show report". Same RunE, different Use/Short.
+func newReportCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "report [track|path]",
+		Short: "Show the latest report for a track (alias: bench show report)",
+		Long: `Shortcut for bench show report. Prints provenance + aggregated metrics +
+latency + significance table for the most-recent run of the given track.`,
+		Args:    cobra.MaximumNArgs(1),
+		Example: "  bench report fts_quality\n  bench report /path/to/report.json",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			var rpt *report.Report
+			var err error
+			if len(args) == 1 && looksLikePath(args[0]) {
+				rpt, err = report.ReadJSON(args[0])
+			} else {
+				in := trackctx.Inputs{}
+				if len(args) == 1 {
+					in.TrackArg = args[0]
+				}
+				tr, rerr := trackctx.Resolve(in)
+				if rerr != nil {
+					return rerr
+				}
+				rpt, err = report.ReadLatestReport(tr.LatestReportPath())
+			}
+			if err != nil {
+				return err
+			}
+			showReport(cmd.OutOrStdout(), rpt)
+			return nil
+		},
+	}
+}
+
 func newShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "show",

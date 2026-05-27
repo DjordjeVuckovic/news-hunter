@@ -1,7 +1,11 @@
 package report
 
 import (
+	"fmt"
+	"math"
+
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/meta"
+	"github.com/DjordjeVuckovic/news-hunter/internal/bench/metrics"
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/runner"
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/spec"
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/version"
@@ -85,6 +89,7 @@ func generateJobReport(jr *runner.JobResult, kValues []int) JobReport {
 	}
 
 	report.Aggregated = aggregate(jr, kValues)
+	report.Significance = computeSignificance(jr, kValues)
 	return report
 }
 
@@ -95,11 +100,14 @@ func aggregate(jr *runner.JobResult, kValues []int) []AggregatedEntry {
 		agg := AggregatedEntry{
 			EngineName: engName,
 			NDCG:       make(map[int]float64, len(kValues)),
+			NDCGStddev: make(map[int]float64, len(kValues)),
 			Precision:  make(map[int]float64, len(kValues)),
 			Recall:     make(map[int]float64, len(kValues)),
 			F1:         make(map[int]float64, len(kValues)),
 		}
 
+		// Collect per-query NDCG samples for stddev computation.
+		ndcgSamples := make(map[int][]float64, len(kValues))
 		var allStats []runner.LatencyStats
 
 		for _, qID := range jr.QueryOrder {
@@ -126,7 +134,9 @@ func aggregate(jr *runner.JobResult, kValues []int) []AggregatedEntry {
 			agg.MBpref += qr.Scores.Bpref
 
 			for _, k := range kValues {
-				agg.NDCG[k] += qr.Scores.NDCG[k]
+				v := qr.Scores.NDCG[k]
+				agg.NDCG[k] += v
+				ndcgSamples[k] = append(ndcgSamples[k], v)
 				agg.Precision[k] += qr.Scores.Precision[k]
 				agg.Recall[k] += qr.Scores.Recall[k]
 				agg.F1[k] += qr.Scores.F1[k]
@@ -147,6 +157,9 @@ func aggregate(jr *runner.JobResult, kValues []int) []AggregatedEntry {
 				agg.Precision[k] /= n
 				agg.Recall[k] /= n
 				agg.F1[k] /= n
+				if samples := ndcgSamples[k]; len(samples) > 1 {
+					agg.NDCGStddev[k] = sampleStddev(samples)
+				}
 			}
 		}
 
@@ -154,4 +167,79 @@ func aggregate(jr *runner.JobResult, kValues []int) []AggregatedEntry {
 	}
 
 	return entries
+}
+
+// computeSignificance runs pairwise Wilcoxon signed-rank tests for every
+// engine pair in the job, for NDCG@K (all K values), MAP, and MRR.
+// Only judged queries where both engines have scores are included.
+func computeSignificance(jr *runner.JobResult, kValues []int) []PairwiseSignificance {
+	engNames := jr.EngineNames
+	var results []PairwiseSignificance
+
+	for i := 0; i < len(engNames); i++ {
+		for j := i + 1; j < len(engNames); j++ {
+			engA, engB := engNames[i], engNames[j]
+
+			// Collect paired per-query scores for all metrics at once.
+			var mapA, mapB, mrrA, mrrB []float64
+			ndcgA := make(map[int][]float64, len(kValues))
+			ndcgB := make(map[int][]float64, len(kValues))
+
+			for _, qID := range jr.QueryOrder {
+				qrA, okA := jr.Results[qID][engA]
+				qrB, okB := jr.Results[qID][engB]
+				if !okA || !okB || !qrA.Scores.Judged || !qrB.Scores.Judged {
+					continue
+				}
+				mapA = append(mapA, qrA.Scores.AP)
+				mapB = append(mapB, qrB.Scores.AP)
+				mrrA = append(mrrA, qrA.Scores.RR)
+				mrrB = append(mrrB, qrB.Scores.RR)
+				for _, k := range kValues {
+					ndcgA[k] = append(ndcgA[k], qrA.Scores.NDCG[k])
+					ndcgB[k] = append(ndcgB[k], qrB.Scores.NDCG[k])
+				}
+			}
+
+			for _, k := range kValues {
+				if res := metrics.Wilcoxon(ndcgA[k], ndcgB[k]); res != nil {
+					results = append(results, PairwiseSignificance{
+						EngineA: engA, EngineB: engB,
+						Metric: fmt.Sprintf("NDCG@%d", k),
+						W:      res.W, P: res.P, Stars: res.Stars,
+					})
+				}
+			}
+			if res := metrics.Wilcoxon(mapA, mapB); res != nil {
+				results = append(results, PairwiseSignificance{
+					EngineA: engA, EngineB: engB, Metric: "MAP",
+					W: res.W, P: res.P, Stars: res.Stars,
+				})
+			}
+			if res := metrics.Wilcoxon(mrrA, mrrB); res != nil {
+				results = append(results, PairwiseSignificance{
+					EngineA: engA, EngineB: engB, Metric: "MRR",
+					W: res.W, P: res.P, Stars: res.Stars,
+				})
+			}
+		}
+	}
+	return results
+}
+
+func sampleStddev(vals []float64) float64 {
+	if len(vals) < 2 {
+		return 0
+	}
+	mean := 0.0
+	for _, v := range vals {
+		mean += v
+	}
+	mean /= float64(len(vals))
+	variance := 0.0
+	for _, v := range vals {
+		d := v - mean
+		variance += d * d
+	}
+	return math.Sqrt(variance / float64(len(vals)-1))
 }

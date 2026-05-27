@@ -26,6 +26,7 @@ func WriteTable(r *Report, w io.Writer) {
 		} else {
 			writeAggregatedTable(tw, &jr, r.Config.KValues)
 			writeLatencyTable(tw, &jr)
+			writeSignificanceTable(tw, &jr)
 			writePerQueryTable(tw, &jr, r.Config.KValues)
 		}
 	}
@@ -121,6 +122,24 @@ func writeLatencyTable(tw *tabwriter.Writer, jr *JobReport) {
 		fmt.Fprintln(tw, strings.Join(row, "\t"))
 	}
 
+	fmt.Fprintln(tw)
+}
+
+func writeSignificanceTable(tw *tabwriter.Writer, jr *JobReport) {
+	if len(jr.Significance) == 0 {
+		return
+	}
+	fmt.Fprintf(tw, "Statistical Significance (Wilcoxon signed-rank, two-tailed; * p<0.05, ** p<0.01)\n\n")
+	fmt.Fprintln(tw, "Engine A\tEngine B\tMetric\tW\tp-value\tSig")
+	fmt.Fprintln(tw, "---\t---\t---\t---\t---\t---")
+	for _, s := range jr.Significance {
+		sig := s.Stars
+		if sig == "" {
+			sig = "ns"
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%.1f\t%.4f\t%s\n",
+			s.EngineA, s.EngineB, s.Metric, s.W, s.P, sig)
+	}
 	fmt.Fprintln(tw)
 }
 
