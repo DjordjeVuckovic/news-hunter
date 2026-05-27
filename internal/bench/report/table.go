@@ -3,15 +3,15 @@ package report
 import (
 	"fmt"
 	"io"
-	"strings"
-	"text/tabwriter"
+	"math"
 	"time"
 
 	"github.com/fatih/color"
+	"github.com/jedib0t/go-pretty/v6/table"
+	"github.com/jedib0t/go-pretty/v6/text"
 )
 
-// table-level color instances — only applied to last columns or standalone
-// lines to avoid ANSI-byte misalignment inside tabwriter.
+// table-level color instances
 var (
 	tBold   = color.New(color.Bold)
 	tGreen  = color.New(color.FgGreen, color.Bold)
@@ -21,29 +21,26 @@ var (
 )
 
 func WriteTable(r *Report, w io.Writer) {
-	tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
-
 	title := r.Provenance.SpecID
 	if title == "" {
 		title = "Benchmark"
 	}
-	fmt.Fprintf(tw, "\n%s\n", tBold.Sprintf("=== %s  run_id=%s ===", title, r.Provenance.RunID))
+	fmt.Fprintf(w, "\n%s\n", tBold.Sprintf("=== %s  run_id=%s ===", title, r.Provenance.RunID))
 
 	for _, jr := range r.Jobs {
-		fmt.Fprintf(tw, "\n%s\n\n", tBold.Sprintf("--- Job: %s ---", jr.JobName))
+		fmt.Fprintf(w, "\n%s\n", tBold.Sprintf("--- Job: %s ---", jr.JobName))
 		if !hasAnyJudgments(&jr) {
-			fmt.Fprintf(tw, "%s No relevance judgments found. Showing latency only.\n", tYellow.Sprint("WARNING:"))
-			fmt.Fprintf(tw, "         Run bench pool first, then bench judge.\n\n")
-			writeLatencyTable(tw, &jr)
+			fmt.Fprintf(w, "\n%s No relevance judgments found. Showing latency only.\n",
+				tYellow.Sprint("WARNING:"))
+			fmt.Fprintf(w, "  Run bench pool, then bench judge.\n\n")
+			writeLatencyTable(w, &jr)
 		} else {
-			writeAggregatedTable(tw, &jr, r.Config.KValues)
-			writeLatencyTable(tw, &jr)
-			writeSignificanceTable(tw, &jr)
-			writePerQueryTable(tw, &jr, r.Config.KValues)
+			writeAggregatedTable(w, &jr, r.Config.KValues)
+			writeLatencyTable(w, &jr)
+			writeSignificanceTable(w, &jr)
+			writePerQueryTable(w, &jr, r.Config.KValues)
 		}
 	}
-
-	tw.Flush()
 }
 
 func hasAnyJudgments(jr *JobReport) bool {
@@ -55,73 +52,145 @@ func hasAnyJudgments(jr *JobReport) bool {
 	return false
 }
 
-func writeAggregatedTable(tw *tabwriter.Writer, jr *JobReport, kValues []int) {
-	fmt.Fprintf(tw, "%s\n\n", tBold.Sprint("Aggregated Results (mean across judged queries)"))
+// newTable returns a pre-styled go-pretty table writer.
+func newTable(w io.Writer) table.Writer {
+	t := table.NewWriter()
+	t.SetOutputMirror(w)
+	t.SetStyle(table.StyleRounded)
+	return t
+}
 
-	header := []string{"Engine"}
-	for _, k := range kValues {
-		header = append(header, fmt.Sprintf("NDCG@%d", k))
+// rightCols returns ColumnConfigs that right-align the given 1-based column numbers.
+func rightCols(cols ...int) []table.ColumnConfig {
+	cfgs := make([]table.ColumnConfig, len(cols))
+	for i, c := range cols {
+		cfgs[i] = table.ColumnConfig{Number: c, Align: text.AlignRight}
 	}
-	for _, k := range kValues {
-		header = append(header, fmt.Sprintf("P@%d", k))
-	}
-	header = append(header, "MAP", "MRR", "Bpref", "Judged", "Errors")
-	fmt.Fprintln(tw, strings.Join(header, "\t"))
+	return cfgs
+}
 
-	sep := make([]string, len(header))
-	for i := range sep {
-		sep[i] = "---"
+func writeAggregatedTable(w io.Writer, jr *JobReport, kValues []int) {
+	fmt.Fprintf(w, "\n%s\n\n", tBold.Sprint("Aggregated Results"))
+
+	t := newTable(w)
+
+	hdr := table.Row{"Engine"}
+	for _, k := range kValues {
+		hdr = append(hdr, fmt.Sprintf("NDCG@%d", k))
 	}
-	fmt.Fprintln(tw, strings.Join(sep, "\t"))
+	for _, k := range kValues {
+		hdr = append(hdr, fmt.Sprintf("P@%d", k))
+	}
+	hdr = append(hdr, "MAP", "MRR", "Bpref", "Judged", "Errors")
+	t.AppendHeader(hdr)
+
+	// Right-align all metric columns (2 … N-2); keep Judged/Errors default.
+	numMetricCols := len(kValues)*2 + 3
+	var rcols []int
+	for i := 2; i <= 1+numMetricCols; i++ {
+		rcols = append(rcols, i)
+	}
+	t.SetColumnConfigs(rightCols(rcols...))
+
+	// Find per-column best values for highlighting.
+	bestNDCG := make(map[int]float64, len(kValues))
+	bestP := make(map[int]float64, len(kValues))
+	bestMAP, bestMRR, bestBpref := math.Inf(-1), math.Inf(-1), math.Inf(-1)
+	for _, k := range kValues {
+		bestNDCG[k] = math.Inf(-1)
+		bestP[k] = math.Inf(-1)
+	}
+	for _, agg := range jr.Aggregated {
+		if agg.JudgedCount == 0 {
+			continue
+		}
+		for _, k := range kValues {
+			if v := agg.NDCG[k]; v > bestNDCG[k] {
+				bestNDCG[k] = v
+			}
+			if v := agg.Precision[k]; v > bestP[k] {
+				bestP[k] = v
+			}
+		}
+		if agg.MAP > bestMAP {
+			bestMAP = agg.MAP
+		}
+		if agg.MRR > bestMRR {
+			bestMRR = agg.MRR
+		}
+		if agg.MBpref > bestBpref {
+			bestBpref = agg.MBpref
+		}
+	}
 
 	for _, agg := range jr.Aggregated {
-		row := []string{agg.EngineName}
+		row := table.Row{agg.EngineName}
 		if agg.JudgedCount > 0 {
 			for _, k := range kValues {
-				row = append(row, fmt.Sprintf("%.4f", agg.NDCG[k]))
+				row = append(row, fmtBest(agg.NDCG[k], bestNDCG[k]))
 			}
 			for _, k := range kValues {
-				row = append(row, fmt.Sprintf("%.4f", agg.Precision[k]))
+				row = append(row, fmtBest(agg.Precision[k], bestP[k]))
 			}
 			row = append(row,
-				fmt.Sprintf("%.4f", agg.MAP),
-				fmt.Sprintf("%.4f", agg.MRR),
-				fmt.Sprintf("%.4f", agg.MBpref),
+				fmtBest(agg.MAP, bestMAP),
+				fmtBest(agg.MRR, bestMRR),
+				fmtBest(agg.MBpref, bestBpref),
 			)
 		} else {
-			naCount := len(kValues)*2 + 3
-			for i := 0; i < naCount; i++ {
-				row = append(row, "N/A")
+			for i := 0; i < numMetricCols; i++ {
+				row = append(row, tDim.Sprint("N/A"))
 			}
 		}
 		row = append(row,
 			fmt.Sprintf("%d/%d", agg.JudgedCount, agg.QueryCount),
 			fmt.Sprintf("%d/%d", agg.ErrorCount, agg.QueryCount),
 		)
-		fmt.Fprintln(tw, strings.Join(row, "\t"))
+		t.AppendRow(row)
 	}
 
-	fmt.Fprintln(tw)
+	t.Render()
+	fmt.Fprintln(w)
 }
 
-func writeLatencyTable(tw *tabwriter.Writer, jr *JobReport) {
-	fmt.Fprintf(tw, "%s\n\n", tBold.Sprint("Latency Statistics (aggregated across queries)"))
-
-	header := []string{"Engine", "Min", "p50", "p75", "p90", "p95", "p99", "Max", "Mean", "Stddev", "Samples"}
-	fmt.Fprintln(tw, strings.Join(header, "\t"))
-
-	sep := make([]string, len(header))
-	for i := range sep {
-		sep[i] = "---"
+// fmtBest formats a metric value and highlights it green when it equals best.
+// Ties are both highlighted.
+func fmtBest(v, best float64) string {
+	s := fmt.Sprintf("%.4f", v)
+	if v == best {
+		return tGreen.Sprint(s)
 	}
-	fmt.Fprintln(tw, strings.Join(sep, "\t"))
+	return s
+}
+
+func writeLatencyTable(w io.Writer, jr *JobReport) {
+	fmt.Fprintf(w, "%s\n\n", tBold.Sprint("Latency Statistics"))
+
+	// Fastest p50 gets highlighted.
+	bestP50 := time.Duration(math.MaxInt64)
+	for _, agg := range jr.Aggregated {
+		if p := agg.Latency.P50(); p > 0 && p < bestP50 {
+			bestP50 = p
+		}
+	}
+
+	t := newTable(w)
+	t.AppendHeader(table.Row{
+		"Engine", "Min", "p50", "p75", "p90", "p95", "p99", "Max", "Mean", "Stddev", "Samples",
+	})
+	t.SetColumnConfigs(rightCols(2, 3, 4, 5, 6, 7, 8, 9, 10, 11))
 
 	for _, agg := range jr.Aggregated {
 		s := agg.Latency
-		row := []string{
+		p50 := agg.Latency.P50()
+		p50Str := fmtDuration(p50)
+		if p50 == bestP50 {
+			p50Str = tGreen.Sprint(p50Str)
+		}
+		t.AppendRow(table.Row{
 			agg.EngineName,
 			fmtDuration(s.Min),
-			fmtDuration(s.P50()),
+			p50Str,
 			fmtDuration(s.P75()),
 			fmtDuration(s.P90()),
 			fmtDuration(s.P95()),
@@ -129,28 +198,36 @@ func writeLatencyTable(tw *tabwriter.Writer, jr *JobReport) {
 			fmtDuration(s.Max),
 			fmtDuration(s.Mean),
 			fmtDuration(s.Stddev),
-			fmt.Sprintf("%d", s.SampleCount),
-		}
-		fmt.Fprintln(tw, strings.Join(row, "\t"))
+			s.SampleCount,
+		})
 	}
 
-	fmt.Fprintln(tw)
+	t.Render()
+	fmt.Fprintln(w)
 }
 
-func writeSignificanceTable(tw *tabwriter.Writer, jr *JobReport) {
+func writeSignificanceTable(w io.Writer, jr *JobReport) {
 	if len(jr.Significance) == 0 {
 		return
 	}
-	fmt.Fprintf(tw, "%s\n\n", tBold.Sprint("Statistical Significance (Wilcoxon signed-rank, two-tailed; * p<0.05, ** p<0.01)"))
-	fmt.Fprintln(tw, "Engine A\tEngine B\tMetric\tW\tp-value\tSig")
-	fmt.Fprintln(tw, "---\t---\t---\t---\t---\t---")
+	fmt.Fprintf(w, "%s\n\n",
+		tBold.Sprint("Statistical Significance (Wilcoxon signed-rank, two-tailed · * p<0.05 · ** p<0.01)"))
+
+	t := newTable(w)
+	t.AppendHeader(table.Row{"Engine A", "Engine B", "Metric", "W", "p-value", "Sig"})
+	t.SetColumnConfigs(rightCols(4, 5))
+
 	for _, s := range jr.Significance {
-		// Sig is the last column — safe to add ANSI without breaking alignment.
-		sig := colorSig(s.Stars)
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%.1f\t%.4f\t%s\n",
-			s.EngineA, s.EngineB, s.Metric, s.W, s.P, sig)
+		t.AppendRow(table.Row{
+			s.EngineA, s.EngineB, s.Metric,
+			fmt.Sprintf("%.1f", s.W),
+			fmt.Sprintf("%.4f", s.P),
+			colorSig(s.Stars),
+		})
 	}
-	fmt.Fprintln(tw)
+
+	t.Render()
+	fmt.Fprintln(w)
 }
 
 func colorSig(stars string) string {
@@ -164,22 +241,21 @@ func colorSig(stars string) string {
 	}
 }
 
-func writePerQueryTable(tw *tabwriter.Writer, jr *JobReport, kValues []int) {
-	fmt.Fprintf(tw, "%s\n\n", tBold.Sprint("Per-Query Results"))
+func writePerQueryTable(w io.Writer, jr *JobReport, kValues []int) {
+	fmt.Fprintf(w, "%s\n\n", tBold.Sprint("Per-Query Results"))
 
 	k := primaryK(kValues)
 
-	header := []string{"Query", "Engine", fmt.Sprintf("NDCG@%d", k), fmt.Sprintf("P@%d", k), "AP", "RR", "Bpref", "Hits", "p50", "p95", "Status"}
-	fmt.Fprintln(tw, strings.Join(header, "\t"))
-
-	sep := make([]string, len(header))
-	for i := range sep {
-		sep[i] = "---"
-	}
-	fmt.Fprintln(tw, strings.Join(sep, "\t"))
+	t := newTable(w)
+	t.AppendHeader(table.Row{
+		"Query", "Engine",
+		fmt.Sprintf("NDCG@%d", k), fmt.Sprintf("P@%d", k),
+		"AP", "RR", "Bpref",
+		"Hits", "p50", "p95", "Status",
+	})
+	t.SetColumnConfigs(rightCols(3, 4, 5, 6, 7, 8, 9, 10))
 
 	for _, e := range jr.PerQuery {
-		// Status is the last column — safe to color without breaking tabwriter alignment.
 		var status string
 		if e.Error != "" {
 			status = tRed.Sprint("ERR")
@@ -187,30 +263,25 @@ func writePerQueryTable(tw *tabwriter.Writer, jr *JobReport, kValues []int) {
 			status = tGreen.Sprint("OK")
 		}
 
-		apStr, rrStr, bprefStr := tDim.Sprint("N/A"), tDim.Sprint("N/A"), tDim.Sprint("N/A")
+		apStr, rrStr, bprefStr := tDim.Sprint("—"), tDim.Sprint("—"), tDim.Sprint("—")
 		if e.Judged {
 			apStr = fmt.Sprintf("%.4f", e.AP)
 			rrStr = fmt.Sprintf("%.4f", e.RR)
 			bprefStr = fmt.Sprintf("%.4f", e.Bpref)
 		}
 
-		row := []string{
-			e.QueryID,
-			e.EngineName,
-			fmtScore(e.NDCG, k),
-			fmtScore(e.Precision, k),
-			apStr,
-			rrStr,
-			bprefStr,
-			fmt.Sprintf("%d", e.TotalMatches),
-			fmtDuration(e.Latency.P50()),
-			fmtDuration(e.Latency.P95()),
+		t.AppendRow(table.Row{
+			e.QueryID, e.EngineName,
+			fmtScore(e.NDCG, k), fmtScore(e.Precision, k),
+			apStr, rrStr, bprefStr,
+			e.TotalMatches,
+			fmtDuration(e.Latency.P50()), fmtDuration(e.Latency.P95()),
 			status,
-		}
-		fmt.Fprintln(tw, strings.Join(row, "\t"))
+		})
 	}
 
-	fmt.Fprintln(tw)
+	t.Render()
+	fmt.Fprintln(w)
 }
 
 func primaryK(kValues []int) int {
