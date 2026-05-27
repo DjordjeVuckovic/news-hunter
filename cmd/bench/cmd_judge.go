@@ -107,7 +107,7 @@ func executeJudge(cmd *cobra.Command, f judgeFlags, args []string) error {
 		if err := judgment.WriteFile(jf, outPath); err != nil {
 			return fmt.Errorf("write judgments: %w", err)
 		}
-		cmd.Printf("Manual template written: %s (queries=%d)\n", outPath, len(jf.Queries))
+		printDone(cmd.OutOrStdout(), fmt.Sprintf("Manual template written: %s  (queries=%d)", outPath, len(jf.Queries)))
 		return nil
 	}
 
@@ -157,7 +157,7 @@ func executeJudge(cmd *cobra.Command, f judgeFlags, args []string) error {
 						"  • the grading rubric changed; re-run without --resume to re-grade cleanly",
 					prior.Meta.JudgePromptVersion, judgment.PromptVersion)
 			}
-			cmd.Printf("Resume: loaded %d prior queries from %s\n", len(prior.Queries), outPath)
+			printWarn(cmd.OutOrStdout(), fmt.Sprintf("Resume: loaded %d prior queries from %s", len(prior.Queries), outPath))
 		}
 	}
 
@@ -170,18 +170,26 @@ func executeJudge(cmd *cobra.Command, f judgeFlags, args []string) error {
 		Sink:        writer.Append,
 		OnQueryStart: func(qid string, total, skipped int) {
 			if skipped > 0 {
-				cmd.Printf("[%s] grading %d docs (%d already done)\n", qid, total-skipped, skipped)
+				fmt.Fprintf(cmd.OutOrStdout(), "%s grading %d docs %s\n",
+					cCyan.Sprintf("[%s]", qid), total-skipped,
+					cDim.Sprintf("(%d already done)", skipped))
 			} else {
-				cmd.Printf("[%s] grading %d docs\n", qid, total)
+				fmt.Fprintf(cmd.OutOrStdout(), "%s grading %d docs\n",
+					cCyan.Sprintf("[%s]", qid), total)
 			}
 		},
 		OnBatch: func(bp judgment.BatchProgress) {
-			cmd.Printf("  └ batch %d/%d: graded=%d missing=%d %s\n",
-				bp.BatchIdx, bp.BatchN, bp.Graded, bp.Missing, formatHistogram(bp.Histogram))
+			fmt.Fprintf(cmd.OutOrStdout(), "  %s batch %d/%d: graded=%d missing=%d %s\n",
+				cDim.Sprint("└"),
+				bp.BatchIdx, bp.BatchN, bp.Graded, bp.Missing,
+				cDim.Sprint(formatHistogram(bp.Histogram)))
 		},
 		OnQueryDone: func(qp judgment.QueryProgress) {
-			cmd.Printf("[%s] done: graded=%d skipped=%d unjudged=%d %s\n",
-				qp.QueryID, qp.Graded, qp.Skipped, qp.Unjudged, formatHistogram(qp.Histogram))
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s graded=%d skipped=%d unjudged=%d %s\n",
+				cCyan.Sprintf("[%s]", qp.QueryID),
+				cOK.Sprint("done:"),
+				qp.Graded, qp.Skipped, qp.Unjudged,
+				cDim.Sprint(formatHistogram(qp.Histogram)))
 		},
 	})
 
@@ -207,8 +215,8 @@ func executeJudge(cmd *cobra.Command, f judgeFlags, args []string) error {
 		return fmt.Errorf("finalise judgments: %w", err)
 	}
 
-	cmd.Printf("Judgments written: %s (strategy=%s, queries=%d, run_id=%s)\n",
-		outPath, final.Strategy, len(final.Queries), final.Meta.RunID)
+	printDone(cmd.OutOrStdout(), fmt.Sprintf("Judgments written: %s  (strategy=%s  queries=%d  run_id=%s)",
+		outPath, final.Strategy, len(final.Queries), final.Meta.RunID))
 	return nil
 }
 

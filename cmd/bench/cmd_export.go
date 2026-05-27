@@ -88,7 +88,7 @@ func exportTSV(cmd *cobra.Command, f exportFlags, args []string) error {
 	if err := judgment.WriteQrels(jf, outPath); err != nil {
 		return fmt.Errorf("write qrels: %w", err)
 	}
-	cmd.Printf("Qrels written: %s\n", outPath)
+	printDone(cmd.OutOrStdout(), "Qrels written: "+outPath)
 	return nil
 }
 
@@ -118,6 +118,6 @@ func exportHTML(cmd *cobra.Command, f exportFlags, args []string) error {
 	if err := report.WriteHTML(rpt, outPath); err != nil {
 		return fmt.Errorf("write HTML report: %w", err)
 	}
-	cmd.Printf("HTML report written: %s\n", outPath)
+	printDone(cmd.OutOrStdout(), "HTML report written: "+outPath)
 	return nil
 }

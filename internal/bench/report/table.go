@@ -6,6 +6,18 @@ import (
 	"strings"
 	"text/tabwriter"
 	"time"
+
+	"github.com/fatih/color"
+)
+
+// table-level color instances — only applied to last columns or standalone
+// lines to avoid ANSI-byte misalignment inside tabwriter.
+var (
+	tBold   = color.New(color.Bold)
+	tGreen  = color.New(color.FgGreen, color.Bold)
+	tRed    = color.New(color.FgRed, color.Bold)
+	tYellow = color.New(color.FgYellow)
+	tDim    = color.New(color.FgHiBlack)
 )
 
 func WriteTable(r *Report, w io.Writer) {
@@ -15,13 +27,13 @@ func WriteTable(r *Report, w io.Writer) {
 	if title == "" {
 		title = "Benchmark"
 	}
-	fmt.Fprintf(tw, "\n=== %s  run_id=%s ===\n", title, r.Provenance.RunID)
+	fmt.Fprintf(tw, "\n%s\n", tBold.Sprintf("=== %s  run_id=%s ===", title, r.Provenance.RunID))
 
 	for _, jr := range r.Jobs {
-		fmt.Fprintf(tw, "\n--- Job: %s ---\n\n", jr.JobName)
+		fmt.Fprintf(tw, "\n%s\n\n", tBold.Sprintf("--- Job: %s ---", jr.JobName))
 		if !hasAnyJudgments(&jr) {
-			fmt.Fprintf(tw, "WARNING: No relevance judgments found. Showing latency only.\n")
-			fmt.Fprintf(tw, "         Run pool mode first, annotate, then merge judgments into the suite.\n\n")
+			fmt.Fprintf(tw, "%s No relevance judgments found. Showing latency only.\n", tYellow.Sprint("WARNING:"))
+			fmt.Fprintf(tw, "         Run bench pool first, then bench judge.\n\n")
 			writeLatencyTable(tw, &jr)
 		} else {
 			writeAggregatedTable(tw, &jr, r.Config.KValues)
@@ -44,7 +56,7 @@ func hasAnyJudgments(jr *JobReport) bool {
 }
 
 func writeAggregatedTable(tw *tabwriter.Writer, jr *JobReport, kValues []int) {
-	fmt.Fprintf(tw, "Aggregated Results (mean across judged queries)\n\n")
+	fmt.Fprintf(tw, "%s\n\n", tBold.Sprint("Aggregated Results (mean across judged queries)"))
 
 	header := []string{"Engine"}
 	for _, k := range kValues {
@@ -93,7 +105,7 @@ func writeAggregatedTable(tw *tabwriter.Writer, jr *JobReport, kValues []int) {
 }
 
 func writeLatencyTable(tw *tabwriter.Writer, jr *JobReport) {
-	fmt.Fprintf(tw, "Latency Statistics (aggregated across queries)\n\n")
+	fmt.Fprintf(tw, "%s\n\n", tBold.Sprint("Latency Statistics (aggregated across queries)"))
 
 	header := []string{"Engine", "Min", "p50", "p75", "p90", "p95", "p99", "Max", "Mean", "Stddev", "Samples"}
 	fmt.Fprintln(tw, strings.Join(header, "\t"))
@@ -129,22 +141,31 @@ func writeSignificanceTable(tw *tabwriter.Writer, jr *JobReport) {
 	if len(jr.Significance) == 0 {
 		return
 	}
-	fmt.Fprintf(tw, "Statistical Significance (Wilcoxon signed-rank, two-tailed; * p<0.05, ** p<0.01)\n\n")
+	fmt.Fprintf(tw, "%s\n\n", tBold.Sprint("Statistical Significance (Wilcoxon signed-rank, two-tailed; * p<0.05, ** p<0.01)"))
 	fmt.Fprintln(tw, "Engine A\tEngine B\tMetric\tW\tp-value\tSig")
 	fmt.Fprintln(tw, "---\t---\t---\t---\t---\t---")
 	for _, s := range jr.Significance {
-		sig := s.Stars
-		if sig == "" {
-			sig = "ns"
-		}
+		// Sig is the last column — safe to add ANSI without breaking alignment.
+		sig := colorSig(s.Stars)
 		fmt.Fprintf(tw, "%s\t%s\t%s\t%.1f\t%.4f\t%s\n",
 			s.EngineA, s.EngineB, s.Metric, s.W, s.P, sig)
 	}
 	fmt.Fprintln(tw)
 }
 
+func colorSig(stars string) string {
+	switch stars {
+	case "**":
+		return tGreen.Sprint("**")
+	case "*":
+		return tYellow.Sprint("*")
+	default:
+		return tDim.Sprint("ns")
+	}
+}
+
 func writePerQueryTable(tw *tabwriter.Writer, jr *JobReport, kValues []int) {
-	fmt.Fprintf(tw, "Per-Query Results\n\n")
+	fmt.Fprintf(tw, "%s\n\n", tBold.Sprint("Per-Query Results"))
 
 	k := primaryK(kValues)
 
@@ -158,12 +179,15 @@ func writePerQueryTable(tw *tabwriter.Writer, jr *JobReport, kValues []int) {
 	fmt.Fprintln(tw, strings.Join(sep, "\t"))
 
 	for _, e := range jr.PerQuery {
-		status := "OK"
+		// Status is the last column — safe to color without breaking tabwriter alignment.
+		var status string
 		if e.Error != "" {
-			status = "ERR"
+			status = tRed.Sprint("ERR")
+		} else {
+			status = tGreen.Sprint("OK")
 		}
 
-		apStr, rrStr, bprefStr := "N/A", "N/A", "N/A"
+		apStr, rrStr, bprefStr := tDim.Sprint("N/A"), tDim.Sprint("N/A"), tDim.Sprint("N/A")
 		if e.Judged {
 			apStr = fmt.Sprintf("%.4f", e.AP)
 			rrStr = fmt.Sprintf("%.4f", e.RR)

@@ -83,7 +83,9 @@ func executePool(cmd *cobra.Command, f poolFlags, args []string) error {
 	defer cleanup()
 
 	r := runner.New(runCfg)
+	sp := startSpinner("Pooling " + tr.Name() + "…")
 	result, err := r.RunAll(cmd.Context(), bs, executors)
+	sp.Stop()
 	if err != nil {
 		return fmt.Errorf("pool run: %w", err)
 	}
@@ -106,7 +108,7 @@ func executePool(cmd *cobra.Command, f poolFlags, args []string) error {
 	if err := pool.WritePoolFile(pf, outPath); err != nil {
 		return fmt.Errorf("write pool: %w", err)
 	}
-	cmd.Printf("Pool written: %s (queries=%d, run_id=%s)\n", outPath, len(pf.Queries), pf.Meta.RunID)
+	printDone(cmd.OutOrStdout(), fmt.Sprintf("Pool written: %s  (queries=%d  run_id=%s)", outPath, len(pf.Queries), pf.Meta.RunID))
 	return nil
 }
 

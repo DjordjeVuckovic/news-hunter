@@ -124,9 +124,9 @@ func nthLatestReport(dir string, nth int) (string, error) {
 // ─── diff rendering ───────────────────────────────────────────────────────────
 
 func printDiff(w io.Writer, a, b *report.Report) {
-	fmt.Fprintf(w, "\nComparing:\n")
-	fmt.Fprintf(w, "  A (before): %s\n", a.Provenance.RunID)
-	fmt.Fprintf(w, "  B (after):  %s\n\n", b.Provenance.RunID)
+	fmt.Fprintf(w, "\n%s\n", cBold.Sprint("Comparing:"))
+	fmt.Fprintf(w, "  %s %s\n", cDim.Sprint("A (before):"), a.Provenance.RunID)
+	fmt.Fprintf(w, "  %s %s\n\n", cDim.Sprint("B (after): "), cBold.Sprint(b.Provenance.RunID))
 
 	// Find common jobs by name.
 	jobsA := indexJobs(a)
@@ -149,11 +149,11 @@ func printDiff(w io.Writer, a, b *report.Report) {
 			if !okA {
 				missing = "A"
 			}
-			fmt.Fprintf(w, "--- Job: %s (only in %s, skipped) ---\n", name, missing)
+			fmt.Fprintf(w, "%s\n", cDim.Sprintf("--- Job: %s (only in %s, skipped) ---", name, missing))
 			continue
 		}
 
-		fmt.Fprintf(w, "--- Job: %s ---\n\n", name)
+		fmt.Fprintf(w, "%s\n\n", cBold.Sprintf("--- Job: %s ---", name))
 		printAggregateDiff(w, jA, jB, kVals)
 		printQueryDiff(w, jA, jB, primaryKVal)
 		fmt.Fprintln(w)
@@ -189,7 +189,7 @@ func printAggregateDiff(w io.Writer, jA, jB *report.JobReport, kVals []int) {
 			fmtDelta("%.4f", ndcgA, ndcgB, true),
 			fmtDelta("%.4f", mapA, mapB, true),
 			fmtDelta("%.4f", mrrA, mrrB, true),
-			fmtDurationDelta(latA, latB),
+			fmtDurationDelta(latA, latB), // last column — safe to color
 		)
 	}
 	tw.Flush()
@@ -225,17 +225,20 @@ func printQueryDiff(w io.Writer, jA, jB *report.JobReport, k int) {
 	// Sort: biggest regression first, then biggest improvement.
 	sort.Slice(deltas, func(i, j int) bool { return deltas[i].diff < deltas[j].diff })
 
-	fmt.Fprintf(w, "Per-Query NDCG@%d Deltas (largest regression first):\n\n", k)
+	fmt.Fprintf(w, "%s\n\n", cBold.Sprintf("Per-Query NDCG@%d Deltas (largest regression first):", k))
 	tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
 	fmt.Fprintln(tw, "Query\tEngine\tA\tB\tΔ")
 	fmt.Fprintln(tw, "---\t---\t---\t---\t---")
 	for _, d := range deltas {
-		arrow := "↑"
-		if d.diff < 0 {
-			arrow = "↓"
+		// Δ is the last column — safe to color.
+		var delta string
+		if d.diff > 0 {
+			delta = cOK.Sprintf("↑%+.4f", d.diff)
+		} else {
+			delta = cFail.Sprintf("↓%+.4f", d.diff)
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%.4f\t%.4f\t%s%+.4f\n",
-			d.query, d.engine, d.a, d.b, arrow, d.diff)
+		fmt.Fprintf(tw, "%s\t%s\t%.4f\t%.4f\t%s\n",
+			d.query, d.engine, d.a, d.b, delta)
 	}
 	tw.Flush()
 }
@@ -287,8 +290,9 @@ func fmtDelta(format string, a, b float64, higherBetter bool) string {
 	if d == 0 {
 		return fmt.Sprintf(format+" (=)", a)
 	}
+	improved := (d > 0) == higherBetter
 	arrow := "↑"
-	if (d < 0) == higherBetter {
+	if !improved {
 		arrow = "↓"
 	}
 	pct := 0.0
@@ -298,23 +302,52 @@ func fmtDelta(format string, a, b float64, higherBetter bool) string {
 	return fmt.Sprintf(format+"→"+format+" %s%+.1f%%", a, b, arrow, pct)
 }
 
+// fmtDeltaColored is fmtDelta with ANSI coloring — only call for the last
+// column of a tabwriter table to avoid misalignment on earlier columns.
+func fmtDeltaColored(format string, a, b float64, higherBetter bool) string {
+	d := b - a
+	if d == 0 {
+		return cDim.Sprintf(format+" (=)", a)
+	}
+	improved := (d > 0) == higherBetter
+	arrow := "↑"
+	if !improved {
+		arrow = "↓"
+	}
+	pct := 0.0
+	if a != 0 {
+		pct = d / a * 100
+	}
+	s := fmt.Sprintf(format+"→"+format+" %s%+.1f%%", a, b, arrow, pct)
+	if improved {
+		return cOK.Sprint(s)
+	}
+	return cFail.Sprint(s)
+}
+
 func fmtDurationDelta(a, b time.Duration) string {
 	if a == 0 && b == 0 {
 		return "—"
 	}
 	d := b - a
 	if d == 0 {
-		return durStr(a) + " (=)"
+		return cDim.Sprint(durStr(a) + " (=)")
 	}
-	arrow := "↑" // latency up = worse
-	if d < 0 {
-		arrow = "↓" // latency down = better
+	// For latency: lower is better, so improvement = d < 0.
+	improved := d < 0
+	arrow := "↑" // up = slower = worse
+	if improved {
+		arrow = "↓" // down = faster = better
 	}
 	pct := 0.0
 	if a != 0 {
 		pct = float64(d) / float64(a) * 100
 	}
-	return fmt.Sprintf("%s→%s %s%+.1f%%", durStr(a), durStr(b), arrow, pct)
+	s := fmt.Sprintf("%s→%s %s%+.1f%%", durStr(a), durStr(b), arrow, pct)
+	if improved {
+		return cOK.Sprint(s)
+	}
+	return cFail.Sprint(s)
 }
 
 func primaryKFromSlice(kVals []int) int {

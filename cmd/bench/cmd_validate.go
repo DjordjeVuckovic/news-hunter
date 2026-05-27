@@ -117,10 +117,14 @@ func executeValidate(cmd *cobra.Command, f validateFlags, args []string) error {
 	}
 
 	printValidateRows(cmd.OutOrStdout(), rows)
-	cmd.Printf("\nTotal: %d checks, %d failed\n", len(rows), failures)
+	fmt.Fprintln(cmd.OutOrStdout())
 	if failures > 0 {
+		fmt.Fprintf(cmd.OutOrStdout(), "Total: %d checks  %s\n",
+			len(rows), cFail.Sprintf("%d failed", failures))
 		return fmt.Errorf("%d query/engine pair(s) failed validation", failures)
 	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Total: %d checks  %s\n",
+		len(rows), cOK.Sprint("all passed"))
 	return nil
 }
 
@@ -153,10 +157,10 @@ func validateOne(ctx context.Context, row validateRow, q suite.Query, engName st
 
 func printValidateRows(w io.Writer, rows []validateRow) {
 	tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(tw, "QUERY\tENGINE\tSTATUS\tDETAIL")
+	fmt.Fprintln(tw, cBold.Sprint("QUERY")+"\t"+cBold.Sprint("ENGINE")+"\t"+cBold.Sprint("STATUS")+"\t"+cBold.Sprint("DETAIL"))
 	fmt.Fprintln(tw, "-----\t------\t------\t------")
 	for _, r := range rows {
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", r.queryID, r.engine, r.status, r.detail)
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", r.queryID, r.engine, colorStatus(r.status), r.detail)
 	}
 	tw.Flush()
 }

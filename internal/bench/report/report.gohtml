@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bench: {{.Title}}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:14px;color:#111827;background:#f3f4f6;padding:20px}
+.container{max-width:1200px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+
+/* header */
+.card{background:#fff;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden}
+.card-header{padding:14px 20px;background:#f8fafc;border-bottom:1px solid #e5e7eb;display:flex;align-items:baseline;gap:12px}
+.card-header h1{font-size:18px;font-weight:700;color:#111827}
+.card-header .run-id{font-size:12px;color:#6b7280;font-family:monospace}
+.meta-grid{padding:16px 20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:6px 20px}
+.meta-row{display:flex;gap:8px;font-size:13px}
+.meta-row .lbl{color:#9ca3af;min-width:68px;flex-shrink:0}
+.meta-row .val{color:#111827;font-weight:500;word-break:break-all}
+.sources{padding:0 20px 16px;border-top:1px solid #f3f4f6;margin-top:4px}
+.sources h3{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;margin:12px 0 6px}
+.sources .meta-row .lbl{color:#d1d5db;min-width:72px}
+.sources .meta-row .val{font-family:monospace;font-size:12px;color:#6b7280}
+
+/* job cards */
+.job-header{padding:12px 20px;display:flex;align-items:center;gap:10px}
+.job-header h2{font-size:15px;font-weight:600;color:#111827}
+
+/* sections inside job */
+.section{padding:16px 20px}
+.section+.section{border-top:1px solid #f3f4f6}
+.section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:12px}
+
+/* charts */
+.chart-wrap{display:flex;flex-direction:column;gap:10px}
+.chart-legend{display:flex;flex-wrap:wrap;gap:8px 16px;padding:0 2px}
+.legend-item{display:flex;align-items:center;gap:5px;font-size:12px;color:#374151}
+.legend-swatch{width:12px;height:12px;border-radius:2px;flex-shrink:0}
+.chart-note{font-size:11px;color:#9ca3af;margin-top:2px}
+
+/* tables */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:7px 10px;background:#f9fafb;border-bottom:2px solid #e5e7eb;white-space:nowrap;cursor:pointer;user-select:none;font-weight:600;color:#374151}
+th:hover{background:#f3f4f6}
+th.asc::after{content:" ↑";color:#6b7280}
+th.desc::after{content:" ↓";color:#6b7280}
+td{padding:6px 10px;border-bottom:1px solid #f9fafb;white-space:nowrap;color:#374151}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#fafafa}
+.val-main{font-weight:500}
+.val-sd{color:#9ca3af;font-size:11px;margin-left:3px}
+.sig-sig{font-weight:700;color:#059669}
+.sig-ns{color:#d1d5db}
+.status-ok{color:#059669;font-weight:500}
+.status-err{color:#dc2626;font-weight:700}
+
+/* filter */
+.filter-wrap{margin-bottom:10px}
+.filter-input{width:100%;max-width:340px;padding:6px 10px;border:1px solid #e5e7eb;border-radius:6px;font-size:13px;outline:none}
+.filter-input:focus{border-color:#4C8EDA;box-shadow:0 0 0 2px #4C8EDA22}
+
+/* glossary */
+details.glossary{border:1px solid #e5e7eb;border-radius:8px;background:#fafafa}
+details.glossary summary{padding:10px 14px;cursor:pointer;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;list-style:none;display:flex;align-items:center;gap:6px}
+details.glossary summary::before{content:"▶";font-size:9px;transition:transform .15s}
+details.glossary[open] summary::before{transform:rotate(90deg)}
+.glossary-body{padding:12px 16px 14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px 24px}
+.glossary-entry dt{font-weight:600;font-size:12px;color:#374151;margin-bottom:2px}
+.glossary-entry dd{font-size:12px;color:#6b7280;line-height:1.5}
+
+footer{text-align:center;color:#9ca3af;font-size:12px;padding-top:8px}
+</style>
+</head>
+<body>
+<div class="container">
+
+<!-- ── header ── -->
+<div class="card">
+  <div class="card-header">
+    <h1>{{.Title}}</h1>
+    <span class="run-id">{{.RunID}}</span>
+  </div>
+  <div class="meta-grid">
+    <div class="meta-row"><span class="lbl">Tool</span><span class="val">{{.Tool}}</span></div>
+    <div class="meta-row"><span class="lbl">Generated</span><span class="val">{{.Generated}}</span></div>
+    {{if .SpecID}}<div class="meta-row"><span class="lbl">Spec</span><span class="val">{{.SpecID}}</span></div>{{end}}
+  </div>
+  {{if .Sources}}
+  <div class="sources">
+    <h3>Sources</h3>
+    {{if .Sources.Spec}}<div class="meta-row"><span class="lbl">spec</span><span class="val">{{.Sources.Spec}}</span></div>{{end}}
+    {{if .Sources.Suite}}<div class="meta-row"><span class="lbl">suite</span><span class="val">{{.Sources.Suite}}</span></div>{{end}}
+    {{if .Sources.Pool}}<div class="meta-row"><span class="lbl">pool</span><span class="val">{{.Sources.Pool}}</span></div>{{end}}
+    {{if .Sources.Judgments}}<div class="meta-row"><span class="lbl">judgments</span><span class="val">{{.Sources.Judgments}}</span></div>{{end}}
+  </div>
+  {{end}}
+</div>
+
+<!-- ── metric glossary (collapsed by default) ── -->
+<details class="glossary">
+  <summary>Metric Definitions</summary>
+  <div class="glossary-body">
+    <div class="glossary-entry"><dt>NDCG@K</dt><dd>Normalized Discounted Cumulative Gain — measures ranking quality by rewarding relevant documents found at higher ranks. Score 0–1; 1 = perfect ranking.</dd></div>
+    <div class="glossary-entry"><dt>MAP</dt><dd>Mean Average Precision — average of precision values at every rank position where a relevant document appears, averaged across queries. Sensitive to recall.</dd></div>
+    <div class="glossary-entry"><dt>MRR</dt><dd>Mean Reciprocal Rank — 1 ÷ rank of first relevant result, averaged across queries. Measures how quickly the first correct answer appears.</dd></div>
+    <div class="glossary-entry"><dt>Bpref</dt><dd>Binary Preference — fraction of relevant documents ranked above non-relevant ones. More robust than MAP when judgments are incomplete.</dd></div>
+    <div class="glossary-entry"><dt>P@K</dt><dd>Precision at K — fraction of top-K results that are relevant. Straightforward but ignores rank within the K results.</dd></div>
+    <div class="glossary-entry"><dt>Wilcoxon test</dt><dd>Non-parametric paired significance test across queries. ns = not significant; * p&lt;0.05; ** p&lt;0.01. With n=10 queries the test has limited power — treat ns as "inconclusive".</dd></div>
+    <div class="glossary-entry"><dt>NDCG ±stddev</dt><dd>Sample standard deviation of per-query NDCG values. High stddev means inconsistent ranking quality — some queries are handled well, others poorly.</dd></div>
+    <div class="glossary-entry"><dt>Latency chart</dt><dd>p50 (median) latency on a logarithmic scale. Log scale is used because the range spans multiple orders of magnitude (µs → seconds).</dd></div>
+  </div>
+</details>
+
+<!-- ── jobs ── -->
+{{range .Jobs}}
+<div class="card">
+  <div class="job-header"><h2>{{.Name}}</h2></div>
+
+  <!-- NDCG@K chart -->
+  {{if .NDCGChart}}
+  <div class="section">
+    <div class="section-title">NDCG@K</div>
+    <div class="chart-wrap">
+      {{.NDCGChart}}
+      <div class="chart-legend">
+        {{range .EngineLegend}}
+        <span class="legend-item">
+          <span class="legend-swatch" style="background:{{.Color}}"></span>{{.Name}}
+        </span>
+        {{end}}
+      </div>
+    </div>
+  </div>
+  {{end}}
+
+  <!-- Latency chart -->
+  {{if .LatencyChart}}
+  <div class="section">
+    <div class="section-title">p50 Latency (log scale)</div>
+    {{.LatencyChart}}
+    <p class="chart-note">Bars scaled to log₁₀(latency) — equal visual distance = equal order-of-magnitude difference.</p>
+  </div>
+  {{end}}
+
+  <!-- Aggregated metrics table -->
+  <div class="section">
+    <div class="section-title">Aggregated Results</div>
+    <table class="sortable">
+      <thead><tr>
+        <th>Engine</th>
+        {{range .KValues}}<th>NDCG@{{.}}</th>{{end}}
+        <th>MAP</th><th>MRR</th><th>Bpref</th><th>Judged</th><th>Errors</th>
+      </tr></thead>
+      <tbody>
+      {{range .Aggregated}}<tr>
+        <td>{{.Engine}}</td>
+        {{range .NDCG}}<td><span class="val-main">{{.Val}}</span>{{if .Stddev}}<span class="val-sd">±{{.Stddev}}</span>{{end}}</td>{{end}}
+        <td class="val-main">{{.MAP.Val}}</td>
+        <td class="val-main">{{.MRR.Val}}</td>
+        <td class="val-main">{{.Bpref.Val}}</td>
+        <td>{{.Judged}}</td>
+        <td>{{.Errors}}</td>
+      </tr>{{end}}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Latency statistics table -->
+  <div class="section">
+    <div class="section-title">Latency Statistics</div>
+    <table class="sortable">
+      <thead><tr>
+        <th>Engine</th><th>Min</th><th>p50</th><th>p75</th><th>p90</th><th>p95</th><th>p99</th><th>Max</th><th>Mean</th><th>Stddev</th><th>Samples</th>
+      </tr></thead>
+      <tbody>
+      {{range .Latency}}<tr>
+        <td>{{.Engine}}</td>
+        <td>{{.Min}}</td><td>{{.P50}}</td><td>{{.P75}}</td><td>{{.P90}}</td>
+        <td>{{.P95}}</td><td>{{.P99}}</td><td>{{.Max}}</td>
+        <td>{{.Mean}}</td><td>{{.Stddev}}</td><td>{{.Samples}}</td>
+      </tr>{{end}}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Significance table -->
+  {{if .Significance}}
+  <div class="section">
+    <div class="section-title">Statistical Significance <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px">(Wilcoxon signed-rank, two-tailed &nbsp;·&nbsp; * p&lt;0.05 &nbsp; ** p&lt;0.01)</span></div>
+    <table>
+      <thead><tr><th>Engine A</th><th>Engine B</th><th>Metric</th><th>W</th><th>p-value</th><th>Sig</th></tr></thead>
+      <tbody>
+      {{range .Significance}}<tr>
+        <td>{{.EngineA}}</td><td>{{.EngineB}}</td><td>{{.Metric}}</td>
+        <td>{{.W}}</td><td>{{.P}}</td>
+        <td>{{if .NS}}<span class="sig-ns">ns</span>{{else}}<span class="sig-sig">{{.Stars}}</span>{{end}}</td>
+      </tr>{{end}}
+      </tbody>
+    </table>
+  </div>
+  {{end}}
+
+  <!-- Per-query table with filter -->
+  <div class="section">
+    <div class="section-title">Per-Query Results</div>
+    <div class="filter-wrap">
+      <input class="filter-input" type="search" placeholder="Filter by query or engine…"
+             oninput="filterRows(this,'{{.FilterID}}')" aria-label="Filter per-query results">
+    </div>
+    <table class="sortable" id="{{.FilterID}}">
+      <thead><tr>
+        <th>Query</th><th>Engine</th><th>NDCG@K</th><th>P@K</th><th>AP</th><th>RR</th><th>Bpref</th><th>Hits</th><th>p50</th><th>p95</th><th>Status</th>
+      </tr></thead>
+      <tbody>
+      {{range .PerQuery}}<tr>
+        <td>{{.Query}}</td><td>{{.Engine}}</td>
+        <td>{{.NDCG}}</td><td>{{.Precision}}</td>
+        <td>{{.AP}}</td><td>{{.RR}}</td><td>{{.Bpref}}</td>
+        <td>{{.Hits}}</td><td>{{.P50}}</td><td>{{.P95}}</td>
+        <td>{{if .IsErr}}<span class="status-err">ERR</span>{{else}}<span class="status-ok">OK</span>{{end}}</td>
+      </tr>{{end}}
+      </tbody>
+    </table>
+  </div>
+</div>
+{{end}}
+
+<footer>Generated by {{.Tool}}</footer>
+</div>
+
+<script>
+(function(){
+  // Sortable tables: click any <th> to sort by that column.
+  document.querySelectorAll('table.sortable').forEach(function(tbl){
+    tbl.querySelectorAll('thead th').forEach(function(th, col){
+      th.addEventListener('click', function(){
+        var asc = !th.classList.contains('asc');
+        tbl.querySelectorAll('thead th').forEach(function(h){ h.classList.remove('asc','desc'); });
+        th.classList.add(asc ? 'asc' : 'desc');
+        var rows = Array.from(tbl.querySelector('tbody').rows);
+        rows.sort(function(a,b){
+          var av = (a.cells[col]||{}).innerText||'';
+          var bv = (b.cells[col]||{}).innerText||'';
+          var an = parseFloat(av), bn = parseFloat(bv);
+          var cmp = (!isNaN(an)&&!isNaN(bn)) ? an-bn : av.localeCompare(bv);
+          return asc ? cmp : -cmp;
+        });
+        var tbody = tbl.querySelector('tbody');
+        rows.forEach(function(r){ tbody.appendChild(r); });
+      });
+    });
+  });
+})();
+
+// Per-query row filter.
+function filterRows(input, tableId){
+  var q = input.value.toLowerCase();
+  var tbl = document.getElementById(tableId);
+  if(!tbl) return;
+  tbl.querySelectorAll('tbody tr').forEach(function(row){
+    row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+</script>
+</body>
+</html>

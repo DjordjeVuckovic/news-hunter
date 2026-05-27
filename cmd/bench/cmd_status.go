@@ -40,8 +40,8 @@ func executeStatus(w io.Writer, track string, args []string) error {
 		return err
 	}
 
-	fmt.Fprintf(w, "Track: %s\n", tr.Name())
-	fmt.Fprintf(w, "  Root: %s\n\n", tr.Root)
+	fmt.Fprintf(w, "%s %s\n", cBold.Sprint("Track:"), cBold.Sprint(tr.Name()))
+	fmt.Fprintf(w, "  %s %s\n\n", cDim.Sprint("root:"), tr.Root)
 
 	trecDir := filepath.Dir(tr.Pool)
 	reportsDir := filepath.Dir(tr.LatestReportPath())
@@ -55,7 +55,9 @@ func executeStatus(w io.Writer, track string, args []string) error {
 	annotationGlob := filepath.Join(trecDir, "annotations.*.yaml")
 	annotations, _ := filepath.Glob(annotationGlob)
 	if len(annotations) == 0 {
-		fmt.Fprintf(w, "  Judgments    ✗  (none found — run: bench judge %s --strategy lexical)\n", tr.Name())
+		fmt.Fprintf(w, "  Judgments    %s  %s\n",
+			cFail.Sprint("✗"),
+			cDim.Sprintf("none found — run: bench judge %s --strategy lexical", tr.Name()))
 	} else {
 		for i, path := range annotations {
 			prefix := "  Judgments   "
@@ -72,7 +74,9 @@ func executeStatus(w io.Writer, track string, args []string) error {
 	// Latest report
 	latest := tr.LatestReportPath()
 	if _, err := os.Stat(latest); os.IsNotExist(err) {
-		fmt.Fprintf(w, "  Reports      ✗  (none — run: bench run %s)\n", tr.Name())
+		fmt.Fprintf(w, "  Reports      %s  %s\n",
+			cFail.Sprint("✗"),
+			cDim.Sprintf("none — run: bench run %s", tr.Name()))
 	} else {
 		printArtifact(w, "Reports", latest, func(path string) string {
 			return readLatestMeta(path, reportsDir)
@@ -81,17 +85,19 @@ func executeStatus(w io.Writer, track string, args []string) error {
 
 	// Suggest next step.
 	fmt.Fprintln(w)
-	fmt.Fprintln(w, "  Next steps:  bench validate → bench pool → bench judge → bench run")
+	fmt.Fprintf(w, "  %s  %s\n",
+		cDim.Sprint("Next steps:"),
+		cDim.Sprint("bench validate → bench pool → bench judge → bench run"))
 	return nil
 }
 
 func printArtifact(w io.Writer, label, path string, describe func(string) string) {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		fmt.Fprintf(w, "  %-14s ✗  %s (not found)\n", label, filepath.Base(path))
+		fmt.Fprintf(w, "  %-14s %s  %s\n", label, cFail.Sprint("✗"), cDim.Sprint(filepath.Base(path)+" (not found)"))
 		return
 	}
 	desc := describe(path)
-	fmt.Fprintf(w, "  %-14s ✓  %s\n", label, desc)
+	fmt.Fprintf(w, "  %-14s %s  %s\n", label, cOK.Sprint("✓"), desc)
 }
 
 // extractStrategy pulls the strategy name out of "annotations.<strategy>.yaml".

@@ -115,7 +115,9 @@ func executeRun(cmd *cobra.Command, f runFlags, args []string) error {
 	defer cleanup()
 
 	r := runner.New(runCfg)
+	sp := startSpinner("Running " + tr.Name() + "…")
 	result, err := r.RunAll(cmd.Context(), bs, executors)
+	sp.Stop()
 	if err != nil {
 		return fmt.Errorf("run benchmark: %w", err)
 	}
@@ -141,10 +143,10 @@ func executeRun(cmd *cobra.Command, f runFlags, args []string) error {
 	}
 	if outPath != "" && f.output == "" {
 		if err := updateLatestPointer(tr.LatestReportPath(), outPath); err != nil {
-			cmd.Printf("warning: could not update latest.json pointer: %v\n", err)
+			printWarn(cmd.OutOrStdout(), fmt.Sprintf("could not update latest.json pointer: %v", err))
 		}
 	}
-	cmd.Printf("Report written: %s\n", outPath)
+	printDone(cmd.OutOrStdout(), "Report written: "+outPath)
 	return nil
 }
 
