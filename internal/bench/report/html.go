@@ -2,6 +2,7 @@ package report
 
 import (
 	"bytes"
+	_ "embed"
 	"fmt"
 	"html/template"
 	"math"
@@ -11,9 +12,13 @@ import (
 	"time"
 )
 
+//go:embed report.gohtml
+var htmlTemplate string
+
 // WriteHTML renders r as a self-contained HTML file at path, creating parent
 // directories as needed. The file contains inline CSS, inline SVG charts, and
-// ~50 lines of vanilla JS for sortable table columns — no external dependencies.
+// ~60 lines of vanilla JS for sortable tables and per-query filtering — no
+// external dependencies, opens offline.
 func WriteHTML(r *Report, path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return fmt.Errorf("create report dir: %w", err)
@@ -39,6 +44,41 @@ func RenderHTML(r *Report) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// ─── git-relative path helper ────────────────────────────────────────────────
+
+// repoRelPath makes path relative to the nearest .git root it can find by
+// walking up. Falls back to the path's basename if no git root is found.
+// This keeps source paths readable in shared reports.
+func repoRelPath(path string) string {
+	if path == "" {
+		return ""
+	}
+	root := findGitRoot(filepath.Dir(path))
+	if root == "" {
+		return filepath.Base(path)
+	}
+	rel, err := filepath.Rel(root, path)
+	if err != nil {
+		return path
+	}
+	return rel
+}
+
+func findGitRoot(start string) string {
+	dir := start
+	for i := 0; i < 20; i++ {
+		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
+		}
+		dir = parent
+	}
+	return ""
+}
+
 // ─── view model ─────────────────────────────────────────────────────────────
 
 type htmlReport struct {
@@ -55,6 +95,11 @@ type htmlSources struct {
 	Spec, Suite, Pool, Judgments string
 }
 
+type htmlLegendItem struct {
+	Name  string
+	Color string
+}
+
 type htmlJob struct {
 	Name         string
 	Aggregated   []htmlAggRow
@@ -62,7 +107,10 @@ type htmlJob struct {
 	Significance []htmlSigRow
 	PerQuery     []htmlQueryRow
 	NDCGChart    template.HTML
+	LatencyChart template.HTML
+	EngineLegend []htmlLegendItem
 	KValues      []int
+	FilterID     string // unique ID for per-query filter input
 }
 
 type htmlAggRow struct {
@@ -77,7 +125,7 @@ type htmlAggRow struct {
 
 type htmlCell struct {
 	Val    string
-	Stddev string // optional ±stddev suffix
+	Stddev string
 }
 
 type htmlLatRow struct {
@@ -88,8 +136,7 @@ type htmlLatRow struct {
 
 type htmlSigRow struct {
 	EngineA, EngineB, Metric string
-	W                        string
-	P                        string
+	W, P                     string
 	Stars                    string
 	NS                       bool
 }
@@ -107,7 +154,6 @@ func buildViewModel(r *Report) htmlReport {
 	if title == "" {
 		title = "Benchmark Report"
 	}
-
 	vm := htmlReport{
 		Title:     title,
 		RunID:     r.Provenance.RunID,
@@ -117,23 +163,30 @@ func buildViewModel(r *Report) htmlReport {
 	}
 	if s := r.Provenance.Sources; s != nil {
 		vm.Sources = &htmlSources{
-			Spec:      s.Spec,
-			Suite:     s.Suite,
-			Pool:      s.Pool,
-			Judgments: s.Judgments,
+			Spec:      repoRelPath(s.Spec),
+			Suite:     repoRelPath(s.Suite),
+			Pool:      repoRelPath(s.Pool),
+			Judgments: repoRelPath(s.Judgments),
 		}
 	}
 
 	kVals := r.Config.KValues
 
-	for _, jr := range r.Jobs {
-		job := htmlJob{Name: jr.JobName, KValues: kVals}
+	for ji, jr := range r.Jobs {
+		job := htmlJob{
+			Name:     jr.JobName,
+			KValues:  kVals,
+			FilterID: fmt.Sprintf("pq-filter-%d", ji),
+		}
 
-		for _, agg := range jr.Aggregated {
+		for i, agg := range jr.Aggregated {
+			color := engineColors[i%len(engineColors)]
+			job.EngineLegend = append(job.EngineLegend, htmlLegendItem{Name: agg.EngineName, Color: color})
+
 			row := htmlAggRow{Engine: agg.EngineName}
 			for _, k := range kVals {
 				c := htmlCell{Val: fmt.Sprintf("%.4f", agg.NDCG[k])}
-				if sd, ok := agg.NDCGStddev[k]; ok && sd > 0 {
+				if sd := agg.NDCGStddev[k]; sd > 0 {
 					c.Stddev = fmt.Sprintf("%.4f", sd)
 				}
 				row.NDCG = append(row.NDCG, c)
@@ -164,354 +217,207 @@ func buildViewModel(r *Report) htmlReport {
 		}
 
 		for _, sig := range jr.Significance {
-			row := htmlSigRow{
-				EngineA: sig.EngineA,
-				EngineB: sig.EngineB,
-				Metric:  sig.Metric,
-				W:       fmt.Sprintf("%.1f", sig.W),
-				P:       fmt.Sprintf("%.4f", sig.P),
-				Stars:   sig.Stars,
-				NS:      sig.Stars == "",
-			}
-			job.Significance = append(job.Significance, row)
+			job.Significance = append(job.Significance, htmlSigRow{
+				EngineA: sig.EngineA, EngineB: sig.EngineB, Metric: sig.Metric,
+				W: fmt.Sprintf("%.1f", sig.W), P: fmt.Sprintf("%.4f", sig.P),
+				Stars: sig.Stars, NS: sig.Stars == "",
+			})
 		}
 
 		k := primaryK(kVals)
 		for _, e := range jr.PerQuery {
-			status := "OK"
-			isErr := false
+			status, isErr := "OK", false
 			if e.Error != "" {
-				status = "ERR"
-				isErr = true
+				status, isErr = "ERR", true
 			}
-			apStr, rrStr, bpStr := "—", "—", "—"
+			ap, rr, bp := "—", "—", "—"
 			if e.Judged {
-				apStr = fmt.Sprintf("%.4f", e.AP)
-				rrStr = fmt.Sprintf("%.4f", e.RR)
-				bpStr = fmt.Sprintf("%.4f", e.Bpref)
+				ap = fmt.Sprintf("%.4f", e.AP)
+				rr = fmt.Sprintf("%.4f", e.RR)
+				bp = fmt.Sprintf("%.4f", e.Bpref)
 			}
 			job.PerQuery = append(job.PerQuery, htmlQueryRow{
-				Query:     e.QueryID,
-				Engine:    e.EngineName,
-				NDCG:      fmtScore(e.NDCG, k),
-				Precision: fmtScore(e.Precision, k),
-				AP:        apStr,
-				RR:        rrStr,
-				Bpref:     bpStr,
-				Hits:      e.TotalMatches,
-				P50:       fmtDuration(e.Latency.P50()),
-				P95:       fmtDuration(e.Latency.P95()),
-				Status:    status,
-				IsErr:     isErr,
+				Query: e.QueryID, Engine: e.EngineName,
+				NDCG: fmtScore(e.NDCG, k), Precision: fmtScore(e.Precision, k),
+				AP: ap, RR: rr, Bpref: bp,
+				Hits: e.TotalMatches,
+				P50:  fmtDuration(e.Latency.P50()), P95: fmtDuration(e.Latency.P95()),
+				Status: status, IsErr: isErr,
 			})
 		}
 
 		job.NDCGChart = buildNDCGChart(jr.Aggregated, kVals)
+		job.LatencyChart = buildLatencyChart(jr.Aggregated)
 		vm.Jobs = append(vm.Jobs, job)
 	}
-
 	return vm
 }
 
-// ─── SVG chart ───────────────────────────────────────────────────────────────
+// ─── SVG charts ──────────────────────────────────────────────────────────────
 
 var engineColors = []string{
 	"#4C8EDA", "#E05C5C", "#52C878", "#F5A623", "#9B59B6", "#1ABC9C",
 }
 
+// buildNDCGChart renders a grouped bar chart of NDCG@K scores per engine.
+// The engine legend is NOT included in the SVG; it is rendered in HTML below
+// the chart using job.EngineLegend — this avoids text overflow for long names.
 func buildNDCGChart(aggregated []AggregatedEntry, kVals []int) template.HTML {
 	if len(aggregated) == 0 || len(kVals) == 0 {
 		return ""
 	}
-
 	const (
-		svgW      = 620
-		svgH      = 200
-		padLeft   = 50
-		padRight  = 20
+		svgW      = 560
+		svgH      = 190
+		padLeft   = 46
+		padRight  = 16
 		padTop    = 20
-		padBottom = 40
-		maxVal    = 1.0
+		padBottom = 30 // only K-value labels, no legend
 	)
-
 	plotW := svgW - padLeft - padRight
 	plotH := svgH - padTop - padBottom
 
 	nGroups := len(kVals)
 	nEngines := len(aggregated)
 	groupW := float64(plotW) / float64(nGroups)
-	barW := groupW / float64(nEngines+1) // +1 for gap
+	barW := groupW / float64(nEngines+1)
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf(`<svg width="%d" height="%d" xmlns="http://www.w3.org/2000/svg" class="ndcg-chart">`, svgW, svgH))
+	// viewBox makes the chart responsive; width=100% fills the container.
+	sb.WriteString(fmt.Sprintf(
+		`<svg viewBox="0 0 %d %d" width="100%%" xmlns="http://www.w3.org/2000/svg">`,
+		svgW, svgH))
 
-	// Y-axis gridlines + labels.
+	// Gridlines + Y-axis labels.
 	for _, tick := range []float64{0, 0.25, 0.5, 0.75, 1.0} {
-		y := padTop + plotH - int(tick*float64(plotH)/maxVal)
-		sb.WriteString(fmt.Sprintf(`<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="#e5e7eb" stroke-width="1"/>`,
+		y := padTop + plotH - int(tick*float64(plotH))
+		sb.WriteString(fmt.Sprintf(
+			`<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="#e5e7eb" stroke-width="1"/>`,
 			padLeft, y, svgW-padRight, y))
-		sb.WriteString(fmt.Sprintf(`<text x="%d" y="%d" text-anchor="end" font-size="11" fill="#6b7280">%.2f</text>`,
+		sb.WriteString(fmt.Sprintf(
+			`<text x="%d" y="%d" text-anchor="end" font-size="10" fill="#9ca3af">%.2f</text>`,
 			padLeft-4, y+4, tick))
 	}
 
-	// Bars.
+	// Bars + value labels.
 	for gi, k := range kVals {
 		groupX := padLeft + int(float64(gi)*groupW)
 		for ei, agg := range aggregated {
-			val := math.Min(agg.NDCG[k], maxVal)
-			barH := int(val * float64(plotH) / maxVal)
-			x := groupX + int(float64(ei)*barW) + int(barW*0.2)
+			val := math.Min(agg.NDCG[k], 1.0)
+			barH := int(val * float64(plotH))
+			x := groupX + int(float64(ei)*barW) + int(barW*0.15)
 			y := padTop + plotH - barH
 			color := engineColors[ei%len(engineColors)]
 			sb.WriteString(fmt.Sprintf(
 				`<rect x="%d" y="%d" width="%d" height="%d" fill="%s" rx="2"/>`,
-				x, y, int(barW*0.8), barH, color))
-			// Value label above bar.
-			sb.WriteString(fmt.Sprintf(
-				`<text x="%d" y="%d" text-anchor="middle" font-size="9" fill="%s">%.2f</text>`,
-				x+int(barW*0.4), y-3, color, val))
+				x, y, max(int(barW*0.75), 1), barH, color))
+			if barH > 14 {
+				sb.WriteString(fmt.Sprintf(
+					`<text x="%d" y="%d" text-anchor="middle" font-size="9" fill="#fff">%.2f</text>`,
+					x+max(int(barW*0.75), 1)/2, y+12, val))
+			}
 		}
-		// Group label (K value).
+		// K-value label below group.
 		labelX := groupX + int(groupW/2)
-		labelY := padTop + plotH + 16
 		sb.WriteString(fmt.Sprintf(
 			`<text x="%d" y="%d" text-anchor="middle" font-size="12" fill="#374151">@%d</text>`,
-			labelX, labelY, k))
+			labelX, padTop+plotH+18, k))
 	}
-
-	// Legend.
-	legendY := padTop + plotH + 32
-	legendX := padLeft
-	for ei, agg := range aggregated {
-		color := engineColors[ei%len(engineColors)]
-		sb.WriteString(fmt.Sprintf(
-			`<rect x="%d" y="%d" width="10" height="10" fill="%s" rx="1"/>`, legendX, legendY-9, color))
-		sb.WriteString(fmt.Sprintf(
-			`<text x="%d" y="%d" font-size="11" fill="#374151">%s</text>`,
-			legendX+14, legendY, template.HTMLEscapeString(agg.EngineName)))
-		legendX += 14 + len(agg.EngineName)*7 + 16
-	}
-
-	// X-axis label.
-	sb.WriteString(fmt.Sprintf(
-		`<text x="%d" y="%d" text-anchor="middle" font-size="12" fill="#6b7280">NDCG@K</text>`,
-		padLeft+plotW/2, svgH-4))
 
 	sb.WriteString(`</svg>`)
 	return template.HTML(sb.String())
 }
 
-// ─── HTML template ───────────────────────────────────────────────────────────
+// buildLatencyChart renders a horizontal bar chart of p50 latency per engine
+// on a logarithmic scale, making order-of-magnitude differences visible.
+func buildLatencyChart(aggregated []AggregatedEntry) template.HTML {
+	if len(aggregated) == 0 {
+		return ""
+	}
+
+	type latEntry struct {
+		name   string
+		us     float64 // p50 in microseconds
+		valStr string
+		color  string
+	}
+	var entries []latEntry
+	for i, agg := range aggregated {
+		us := float64(agg.Latency.P50().Microseconds())
+		if us < 1 {
+			us = 1
+		}
+		entries = append(entries, latEntry{
+			name:   agg.EngineName,
+			us:     us,
+			valStr: fmtDuration(agg.Latency.P50()),
+			color:  engineColors[i%len(engineColors)],
+		})
+	}
+
+	const (
+		svgW   = 560
+		barH   = 26
+		barGap = 10
+		padL   = 120
+		padR   = 80
+		padV   = 10
+	)
+	plotW := svgW - padL - padR
+	n := len(entries)
+	svgH := padV*2 + n*(barH+barGap) - barGap
+
+	// Log-scale range.
+	minLog := math.Log10(entries[0].us)
+	maxLog := minLog
+	for _, e := range entries {
+		l := math.Log10(e.us)
+		if l < minLog {
+			minLog = l
+		}
+		if l > maxLog {
+			maxLog = l
+		}
+	}
+	logRange := maxLog - minLog
+	if logRange < 0.3 {
+		logRange = 0.3 // minimum range so bars differ visually
+	}
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf(
+		`<svg viewBox="0 0 %d %d" width="100%%" xmlns="http://www.w3.org/2000/svg">`,
+		svgW, svgH))
+
+	for i, e := range entries {
+		y := padV + i*(barH+barGap)
+		cy := y + barH/2
+
+		frac := (math.Log10(e.us) - minLog) / logRange
+		bw := int(frac*float64(plotW)) + 6 // +6 minimum so fastest engine is visible
+
+		// Engine name.
+		sb.WriteString(fmt.Sprintf(
+			`<text x="%d" y="%d" text-anchor="end" font-size="12" fill="#374151" dominant-baseline="middle">%s</text>`,
+			padL-8, cy, template.HTMLEscapeString(e.name)))
+		// Bar.
+		sb.WriteString(fmt.Sprintf(
+			`<rect x="%d" y="%d" width="%d" height="%d" fill="%s" rx="3" opacity="0.85"/>`,
+			padL, y, bw, barH, e.color))
+		// Value label.
+		sb.WriteString(fmt.Sprintf(
+			`<text x="%d" y="%d" font-size="11" fill="#374151" dominant-baseline="middle">%s</text>`,
+			padL+bw+6, cy, e.valStr))
+	}
+
+	sb.WriteString(`</svg>`)
+	return template.HTML(sb.String())
+}
+
+// ─── template helpers ────────────────────────────────────────────────────────
 
 func htmlFuncs() template.FuncMap {
 	return template.FuncMap{
 		"fmtTime": func(t time.Time) string { return t.Format("2006-01-02 15:04:05 UTC") },
-		"hasStars": func(rows []htmlSigRow) bool {
-			for _, r := range rows {
-				if r.Stars != "" {
-					return true
-				}
-			}
-			return false
-		},
 	}
 }
-
-const htmlTemplate = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Bench Report: {{.Title}}</title>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:14px;color:#111827;background:#f9fafb;padding:24px}
-.container{max-width:1200px;margin:0 auto}
-header{background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:20px 24px;margin-bottom:24px}
-header h1{font-size:20px;font-weight:600;color:#111827;margin-bottom:12px}
-.provenance{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:6px 24px}
-.provenance .row{display:flex;gap:8px}
-.provenance .label{color:#6b7280;min-width:80px}
-.provenance .val{color:#111827;font-weight:500;word-break:break-all}
-.sources{margin-top:12px;padding-top:12px;border-top:1px solid #e5e7eb}
-.sources h3{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin-bottom:8px}
-.sources .row .label{min-width:70px;color:#9ca3af}
-.job{background:#fff;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:24px;overflow:hidden}
-.job-header{padding:16px 20px;background:#f8fafc;border-bottom:1px solid #e5e7eb}
-.job-header h2{font-size:16px;font-weight:600;color:#111827}
-.section{padding:20px}
-.section+.section{border-top:1px solid #f3f4f6}
-.section h3{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin-bottom:12px}
-table{width:100%;border-collapse:collapse;font-size:13px}
-th{text-align:left;padding:6px 10px;background:#f3f4f6;border-bottom:2px solid #e5e7eb;white-space:nowrap;cursor:pointer;user-select:none}
-th:hover{background:#e9ecef}
-th.sorted-asc::after{content:" ↑"}
-th.sorted-desc::after{content:" ↓"}
-td{padding:6px 10px;border-bottom:1px solid #f3f4f6;white-space:nowrap}
-tr:last-child td{border-bottom:none}
-tr:hover td{background:#fafafa}
-.cell-val{font-weight:500}
-.cell-sd{color:#9ca3af;font-size:11px;margin-left:4px}
-.sig-stars{font-weight:700;color:#059669}
-.sig-ns{color:#9ca3af}
-.status-ok{color:#059669}
-.status-err{color:#dc2626;font-weight:600}
-.chart-section{padding:20px}
-.chart-section h3{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin-bottom:12px}
-.ndcg-chart{display:block;max-width:100%;overflow:visible}
-footer{text-align:center;color:#9ca3af;font-size:12px;margin-top:24px}
-</style>
-</head>
-<body>
-<div class="container">
-
-<header>
-  <h1>{{.Title}}</h1>
-  <div class="provenance">
-    <div class="row"><span class="label">Run ID</span><span class="val">{{.RunID}}</span></div>
-    <div class="row"><span class="label">Tool</span><span class="val">{{.Tool}}</span></div>
-    <div class="row"><span class="label">Generated</span><span class="val">{{.Generated}}</span></div>
-    {{if .SpecID}}<div class="row"><span class="label">Spec</span><span class="val">{{.SpecID}}</span></div>{{end}}
-  </div>
-  {{if .Sources}}
-  <div class="sources">
-    <h3>Sources</h3>
-    {{if .Sources.Spec}}<div class="row"><span class="label">spec</span><span class="val">{{.Sources.Spec}}</span></div>{{end}}
-    {{if .Sources.Suite}}<div class="row"><span class="label">suite</span><span class="val">{{.Sources.Suite}}</span></div>{{end}}
-    {{if .Sources.Pool}}<div class="row"><span class="label">pool</span><span class="val">{{.Sources.Pool}}</span></div>{{end}}
-    {{if .Sources.Judgments}}<div class="row"><span class="label">judgments</span><span class="val">{{.Sources.Judgments}}</span></div>{{end}}
-  </div>
-  {{end}}
-</header>
-
-{{range .Jobs}}
-<div class="job">
-  <div class="job-header"><h2>{{.Name}}</h2></div>
-
-  {{if .NDCGChart}}
-  <div class="chart-section">
-    <h3>NDCG@K</h3>
-    {{.NDCGChart}}
-  </div>
-  {{end}}
-
-  <div class="section">
-    <h3>Aggregated Results</h3>
-    <table class="sortable" id="agg-{{.Name}}">
-      <thead><tr>
-        <th>Engine</th>
-        {{range .KValues}}<th>NDCG@{{.}}</th>{{end}}
-        <th>MAP</th><th>MRR</th><th>Bpref</th><th>Judged</th><th>Errors</th>
-      </tr></thead>
-      <tbody>
-      {{range .Aggregated}}
-      <tr>
-        <td>{{.Engine}}</td>
-        {{range .NDCG}}
-        <td><span class="cell-val">{{.Val}}</span>{{if .Stddev}}<span class="cell-sd">±{{.Stddev}}</span>{{end}}</td>
-        {{end}}
-        <td class="cell-val">{{.MAP.Val}}</td>
-        <td class="cell-val">{{.MRR.Val}}</td>
-        <td class="cell-val">{{.Bpref.Val}}</td>
-        <td>{{.Judged}}</td>
-        <td>{{.Errors}}</td>
-      </tr>
-      {{end}}
-      </tbody>
-    </table>
-  </div>
-
-  <div class="section">
-    <h3>Latency Statistics</h3>
-    <table class="sortable">
-      <thead><tr>
-        <th>Engine</th><th>Min</th><th>p50</th><th>p75</th><th>p90</th><th>p95</th><th>p99</th><th>Max</th><th>Mean</th><th>Stddev</th><th>Samples</th>
-      </tr></thead>
-      <tbody>
-      {{range .Latency}}
-      <tr>
-        <td>{{.Engine}}</td>
-        <td>{{.Min}}</td><td>{{.P50}}</td><td>{{.P75}}</td><td>{{.P90}}</td>
-        <td>{{.P95}}</td><td>{{.P99}}</td><td>{{.Max}}</td>
-        <td>{{.Mean}}</td><td>{{.Stddev}}</td><td>{{.Samples}}</td>
-      </tr>
-      {{end}}
-      </tbody>
-    </table>
-  </div>
-
-  {{if .Significance}}
-  <div class="section">
-    <h3>Statistical Significance <small style="font-weight:400;text-transform:none;letter-spacing:0">(Wilcoxon signed-rank, two-tailed — * p&lt;0.05 &nbsp; ** p&lt;0.01)</small></h3>
-    <table>
-      <thead><tr><th>Engine A</th><th>Engine B</th><th>Metric</th><th>W</th><th>p-value</th><th>Sig</th></tr></thead>
-      <tbody>
-      {{range .Significance}}
-      <tr>
-        <td>{{.EngineA}}</td><td>{{.EngineB}}</td><td>{{.Metric}}</td>
-        <td>{{.W}}</td><td>{{.P}}</td>
-        <td>{{if .NS}}<span class="sig-ns">ns</span>{{else}}<span class="sig-stars">{{.Stars}}</span>{{end}}</td>
-      </tr>
-      {{end}}
-      </tbody>
-    </table>
-  </div>
-  {{end}}
-
-  <div class="section">
-    <h3>Per-Query Results</h3>
-    <table class="sortable">
-      <thead><tr>
-        <th>Query</th><th>Engine</th><th>NDCG@K</th><th>P@K</th><th>AP</th><th>RR</th><th>Bpref</th><th>Hits</th><th>p50</th><th>p95</th><th>Status</th>
-      </tr></thead>
-      <tbody>
-      {{range .PerQuery}}
-      <tr>
-        <td>{{.Query}}</td>
-        <td>{{.Engine}}</td>
-        <td>{{.NDCG}}</td>
-        <td>{{.Precision}}</td>
-        <td>{{.AP}}</td>
-        <td>{{.RR}}</td>
-        <td>{{.Bpref}}</td>
-        <td>{{.Hits}}</td>
-        <td>{{.P50}}</td>
-        <td>{{.P95}}</td>
-        <td>{{if .IsErr}}<span class="status-err">ERR</span>{{else}}<span class="status-ok">OK</span>{{end}}</td>
-      </tr>
-      {{end}}
-      </tbody>
-    </table>
-  </div>
-</div>
-{{end}}
-
-<footer>Generated by {{.Tool}}</footer>
-</div>
-
-<script>
-(function(){
-  document.querySelectorAll('table.sortable').forEach(function(tbl){
-    var ths = tbl.querySelectorAll('thead th');
-    ths.forEach(function(th, col){
-      th.addEventListener('click', function(){
-        var asc = !th.classList.contains('sorted-asc');
-        ths.forEach(function(h){ h.classList.remove('sorted-asc','sorted-desc'); });
-        th.classList.add(asc ? 'sorted-asc' : 'sorted-desc');
-        var tbody = tbl.querySelector('tbody');
-        var rows = Array.from(tbody.querySelectorAll('tr'));
-        rows.sort(function(a,b){
-          var av = a.cells[col] ? a.cells[col].innerText.trim() : '';
-          var bv = b.cells[col] ? b.cells[col].innerText.trim() : '';
-          var an = parseFloat(av), bn = parseFloat(bv);
-          var cmp = (!isNaN(an) && !isNaN(bn)) ? an-bn : av.localeCompare(bv);
-          return asc ? cmp : -cmp;
-        });
-        rows.forEach(function(r){ tbody.appendChild(r); });
-      });
-    });
-  });
-})();
-</script>
-</body>
-</html>`
