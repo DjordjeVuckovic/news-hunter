@@ -226,25 +226,24 @@ queries:
         }
 
   - id: match-content-ai
-    description: "Content-field search for AI technology"
+    description: "Phrase search for 'artificial intelligence' across all fields"
     engines:
       pg-seq:
-        template: pg_fts_single_field
-        params: { field: "content", tsquery_fn: "phraseto_tsquery", terms: "artificial intelligence", limit: 100 }
+        template: pg_fts_phrase
+        params: { fields: "title || ' ' || coalesce(description,'') || ' ' || coalesce(content,'')", terms: "artificial intelligence", limit: 100 }
       pg-gin:
         template: pg_idx_phrase
         params: { terms: "artificial intelligence", limit: 100 }
       paradedb:
-        template: pdb_single_field
-        params: { field: "content", terms: "artificial intelligence", limit: 100 }
+        template: pdb_phrase
+        params: { terms: "artificial intelligence", limit: 100 }
       elasticsearch: |
         {
           "query": {
-            "match": {
-              "content": {
-                "query": "artificial intelligence",
-                "operator": "and"
-              }
+            "multi_match": {
+              "query": "artificial intelligence",
+              "type": "phrase",
+              "fields": ["title", "description", "content"]
             }
           },
           "size": 100
@@ -306,15 +305,27 @@ queries:
     engines:
       pg-seq:
         template: pg_fts_boolean
-        params: { fields: "title || ' ' || coalesce(content,'')", tsquery_expr: "climate & !politics", limit: 100 }
+        params: { fields: "title || ' ' || coalesce(description,'') || ' ' || coalesce(content,'')", tsquery_expr: "climate & !politics", limit: 100 }
       pg-gin:
         template: pg_idx_boolean
         params: { tsquery_expr: "climate & !politics", limit: 100 }
       paradedb: |
         SELECT id FROM articles
         WHERE id @@@ paradedb.boolean(
-          must => ARRAY[paradedb.match('title', 'climate')],
-          must_not => ARRAY[paradedb.match('title', 'politics')]
+          must => ARRAY[
+            paradedb.boolean(should => ARRAY[
+              paradedb.match('title', 'climate'),
+              paradedb.match('description', 'climate'),
+              paradedb.match('content', 'climate')
+            ])
+          ],
+          must_not => ARRAY[
+            paradedb.boolean(should => ARRAY[
+              paradedb.match('title', 'politics'),
+              paradedb.match('description', 'politics'),
+              paradedb.match('content', 'politics')
+            ])
+          ]
         )
         ORDER BY pdb.score(id) DESC
         LIMIT 100
@@ -323,10 +334,10 @@ queries:
           "query": {
             "bool": {
               "must": [
-                { "match": { "content": "climate" } }
+                { "multi_match": { "query": "climate", "fields": ["title", "description", "content"] } }
               ],
               "must_not": [
-                { "match": { "content": "politics" } }
+                { "multi_match": { "query": "politics", "fields": ["title", "description", "content"] } }
               ]
             }
           },
@@ -338,7 +349,7 @@ queries:
     engines:
       pg-seq:
         template: pg_fts_boolean
-        params: { fields: "title || ' ' || coalesce(content,'')", tsquery_expr: "(technology | science) & innovation", limit: 100 }
+        params: { fields: "title || ' ' || coalesce(description,'') || ' ' || coalesce(content,'')", tsquery_expr: "(technology | science) & innovation", limit: 100 }
       pg-gin:
         template: pg_idx_boolean
         params: { tsquery_expr: "(technology | science) & innovation", limit: 100 }
@@ -348,9 +359,17 @@ queries:
           must => ARRAY[
             paradedb.boolean(should => ARRAY[
               paradedb.match('title', 'technology'),
-              paradedb.match('title', 'science')
+              paradedb.match('description', 'technology'),
+              paradedb.match('content', 'technology'),
+              paradedb.match('title', 'science'),
+              paradedb.match('description', 'science'),
+              paradedb.match('content', 'science')
             ]),
-            paradedb.match('title', 'innovation')
+            paradedb.boolean(should => ARRAY[
+              paradedb.match('title', 'innovation'),
+              paradedb.match('description', 'innovation'),
+              paradedb.match('content', 'innovation')
+            ])
           ]
         )
         ORDER BY pdb.score(id) DESC
@@ -360,12 +379,12 @@ queries:
           "query": {
             "bool": {
               "must": [
-                { "match": { "content": "innovation" } },
+                { "multi_match": { "query": "innovation", "fields": ["title", "description", "content"] } },
                 {
                   "bool": {
                     "should": [
-                      { "match": { "content": "technology" } },
-                      { "match": { "content": "science" } }
+                      { "multi_match": { "query": "technology", "fields": ["title", "description", "content"] } },
+                      { "multi_match": { "query": "science", "fields": ["title", "description", "content"] } }
                     ],
                     "minimum_should_match": 1
                   }

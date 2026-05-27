@@ -108,15 +108,15 @@ Pretty-prints a one-page summary of any artifact:
 
 All metrics computed per-query then averaged across judged queries:
 
-| Metric | Description |
-|--------|-------------|
+| Metric   | Description                                                    |
+|----------|----------------------------------------------------------------|
 | `NDCG@k` | Normalized Discounted Cumulative Gain — primary quality signal |
-| `P@k` | Precision at k |
-| `R@k` | Recall at k |
-| `F1@k` | Harmonic mean of P@k and R@k |
-| `MAP` | Mean Average Precision |
-| `MRR` | Mean Reciprocal Rank |
-| `Bpref` | Binary preference — robust to incomplete judgments |
+| `P@k`    | Precision at k                                                 |
+| `R@k`    | Recall at k                                                    |
+| `F1@k`   | Harmonic mean of P@k and R@k                                   |
+| `MAP`    | Mean Average Precision                                         |
+| `MRR`    | Mean Reciprocal Rank                                           |
+| `Bpref`  | Binary preference — robust to incomplete judgments             |
 
 Latency: per-engine p50/p75/p90/p95/p99 across all queries.
 

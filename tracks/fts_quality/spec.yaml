@@ -31,13 +31,13 @@ metrics:
 
 runs:
   warmup: 1
-  iterations: 1
+  iterations: 3
 
 jobs:
   - name: "pg-gin-vs-paradedb-vs-es"
-    suite: tracks/fts_quality/suite.yaml
+    suite: suite.yaml
     engines: [pg-gin, paradedb, elasticsearch]
 
   - name: "all-engines"
-    suite: tracks/fts_quality/suite.yaml
+    suite: suite.yaml
     engines: [pg-seq, pg-gin, paradedb, elasticsearch]

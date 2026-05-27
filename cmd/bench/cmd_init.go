@@ -95,7 +95,6 @@ func executeInit(cmd *cobra.Command, f initFlags, name string) error {
 		}
 	}
 
-	// Drop .gitkeep so trec/ and reports/ are visible to git from day 1.
 	_ = os.WriteFile(filepath.Join(root, "trec", ".gitkeep"), nil, 0644)
 	_ = os.WriteFile(filepath.Join(root, "reports", ".gitkeep"), nil, 0644)
 
