@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/judgment"
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/meta"
@@ -21,6 +23,7 @@ type runFlags struct {
 	judgments string
 	output    string
 	kValues   string
+	jobs      string // comma-separated job name filter
 	maxK      int
 	warmup    int
 	iters     int
@@ -52,6 +55,7 @@ The judgments file used for scoring resolves in this order:
 	cmd.Flags().StringVar(&f.judgments, "judgments", "", "Strategy name (e.g. lexical) or annotations YAML path")
 	cmd.Flags().StringVar(&f.output, "output", "", "Override report path (default: tracks/<name>/reports/<run_id>.json)")
 	cmd.Flags().StringVar(&f.kValues, "k", "3,5,10", "K cut-offs for NDCG/P/R/F1")
+	cmd.Flags().StringVar(&f.jobs, "jobs", "", "Comma-separated job names to run (default: all jobs in spec)")
 	cmd.Flags().IntVar(&f.maxK, "max-k", 0, "Max docs retrieved per query (0 = spec.metrics.max_k)")
 	cmd.Flags().IntVar(&f.warmup, "warmup", 0, "Warmup iterations")
 	cmd.Flags().IntVar(&f.iters, "iterations", 0, "Measured iterations (0 = spec.runs.iterations)")
@@ -108,6 +112,30 @@ func executeRun(cmd *cobra.Command, f runFlags, args []string) error {
 		runCfg.KValues = bs.Metrics.KValues
 	}
 
+	// Apply --jobs filter: keep only the named jobs.
+	if f.jobs != "" {
+		wanted := make(map[string]bool)
+		for _, name := range strings.Split(f.jobs, ",") {
+			if n := strings.TrimSpace(name); n != "" {
+				wanted[n] = true
+			}
+		}
+		filtered := bs.Jobs[:0]
+		for _, job := range bs.Jobs {
+			if wanted[job.Name] {
+				filtered = append(filtered, job)
+			}
+		}
+		if len(filtered) == 0 {
+			var names []string
+			for n := range wanted {
+				names = append(names, n)
+			}
+			return fmt.Errorf("--jobs filter matched no jobs (wanted: %s)", strings.Join(names, ", "))
+		}
+		bs.Jobs = filtered
+	}
+
 	executors, cleanup, err := createExecutors(cmd.Context(), bs)
 	if err != nil {
 		return fmt.Errorf("create executors: %w", err)
@@ -116,7 +144,9 @@ func executeRun(cmd *cobra.Command, f runFlags, args []string) error {
 
 	r := runner.New(runCfg)
 	sp := startSpinner("Running " + tr.Name() + "…")
+	start := time.Now()
 	result, err := r.RunAll(cmd.Context(), bs, executors)
+	elapsed := time.Since(start)
 	sp.Stop()
 	if err != nil {
 		return fmt.Errorf("run benchmark: %w", err)
@@ -133,6 +163,7 @@ func executeRun(cmd *cobra.Command, f runFlags, args []string) error {
 
 	// Print the table to stdout.
 	report.WriteTable(rpt, os.Stdout)
+	fmt.Fprintf(os.Stdout, "%s %s\n", cDim.Sprint("Elapsed:"), elapsed.Round(time.Millisecond))
 
 	outPath := f.output
 	if outPath == "" {

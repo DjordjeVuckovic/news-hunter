@@ -1,8 +1,8 @@
 schema_version: 1
 id: fts_quality_v1
 name: "FTS Quality Benchmark v1"
-description: "Starter suite with ~10 queries across search paradigms for end-to-end verification"
-version: "1.0.0"
+description: "Full-text search quality benchmark — 30 queries across keyword, phrase, boolean, and multi-field paradigms"
+version: "2.0.0"
 
 corpus:
   name: news_hunter_articles
@@ -437,6 +437,553 @@ queries:
             "multi_match": {
               "query": "technology innovation startup",
               "fields": ["title^3", "description^2", "content"]
+            }
+          },
+          "size": 100
+        }
+
+  # --- Additional keyword queries (for statistical power: ≥30 total) ---
+
+  - id: qs-vaccine
+    description: "Simple keyword search for vaccine news"
+    engines:
+      pg-seq:
+        template: pg_fts_multi_field
+        params: { terms: "vaccine covid booster", limit: 100 }
+      pg-gin:
+        template: pg_idx_multi_field
+        params: { terms: "vaccine covid booster", limit: 100 }
+      paradedb:
+        template: pdb_multi_field
+        params: { terms: "vaccine covid booster", limit: 100 }
+      elasticsearch: |
+        {
+          "query": {
+            "multi_match": {
+              "query": "vaccine covid booster",
+              "fields": ["title^3", "description^2", "content"]
+            }
+          },
+          "size": 100
+        }
+
+  - id: qs-ukraine-war
+    description: "Simple keyword search for Ukraine conflict coverage"
+    engines:
+      pg-seq:
+        template: pg_fts_multi_field
+        params: { terms: "ukraine russia war", limit: 100 }
+      pg-gin:
+        template: pg_idx_multi_field
+        params: { terms: "ukraine russia war", limit: 100 }
+      paradedb:
+        template: pdb_multi_field
+        params: { terms: "ukraine russia war", limit: 100 }
+      elasticsearch: |
+        {
+          "query": {
+            "multi_match": {
+              "query": "ukraine russia war",
+              "fields": ["title^3", "description^2", "content"]
+            }
+          },
+          "size": 100
+        }
+
+  - id: qs-interest-rates
+    description: "Simple keyword search for central bank rate decisions"
+    engines:
+      pg-seq:
+        template: pg_fts_multi_field
+        params: { terms: "interest rates federal reserve", limit: 100 }
+      pg-gin:
+        template: pg_idx_multi_field
+        params: { terms: "interest rates federal reserve", limit: 100 }
+      paradedb:
+        template: pdb_multi_field
+        params: { terms: "interest rates federal reserve", limit: 100 }
+      elasticsearch: |
+        {
+          "query": {
+            "multi_match": {
+              "query": "interest rates federal reserve",
+              "fields": ["title^3", "description^2", "content"]
+            }
+          },
+          "size": 100
+        }
+
+  - id: qs-social-media
+    description: "Simple keyword search for social media news"
+    engines:
+      pg-seq:
+        template: pg_fts_multi_field
+        params: { terms: "social media twitter facebook", limit: 100 }
+      pg-gin:
+        template: pg_idx_multi_field
+        params: { terms: "social media twitter facebook", limit: 100 }
+      paradedb:
+        template: pdb_multi_field
+        params: { terms: "social media twitter facebook", limit: 100 }
+      elasticsearch: |
+        {
+          "query": {
+            "multi_match": {
+              "query": "social media twitter facebook",
+              "fields": ["title^3", "description^2", "content"]
+            }
+          },
+          "size": 100
+        }
+
+  - id: qs-housing-prices
+    description: "Simple keyword search for housing market"
+    engines:
+      pg-seq:
+        template: pg_fts_multi_field
+        params: { terms: "housing prices real estate", limit: 100 }
+      pg-gin:
+        template: pg_idx_multi_field
+        params: { terms: "housing prices real estate", limit: 100 }
+      paradedb:
+        template: pdb_multi_field
+        params: { terms: "housing prices real estate", limit: 100 }
+      elasticsearch: |
+        {
+          "query": {
+            "multi_match": {
+              "query": "housing prices real estate",
+              "fields": ["title^3", "description^2", "content"]
+            }
+          },
+          "size": 100
+        }
+
+  - id: qs-space-exploration
+    description: "Simple keyword search for space exploration"
+    engines:
+      pg-seq:
+        template: pg_fts_multi_field
+        params: { terms: "space nasa mission launch", limit: 100 }
+      pg-gin:
+        template: pg_idx_multi_field
+        params: { terms: "space nasa mission launch", limit: 100 }
+      paradedb:
+        template: pdb_multi_field
+        params: { terms: "space nasa mission launch", limit: 100 }
+      elasticsearch: |
+        {
+          "query": {
+            "multi_match": {
+              "query": "space nasa mission launch",
+              "fields": ["title^3", "description^2", "content"]
+            }
+          },
+          "size": 100
+        }
+
+  - id: qs-immigration
+    description: "Simple keyword search for immigration policy"
+    engines:
+      pg-seq:
+        template: pg_fts_multi_field
+        params: { terms: "immigration policy border migrants", limit: 100 }
+      pg-gin:
+        template: pg_idx_multi_field
+        params: { terms: "immigration policy border migrants", limit: 100 }
+      paradedb:
+        template: pdb_multi_field
+        params: { terms: "immigration policy border migrants", limit: 100 }
+      elasticsearch: |
+        {
+          "query": {
+            "multi_match": {
+              "query": "immigration policy border migrants",
+              "fields": ["title^3", "description^2", "content"]
+            }
+          },
+          "size": 100
+        }
+
+  - id: qs-cryptocurrency
+    description: "Simple keyword search for cryptocurrency news"
+    engines:
+      pg-seq:
+        template: pg_fts_multi_field
+        params: { terms: "bitcoin cryptocurrency blockchain", limit: 100 }
+      pg-gin:
+        template: pg_idx_multi_field
+        params: { terms: "bitcoin cryptocurrency blockchain", limit: 100 }
+      paradedb:
+        template: pdb_multi_field
+        params: { terms: "bitcoin cryptocurrency blockchain", limit: 100 }
+      elasticsearch: |
+        {
+          "query": {
+            "multi_match": {
+              "query": "bitcoin cryptocurrency blockchain",
+              "fields": ["title^3", "description^2", "content"]
+            }
+          },
+          "size": 100
+        }
+
+  # --- Additional phrase queries ---
+
+  - id: phrase-stock-market-crash
+    description: "Exact phrase search for 'stock market crash'"
+    engines:
+      pg-seq:
+        template: pg_fts_phrase
+        params: { fields: "title || ' ' || coalesce(description,'')", terms: "stock market crash", limit: 100 }
+      pg-gin:
+        template: pg_idx_phrase
+        params: { terms: "stock market crash", limit: 100 }
+      paradedb:
+        template: pdb_phrase
+        params: { terms: "stock market crash", limit: 100 }
+      elasticsearch: |
+        {
+          "query": {
+            "multi_match": {
+              "query": "stock market crash",
+              "type": "phrase",
+              "fields": ["title", "description"]
+            }
+          },
+          "size": 100
+        }
+
+  - id: phrase-interest-rate-hike
+    description: "Exact phrase search for 'interest rate hike'"
+    engines:
+      pg-seq:
+        template: pg_fts_phrase
+        params: { fields: "title || ' ' || coalesce(description,'')", terms: "interest rate hike", limit: 100 }
+      pg-gin:
+        template: pg_idx_phrase
+        params: { terms: "interest rate hike", limit: 100 }
+      paradedb:
+        template: pdb_phrase
+        params: { terms: "interest rate hike", limit: 100 }
+      elasticsearch: |
+        {
+          "query": {
+            "multi_match": {
+              "query": "interest rate hike",
+              "type": "phrase",
+              "fields": ["title", "description"]
+            }
+          },
+          "size": 100
+        }
+
+  - id: phrase-human-rights-violations
+    description: "Exact phrase search for 'human rights violations'"
+    engines:
+      pg-seq:
+        template: pg_fts_phrase
+        params: { fields: "title || ' ' || coalesce(description,'') || ' ' || coalesce(content,'')", terms: "human rights violations", limit: 100 }
+      pg-gin:
+        template: pg_idx_phrase
+        params: { terms: "human rights violations", limit: 100 }
+      paradedb:
+        template: pdb_phrase
+        params: { terms: "human rights violations", limit: 100 }
+      elasticsearch: |
+        {
+          "query": {
+            "multi_match": {
+              "query": "human rights violations",
+              "type": "phrase",
+              "fields": ["title", "description", "content"]
+            }
+          },
+          "size": 100
+        }
+
+  # --- Additional boolean queries ---
+
+  - id: bool-tech-not-crypto
+    description: "Boolean: technology articles excluding cryptocurrency"
+    engines:
+      pg-seq:
+        template: pg_fts_boolean
+        params: { fields: "title || ' ' || coalesce(description,'') || ' ' || coalesce(content,'')", tsquery_expr: "technology & !cryptocurrency & !bitcoin", limit: 100 }
+      pg-gin:
+        template: pg_idx_boolean
+        params: { tsquery_expr: "technology & !cryptocurrency & !bitcoin", limit: 100 }
+      paradedb: |
+        SELECT id FROM articles
+        WHERE id @@@ paradedb.boolean(
+          must => ARRAY[
+            paradedb.boolean(should => ARRAY[
+              paradedb.match('title', 'technology'),
+              paradedb.match('description', 'technology')
+            ])
+          ],
+          must_not => ARRAY[
+            paradedb.boolean(should => ARRAY[
+              paradedb.match('title', 'cryptocurrency'),
+              paradedb.match('title', 'bitcoin')
+            ])
+          ]
+        )
+        ORDER BY pdb.score(id) DESC
+        LIMIT 100
+      elasticsearch: |
+        {
+          "query": {
+            "bool": {
+              "must": [
+                { "multi_match": { "query": "technology", "fields": ["title", "description"] } }
+              ],
+              "must_not": [
+                { "multi_match": { "query": "cryptocurrency bitcoin", "fields": ["title", "description"] } }
+              ]
+            }
+          },
+          "size": 100
+        }
+
+  - id: bool-health-science
+    description: "Boolean: health AND (science OR medicine OR research)"
+    engines:
+      pg-seq:
+        template: pg_fts_boolean
+        params: { fields: "title || ' ' || coalesce(description,'') || ' ' || coalesce(content,'')", tsquery_expr: "health & (science | medicine | research)", limit: 100 }
+      pg-gin:
+        template: pg_idx_boolean
+        params: { tsquery_expr: "health & (science | medicine | research)", limit: 100 }
+      paradedb: |
+        SELECT id FROM articles
+        WHERE id @@@ paradedb.boolean(
+          must => ARRAY[
+            paradedb.boolean(should => ARRAY[
+              paradedb.match('title', 'health'),
+              paradedb.match('content', 'health')
+            ]),
+            paradedb.boolean(should => ARRAY[
+              paradedb.match('title', 'science'),
+              paradedb.match('title', 'medicine'),
+              paradedb.match('title', 'research'),
+              paradedb.match('content', 'science'),
+              paradedb.match('content', 'medicine'),
+              paradedb.match('content', 'research')
+            ])
+          ]
+        )
+        ORDER BY pdb.score(id) DESC
+        LIMIT 100
+      elasticsearch: |
+        {
+          "query": {
+            "bool": {
+              "must": [
+                { "multi_match": { "query": "health", "fields": ["title", "content"] } },
+                {
+                  "bool": {
+                    "should": [
+                      { "multi_match": { "query": "science", "fields": ["title", "content"] } },
+                      { "multi_match": { "query": "medicine", "fields": ["title", "content"] } },
+                      { "multi_match": { "query": "research", "fields": ["title", "content"] } }
+                    ],
+                    "minimum_should_match": 1
+                  }
+                }
+              ]
+            }
+          },
+          "size": 100
+        }
+
+  - id: bool-economy-recession-not-covid
+    description: "Boolean: (economy OR recession) AND NOT covid"
+    engines:
+      pg-seq:
+        template: pg_fts_boolean
+        params: { fields: "title || ' ' || coalesce(description,'') || ' ' || coalesce(content,'')", tsquery_expr: "(economy | recession) & !covid & !pandemic", limit: 100 }
+      pg-gin:
+        template: pg_idx_boolean
+        params: { tsquery_expr: "(economy | recession) & !covid & !pandemic", limit: 100 }
+      paradedb: |
+        SELECT id FROM articles
+        WHERE id @@@ paradedb.boolean(
+          must => ARRAY[
+            paradedb.boolean(should => ARRAY[
+              paradedb.match('title', 'economy'),
+              paradedb.match('title', 'recession'),
+              paradedb.match('content', 'economy'),
+              paradedb.match('content', 'recession')
+            ])
+          ],
+          must_not => ARRAY[
+            paradedb.boolean(should => ARRAY[
+              paradedb.match('title', 'covid'),
+              paradedb.match('title', 'pandemic')
+            ])
+          ]
+        )
+        ORDER BY pdb.score(id) DESC
+        LIMIT 100
+      elasticsearch: |
+        {
+          "query": {
+            "bool": {
+              "should": [
+                { "multi_match": { "query": "economy", "fields": ["title", "content"] } },
+                { "multi_match": { "query": "recession", "fields": ["title", "content"] } }
+              ],
+              "must_not": [
+                { "multi_match": { "query": "covid pandemic", "fields": ["title", "content"] } }
+              ],
+              "minimum_should_match": 1
+            }
+          },
+          "size": 100
+        }
+
+  # --- Additional multi-field boosted queries ---
+
+  - id: mm-inflation-economy
+    description: "Multi-field search for inflation and economic impacts"
+    engines:
+      pg-seq:
+        template: pg_fts_weighted
+        params: { terms: "inflation economy prices", limit: 100 }
+      pg-gin:
+        template: pg_idx_weighted
+        params: { terms: "inflation economy prices", limit: 100 }
+      paradedb:
+        template: pdb_multi_field_boosted
+        params: { terms: "inflation economy prices", limit: 100 }
+      elasticsearch: |
+        {
+          "query": {
+            "multi_match": {
+              "query": "inflation economy prices",
+              "fields": ["title^3", "description^2", "content"]
+            }
+          },
+          "size": 100
+        }
+
+  - id: mm-cybersecurity-data-breach
+    description: "Multi-field search for cybersecurity incidents"
+    engines:
+      pg-seq:
+        template: pg_fts_weighted
+        params: { terms: "cybersecurity data breach hack", limit: 100 }
+      pg-gin:
+        template: pg_idx_weighted
+        params: { terms: "cybersecurity data breach hack", limit: 100 }
+      paradedb:
+        template: pdb_multi_field_boosted
+        params: { terms: "cybersecurity data breach hack", limit: 100 }
+      elasticsearch: |
+        {
+          "query": {
+            "multi_match": {
+              "query": "cybersecurity data breach hack",
+              "fields": ["title^3", "description^2", "content"]
+            }
+          },
+          "size": 100
+        }
+
+  - id: mm-supreme-court-ruling
+    description: "Multi-field search for US Supreme Court decisions"
+    engines:
+      pg-seq:
+        template: pg_fts_weighted
+        params: { terms: "supreme court ruling decision", limit: 100 }
+      pg-gin:
+        template: pg_idx_weighted
+        params: { terms: "supreme court ruling decision", limit: 100 }
+      paradedb:
+        template: pdb_multi_field_boosted
+        params: { terms: "supreme court ruling decision", limit: 100 }
+      elasticsearch: |
+        {
+          "query": {
+            "multi_match": {
+              "query": "supreme court ruling decision",
+              "fields": ["title^3", "description^2", "content"]
+            }
+          },
+          "size": 100
+        }
+
+  - id: mm-olympics-sports
+    description: "Multi-field search for Olympics and major sports"
+    engines:
+      pg-seq:
+        template: pg_fts_weighted
+        params: { terms: "olympics sports championship medal", limit: 100 }
+      pg-gin:
+        template: pg_idx_weighted
+        params: { terms: "olympics sports championship medal", limit: 100 }
+      paradedb:
+        template: pdb_multi_field_boosted
+        params: { terms: "olympics sports championship medal", limit: 100 }
+      elasticsearch: |
+        {
+          "query": {
+            "multi_match": {
+              "query": "olympics sports championship medal",
+              "fields": ["title^3", "description^2", "content"]
+            }
+          },
+          "size": 100
+        }
+
+  # --- Single field queries (additional) ---
+
+  - id: match-title-pandemic
+    description: "Title-only search for pandemic coverage"
+    engines:
+      pg-seq:
+        template: pg_fts_single_field
+        params: { field: "title", tsquery_fn: "plainto_tsquery", terms: "pandemic lockdown", limit: 100 }
+      pg-gin:
+        template: pg_idx_multi_field
+        params: { terms: "pandemic lockdown", limit: 100 }
+      paradedb:
+        template: pdb_single_field
+        params: { field: "title", terms: "pandemic lockdown", limit: 100 }
+      elasticsearch: |
+        {
+          "query": {
+            "match": {
+              "title": {
+                "query": "pandemic lockdown",
+                "operator": "or"
+              }
+            }
+          },
+          "size": 100
+        }
+
+  - id: match-title-semiconductor
+    description: "Title-only search for semiconductor chip shortage"
+    engines:
+      pg-seq:
+        template: pg_fts_single_field
+        params: { field: "title", tsquery_fn: "plainto_tsquery", terms: "semiconductor chip shortage", limit: 100 }
+      pg-gin:
+        template: pg_idx_multi_field
+        params: { terms: "semiconductor chip shortage", limit: 100 }
+      paradedb:
+        template: pdb_single_field
+        params: { field: "title", terms: "semiconductor chip shortage", limit: 100 }
+      elasticsearch: |
+        {
+          "query": {
+            "match": {
+              "title": {
+                "query": "semiconductor chip shortage",
+                "operator": "or"
+              }
             }
           },
           "size": 100

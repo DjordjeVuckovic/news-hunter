@@ -52,6 +52,136 @@ func hasAnyJudgments(jr *JobReport) bool {
 	return false
 }
 
+// WriteMarkdown renders the report as GitHub-Flavored Markdown suitable for
+// thesis appendices and pull request descriptions. Color is stripped; tables
+// are rendered in GFM pipe format via go-pretty's RenderMarkdown().
+func WriteMarkdown(r *Report, w io.Writer) {
+	title := r.Provenance.SpecID
+	if title == "" {
+		title = "Benchmark"
+	}
+	fmt.Fprintf(w, "# %s\n\n", title)
+	fmt.Fprintf(w, "**run_id:** `%s`  \n", r.Provenance.RunID)
+	if !r.Provenance.GeneratedAt.IsZero() {
+		fmt.Fprintf(w, "**generated:** %s  \n", r.Provenance.GeneratedAt.Format("2006-01-02 15:04:05 UTC"))
+	}
+	fmt.Fprintln(w)
+
+	for _, jr := range r.Jobs {
+		fmt.Fprintf(w, "## Job: %s\n\n", jr.JobName)
+		if !hasAnyJudgments(&jr) {
+			fmt.Fprintf(w, "> ⚠️ No relevance judgments — latency only.\n\n")
+			writeMDLatencyTable(w, &jr)
+		} else {
+			writeMDAggregatedTable(w, &jr, r.Config.KValues)
+			writeMDLatencyTable(w, &jr)
+			writeMDSignificanceTable(w, &jr)
+		}
+	}
+}
+
+// newMDTable returns a go-pretty table writer that renders to GFM markdown.
+// No output mirror — caller gets the rendered string via RenderMarkdown().
+func newMDTable() table.Writer {
+	t := table.NewWriter()
+	return t
+}
+
+func writeMDAggregatedTable(w io.Writer, jr *JobReport, kValues []int) {
+	fmt.Fprintf(w, "### Aggregated Results\n\n")
+
+	t := newMDTable()
+	hdr := table.Row{"Engine"}
+	for _, k := range kValues {
+		hdr = append(hdr, fmt.Sprintf("NDCG@%d", k))
+	}
+	for _, k := range kValues {
+		hdr = append(hdr, fmt.Sprintf("P@%d", k))
+	}
+	hdr = append(hdr, "MAP", "MRR", "Bpref", "Judged", "Errors")
+	t.AppendHeader(hdr)
+
+	numMetricCols := len(kValues)*2 + 3
+	for _, agg := range jr.Aggregated {
+		row := table.Row{agg.EngineName}
+		if agg.JudgedCount > 0 {
+			for _, k := range kValues {
+				row = append(row, fmt.Sprintf("%.4f", agg.NDCG[k]))
+			}
+			for _, k := range kValues {
+				row = append(row, fmt.Sprintf("%.4f", agg.Precision[k]))
+			}
+			row = append(row,
+				fmt.Sprintf("%.4f", agg.MAP),
+				fmt.Sprintf("%.4f", agg.MRR),
+				fmt.Sprintf("%.4f", agg.MBpref),
+			)
+		} else {
+			for i := 0; i < numMetricCols; i++ {
+				row = append(row, "N/A")
+			}
+		}
+		row = append(row,
+			fmt.Sprintf("%d/%d", agg.JudgedCount, agg.QueryCount),
+			fmt.Sprintf("%d/%d", agg.ErrorCount, agg.QueryCount),
+		)
+		t.AppendRow(row)
+	}
+	fmt.Fprintln(w, t.RenderMarkdown())
+	fmt.Fprintln(w)
+}
+
+func writeMDLatencyTable(w io.Writer, jr *JobReport) {
+	fmt.Fprintf(w, "### Latency Statistics\n\n")
+
+	t := newMDTable()
+	t.AppendHeader(table.Row{
+		"Engine", "Min", "p50", "p75", "p90", "p95", "p99", "Max", "Mean", "Stddev", "Samples",
+	})
+	for _, agg := range jr.Aggregated {
+		s := agg.Latency
+		t.AppendRow(table.Row{
+			agg.EngineName,
+			fmtDuration(s.Min),
+			fmtDuration(s.P50()),
+			fmtDuration(s.P75()),
+			fmtDuration(s.P90()),
+			fmtDuration(s.P95()),
+			fmtDuration(s.P99()),
+			fmtDuration(s.Max),
+			fmtDuration(s.Mean),
+			fmtDuration(s.Stddev),
+			s.SampleCount,
+		})
+	}
+	fmt.Fprintln(w, t.RenderMarkdown())
+	fmt.Fprintln(w)
+}
+
+func writeMDSignificanceTable(w io.Writer, jr *JobReport) {
+	if len(jr.Significance) == 0 {
+		return
+	}
+	fmt.Fprintf(w, "### Statistical Significance (Wilcoxon signed-rank, two-tailed)\n\n")
+
+	t := newMDTable()
+	t.AppendHeader(table.Row{"Engine A", "Engine B", "Metric", "W", "p-value", "Sig"})
+	for _, s := range jr.Significance {
+		sig := "ns"
+		if s.Stars != "" {
+			sig = s.Stars
+		}
+		t.AppendRow(table.Row{
+			s.EngineA, s.EngineB, s.Metric,
+			fmt.Sprintf("%.1f", s.W),
+			fmt.Sprintf("%.4f", s.P),
+			sig,
+		})
+	}
+	fmt.Fprintln(w, t.RenderMarkdown())
+	fmt.Fprintln(w)
+}
+
 // newTable returns a pre-styled go-pretty table writer.
 func newTable(w io.Writer) table.Writer {
 	t := table.NewWriter()

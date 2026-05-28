@@ -34,6 +34,7 @@ Typical pipeline (pass the track name as a positional arg):
 
   bench status <name>               see where you left off
   bench diff   <name>               compare latest two runs
+  bench clean  <name>               remove old report files (keep N newest)
 `
 )
 
@@ -55,6 +56,7 @@ func main() {
 		newExportCmd(),
 		newStatusCmd(),
 		newDiffCmd(),
+		newCleanCmd(),
 		newReportCmd(), // top-level alias for bench show report
 	)
 
