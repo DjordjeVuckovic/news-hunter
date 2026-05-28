@@ -1,6 +1,6 @@
 # bench — IR Benchmark CLI
 
-`bench` evaluates full-text, vector, and hybrid search queries against multiple engines (PostgreSQL variants, Elasticsearch, the news-hunter API), computes IR quality metrics and latency statistics, and writes self-attesting JSON reports.
+`bench` evaluates full-text, vector, and hybrid search queries against multiple engines (PostgreSQL variants, Elasticsearch, the news-hunter API), computes IR quality metrics and latency statistics, and writes self-attesting JSON and HTML reports.
 
 ## Track convention
 
@@ -8,52 +8,64 @@ Everything lives in a self-contained **track folder**:
 
 ```
 tracks/<name>/
-  spec.yaml          # engines, jobs, metrics config, defaults
-  suite.yaml         # queries and per-engine templates
+  spec.yaml                         # engines, jobs, metrics config, defaults
+  suite.yaml                        # queries and per-engine SQL/JSON templates
   trec/
     pool.yaml                       # candidate docs (bench pool output)
     annotations.<strategy>.yaml     # relevance grades (bench judge output)
-    qrels.<strategy>.tsv            # TREC qrels export (bench qrels output)
+    qrels.<strategy>.tsv            # TREC qrels (bench export --format qrels)
   reports/
     <run_id>.json                   # one per bench run
     latest.json                     # pointer to most recent report
+    <run_id>.html                   # optional HTML (bench export --format html)
+    <run_id>.md                     # optional Markdown (bench export --format markdown)
 ```
 
-One track, multiple judgment strategies living side by side. Switch strategies with `--judgments <name>` on `bench run` — no YAML editing required.
+One track, multiple judgment strategies living side by side.  
+Switch strategies with `--judgments <name>` on `bench run` — no YAML editing required.
 
 ## Pipeline
 
 ```
-bench init <name>           1. scaffold tracks/<name>/
-bench validate [<name>]     2. dry-run all queries against all engines
-bench pool     [<name>]     3. gather candidate docs → trec/pool.yaml
+bench init    <name>               1. scaffold tracks/<name>/
+bench validate [<name>]            2. dry-run all queries through each engine
+bench pool     [<name>] [--depth N]
+                                   3. gather candidate docs → trec/pool.yaml
 bench judge    [<name>] --strategy <S>
-                            4. grade pool → trec/annotations.<S>.yaml
-bench run      [<name>]     5. execute suite + compute metrics → reports/
-bench qrels    [<name>]     6. export TREC qrels (optional)
-bench show     report|pool|judgments|spec [<name>]
-                            inspect any artifact
+                                   4. grade pool → trec/annotations.<S>.yaml
+bench run      [<name>]            5. execute suite + compute metrics → reports/
+bench export   [<name>] --format <F>
+                                   6. export HTML / Markdown / TREC qrels
 ```
 
-Every command accepts a track name as a positional arg, a `--track` flag, or resolves from the current directory if you `cd tracks/<name>`.
+Inspect at any point:
+
+```
+bench status [<name>]              one-glance pipeline state
+bench show   report|pool|judgments|spec [<name>]
+bench diff   [<name>]              compare latest two runs
+bench clean  [<name>]              remove old report files
+```
+
+Every command accepts a track name as a positional arg (`bench run fts_quality`), a `--track` flag, or resolves from the current directory when you `cd tracks/<name>`.
 
 ## Strategy taxonomy
 
-| Strategy | Class | Status | Description |
-|----------|-------|--------|-------------|
-| `lexical` | Heuristic | ✅ | Token-overlap baseline — fast, deterministic, no network |
-| `bm25` | Heuristic | Reserved | BM25 score + threshold → grade |
-| `vector` | Heuristic | Reserved | Cosine similarity + threshold → grade |
-| `hybrid` | Heuristic | Reserved | Weighted combination |
-| `claude-cli` | LLM | ✅ | `claude -p` subprocess per batch |
-| `claude-api` | LLM | ✅ | Anthropic Messages API per batch |
-| `manual` | Human | ✅ | Emits `grade: -1` placeholders for hand-grading |
+| Strategy     | Class     | Status   | Description                                              |
+|--------------|-----------|----------|----------------------------------------------------------|
+| `lexical`    | Heuristic | ✅        | Token-overlap baseline — fast, deterministic, no network |
+| `bm25`       | Heuristic | Reserved | BM25 score + threshold → grade                           |
+| `vector`     | Heuristic | Reserved | Cosine similarity + threshold → grade                    |
+| `hybrid`     | Heuristic | Reserved | Weighted combination                                     |
+| `claude-cli` | LLM       | ✅        | `claude -p` subprocess per batch                         |
+| `claude-api` | LLM       | ✅        | Anthropic Messages API per batch                         |
+| `manual`     | Human     | ✅        | Emits `grade: -1` placeholders for hand-grading          |
 
 File convention: `trec/annotations.<strategy>.yaml`, `trec/qrels.<strategy>.tsv`.
 
 ## Schema v1
 
-Every produced artifact carries `schema_version: 1` and a `meta:` block. The meta block is the artifact's identity card — it records `run_id`, `tool` (with git sha), `generated_at`, and artifact-specific provenance (spec_id, strategy, judge_model, judge_prompt_version, sources).
+Every produced artifact carries `schema_version: 1` and a `meta:` block. The meta block records `run_id`, `tool` (with git sha), `generated_at`, and artifact-specific provenance (spec_id, strategy, judge_model, judge_prompt_version, sources).
 
 Loading any artifact without `schema_version: 1` is a hard error — there is no silent tolerance.
 
@@ -65,11 +77,11 @@ Scaffolds `tracks/<name>/` with `spec.yaml`, `suite.yaml`, `trec/`, `reports/`, 
 
 ### `bench validate [<name>]`
 
-Dry-runs every query through every engine using the engine's native validation endpoint (PostgreSQL `EXPLAIN`, Elasticsearch `_validate/query`). Reports per-query pass/fail — no data is stored.
+Dry-runs every query through every engine using the engine's native validation endpoint (PostgreSQL `EXPLAIN`, Elasticsearch `_validate/query`). Reports per-query pass/fail with colored status — no data is stored.
 
 ### `bench pool [<name>] [--depth N]`
 
-Runs all queries, gathers the top-N results per engine, deduplicates by doc ID, and writes `trec/pool.yaml`. Default depth is from `spec.defaults.pool_depth`.
+Runs all queries in parallel, gathers the top-N results per engine, deduplicates by doc ID, and writes `trec/pool.yaml`. Default depth is from `spec.defaults.pool_depth`.
 
 ### `bench judge [<name>] --strategy <S>`
 
@@ -80,18 +92,47 @@ Key flags:
 - `--batch N` — override LLM batch size
 - `--concurrency N` — parallel Grade calls (per-doc mode)
 
-### `bench run [<name>] [--judgments <S|path>]`
+### `bench run [<name>] [--judgments <S|path>] [--jobs <name,...>]`
 
-Executes the suite against all engines, computes IR metrics and latency, writes `reports/<run_id>.json` and updates `reports/latest.json`.
+Executes the suite against all engines, computes IR metrics and latency, prints a styled table with per-engine NDCG/MAP/MRR/Bpref + latency percentiles + statistical significance, then writes `reports/<run_id>.json` and updates `reports/latest.json`.
 
 Judgments resolution order:
 1. `--judgments <strategy|path>` (CLI flag)
 2. `spec.defaults.judgments` (per-track default)
 3. None → latency-only report, warning printed
 
-### `bench qrels [<name>] [--strategy <S>]`
+Flags:
+- `--jobs pg,es` — run only the named job(s) from the spec (useful during development)
+- `--k 3,5,10` — NDCG/P cut-off values
+- `--warmup N`, `--iterations N` — override spec settings
+- `--max-k N` — docs retrieved per query
 
-Exports `trec/qrels.<S>.tsv` in standard TREC format for use with `trec_eval` or `pytrec_eval`.
+Elapsed time is printed after the results table.
+
+### `bench export [<name>] --format <F>`
+
+| Format               | Output                  | Description                                                                          |
+|----------------------|-------------------------|--------------------------------------------------------------------------------------|
+| `qrels` (or `tsv`)   | `trec/qrels.<S>.tsv`    | TREC qrels TSV for `trec_eval`, R, pytrec_eval                                       |
+| `html`               | `reports/<run_id>.html` | Self-contained HTML with sortable tables, SVG charts, significance table, provenance |
+| `markdown` (or `md`) | `reports/<run_id>.md`   | GitHub-Flavored Markdown tables for thesis writing and PRs                           |
+
+Examples:
+```bash
+bench export fts_quality --format qrels
+bench export fts_quality --format qrels --strategy claude-api
+bench export fts_quality --format html
+bench export fts_quality --format markdown
+bench export fts_quality --format markdown --output /tmp/results.md
+```
+
+### `bench status [<name>]`
+
+Prints a one-glance dashboard showing which artifacts exist, when they were last generated, and what the natural next step is — like `git status` for the pipeline.
+
+### `bench diff [<name>]`
+
+Loads the two most-recent reports and shows per-engine metric deltas (NDCG, MAP, MRR, latency) and per-query NDCG regressions sorted by magnitude. Pass `--a` / `--b` to compare specific run IDs.
 
 ### `bench show <subcommand> [<name>|path]`
 
@@ -104,9 +145,21 @@ Pretty-prints a one-page summary of any artifact:
 | `show judgments [--strategy S]` | `trec/annotations.<S>.yaml` |
 | `show report` | `reports/latest.json` → actual report |
 
+`bench report [<name>]` is a top-level shorthand for `bench show report`.
+
+### `bench clean [<name>] [--keep N]`
+
+Removes old JSON, HTML, and Markdown files from `reports/`, keeping the `--keep` most-recent (default 5). `latest.json` is never deleted.
+
+```bash
+bench clean fts_quality            # keep 5 most recent
+bench clean fts_quality --keep 2
+bench clean fts_quality --dry-run  # show what would be deleted
+```
+
 ## Metrics
 
-All metrics computed per-query then averaged across judged queries:
+All metrics are computed per-query then averaged across judged queries:
 
 | Metric   | Description                                                    |
 |----------|----------------------------------------------------------------|
@@ -118,10 +171,25 @@ All metrics computed per-query then averaged across judged queries:
 | `MRR`    | Mean Reciprocal Rank                                           |
 | `Bpref`  | Binary preference — robust to incomplete judgments             |
 
-Latency: per-engine p50/p75/p90/p95/p99 across all queries.
+Statistical significance is computed pairwise (Wilcoxon signed-rank, two-tailed) for NDCG@K, MAP, and MRR. Requires ≥4 non-tied paired observations; `*` = p<0.05, `**` = p<0.01.
+
+Latency: per-engine min/p50/p75/p90/p95/p99/max/mean/stddev across all queries.
 
 ## Artifacts
 
 All artifacts are self-attesting. A report's `provenance.sources` block records the exact paths of the spec, suite, pool, and judgments files used — you can reconstruct any run from the report alone.
 
 For per-track documentation, see `tracks/<name>/README.md`.
+
+## Track naming convention
+
+Tracks follow `<dataset>_<paradigm>` naming, one track per (dataset × IR paradigm):
+
+| Track           | Paradigm            | Engines                                 |
+|-----------------|---------------------|-----------------------------------------|
+| `news_fts`      | Full-text search    | pg-seq, pg-gin, paradedb, elasticsearch |
+| `news_fuzzy`    | Fuzzy / approximate | pg_trgm, ES fuzziness                   |
+| `news_semantic` | Semantic / vector   | pgvector, ES dense_vector kNN           |
+| `news_hybrid`   | Hybrid (RRF fusion) | pgvector+BM25, ES hybrid                |
+
+This decomposition ensures that pools and judgments are paradigm-specific (different query types, different relevance criteria) and that statistical comparisons are between equivalent systems.
