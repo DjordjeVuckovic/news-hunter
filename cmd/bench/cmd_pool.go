@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/engine"
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/meta"
@@ -112,29 +113,58 @@ func executePool(cmd *cobra.Command, f poolFlags, args []string) error {
 	return nil
 }
 
+// buildPoolFile merges results across all jobs into one entry per query_id.
+// Multiple jobs commonly share a suite (e.g. a 3-engine job + an all-engines
+// job), so the same query_id surfaces in several JobResults. We union the
+// per-engine executions by query_id so each query is pooled — and later judged
+// — exactly once, regardless of how many jobs touched it.
 func buildPoolFile(result *runner.BenchmarkResult, descs map[string]string, depth int) *pool.PoolFile {
 	pf := &pool.PoolFile{}
+
+	var order []string                                       // first-seen query order
+	byQuery := make(map[string]map[string]*engine.Execution) // query_id → engine → execution
+	jobSeen := make(map[string]struct{})
+	var jobNames []string
+
 	for _, jr := range result.Jobs {
-		pf.SuiteName = jr.JobName
+		if _, ok := jobSeen[jr.JobName]; !ok {
+			jobSeen[jr.JobName] = struct{}{}
+			jobNames = append(jobNames, jr.JobName)
+		}
 		for _, qID := range jr.QueryOrder {
+			execs, ok := byQuery[qID]
+			if !ok {
+				execs = make(map[string]*engine.Execution)
+				byQuery[qID] = execs
+				order = append(order, qID)
+			}
 			engResults := jr.Results[qID]
-			executions := make(map[string]*engine.Execution)
 			for _, engName := range jr.EngineNames {
+				// First job to contribute an engine wins; the same engine on
+				// the same suite/query produces an identical ranked list, so
+				// there's nothing to merge — we only need engines not yet seen.
+				if _, exists := execs[engName]; exists {
+					continue
+				}
 				qr, ok := engResults[engName]
 				if !ok || qr.Error != nil {
 					continue
 				}
-				executions[engName] = &engine.Execution{
+				execs[engName] = &engine.Execution{
 					RankedDocIDs: qr.RankedDocIDs,
 					TotalMatches: qr.TotalMatches,
 				}
 			}
-			pf.Queries = append(pf.Queries, pool.PoolEntry{
-				QueryID:   qID,
-				QueryDesc: descs[qID],
-				Docs:      pool.PoolResults(executions, depth),
-			})
 		}
+	}
+
+	pf.SuiteName = strings.Join(jobNames, ",")
+	for _, qID := range order {
+		pf.Queries = append(pf.Queries, pool.PoolEntry{
+			QueryID:   qID,
+			QueryDesc: descs[qID],
+			Docs:      pool.PoolResults(byQuery[qID], depth),
+		})
 	}
 	return pf
 }

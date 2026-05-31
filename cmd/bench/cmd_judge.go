@@ -135,27 +135,8 @@ func executeJudge(cmd *cobra.Command, f judgeFlags, args []string) error {
 			return fmt.Errorf("load prior judgments: %w", err)
 		}
 		if prior != nil {
-			if prior.Strategy != "" && prior.Strategy != strat.Name() {
-				return fmt.Errorf("--resume strategy mismatch: existing file is %q, --strategy is %q",
-					prior.Strategy, strat.Name())
-			}
-			// Refuse if the prior file was produced by a different model —
-			// mixing grades from different models in one file corrupts the judgment set.
-			if mi, ok := strat.(judgment.ModelIdentifier); ok {
-				if prior.Meta.JudgeModel != mi.ModelID() {
-					return fmt.Errorf(
-						"--resume model mismatch: existing file used %q, current strategy uses %q\n"+
-							"  • re-run without --resume to start fresh with the new model",
-						prior.Meta.JudgeModel, mi.ModelID())
-				}
-			}
-			// Refuse if the grading rubric changed — shifted rubric + old grades
-			// in the same file means the scale is internally inconsistent.
-			if prior.Meta.JudgePromptVersion != judgment.PromptVersion {
-				return fmt.Errorf(
-					"--resume prompt version mismatch: existing file used prompt %q, current is %q\n"+
-						"  • the grading rubric changed; re-run without --resume to re-grade cleanly",
-					prior.Meta.JudgePromptVersion, judgment.PromptVersion)
+			if err := checkResumeCompat(prior, strat); err != nil {
+				return err
 			}
 			printWarn(cmd.OutOrStdout(), fmt.Sprintf("Resume: loaded %d prior queries from %s", len(prior.Queries), outPath))
 		}
@@ -217,6 +198,31 @@ func executeJudge(cmd *cobra.Command, f judgeFlags, args []string) error {
 
 	printDone(cmd.OutOrStdout(), fmt.Sprintf("Judgments written: %s  (strategy=%s  queries=%d  run_id=%s)",
 		outPath, final.Strategy, len(final.Queries), final.Meta.RunID))
+	return nil
+}
+
+// checkResumeCompat verifies that a prior judgments file is safe to resume with
+// the given strategy. It rejects files produced by a different strategy, model,
+// or grading-prompt version — mixing those in one file corrupts the grade set.
+func checkResumeCompat(prior *judgment.JudgmentFile, strat judgment.Strategy) error {
+	if prior.Strategy != "" && prior.Strategy != strat.Name() {
+		return fmt.Errorf("--resume strategy mismatch: existing file is %q, --strategy is %q",
+			prior.Strategy, strat.Name())
+	}
+	if mi, ok := strat.(judgment.ModelIdentifier); ok {
+		if prior.Meta.JudgeModel != "" && prior.Meta.JudgeModel != mi.ModelID() {
+			return fmt.Errorf(
+				"--resume model mismatch: existing file used %q, current strategy uses %q\n"+
+					"  • re-run without --resume to start fresh with the new model",
+				prior.Meta.JudgeModel, mi.ModelID())
+		}
+	}
+	if prior.Meta.JudgePromptVersion != "" && prior.Meta.JudgePromptVersion != judgment.PromptVersion {
+		return fmt.Errorf(
+			"--resume prompt version mismatch: existing file used prompt %q, current is %q\n"+
+				"  • the grading rubric changed; re-run without --resume to re-grade cleanly",
+			prior.Meta.JudgePromptVersion, judgment.PromptVersion)
+	}
 	return nil
 }
 

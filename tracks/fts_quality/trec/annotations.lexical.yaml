@@ -1,8 +1,8 @@
 schema_version: 1
 meta:
-    run_id: 2026-05-27T10-33-05-judge-c87955
+    run_id: 2026-05-31T21-26-28-judge-db9072
     tool: bench/1.0.0
-    generated_at: 2026-05-27T10:33:05.722946Z
+    generated_at: 2026-05-31T21:26:28.061504Z
     strategy: lexical
     judge_prompt_version: v1
     pool_ref: /Users/djordjevuckovic/projects/news-hunter/tracks/fts_quality/trec/pool.yaml
