@@ -17,9 +17,9 @@ type Type string
 
 const (
 	ES    Type = "es"
-	PG         = "pg"
-	Solr       = "solr"
-	InMem      = "in_mem"
+	PG    Type = "pg"
+	Solr  Type = "solr"
+	InMem Type = "in_mem"
 )
 
 type StorerError string

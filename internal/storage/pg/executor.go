@@ -42,7 +42,7 @@ func (e *RawExecutor) Exec(
 		rowMap := make(map[string]interface{})
 		fieldDescriptions := rows.FieldDescriptions()
 		for i, fd := range fieldDescriptions {
-			rowMap[string(fd.Name)] = values[i]
+			rowMap[fd.Name] = values[i]
 		}
 		results = append(results, rowMap)
 	}

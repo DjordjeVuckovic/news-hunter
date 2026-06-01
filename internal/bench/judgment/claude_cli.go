@@ -2,6 +2,7 @@ package judgment
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 )
@@ -73,7 +74,8 @@ func (s *ClaudeCLIStrategy) runCLI(ctx context.Context, prompt string) (string, 
 	cmd := exec.CommandContext(ctx, s.binary, "-p", prompt)
 	out, err := cmd.Output()
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
 			return "", fmt.Errorf("%s -p exit %d: %s", s.binary, exitErr.ExitCode(), string(exitErr.Stderr))
 		}
 		return "", fmt.Errorf("%s -p: %w", s.binary, err)

@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/trackctx"
 	"github.com/spf13/cobra"
@@ -44,7 +43,6 @@ func executeStatus(w io.Writer, track string, args []string) error {
 	fmt.Fprintf(w, "  %s %s\n\n", cDim.Sprint("root:"), tr.Root)
 
 	trecDir := filepath.Dir(tr.Pool)
-	reportsDir := filepath.Dir(tr.LatestReportPath())
 
 	// Pool
 	printArtifact(w, "Pool", tr.Pool, func(path string) string {
@@ -79,7 +77,7 @@ func executeStatus(w io.Writer, track string, args []string) error {
 			cDim.Sprintf("none — run: bench run %s", tr.Name()))
 	} else {
 		printArtifact(w, "Reports", latest, func(path string) string {
-			return readLatestMeta(path, reportsDir)
+			return readLatestMeta(path)
 		})
 	}
 
@@ -109,17 +107,6 @@ func extractStrategy(path string) string {
 }
 
 // ─── meta readers (partial JSON/YAML unmarshal to avoid full parse) ──────────
-
-type minMeta struct {
-	Meta struct {
-		RunID       string    `json:"run_id" yaml:"run_id"`
-		GeneratedAt time.Time `json:"generated_at" yaml:"generated_at"`
-		Strategy    string    `json:"strategy" yaml:"strategy"`
-		GradedCount int       `json:"graded_count" yaml:"graded_count"`
-		PoolDepth   int       `json:"pool_depth" yaml:"pool_depth"`
-	} `json:"meta" yaml:"meta"`
-	Queries interface{} `json:"queries" yaml:"queries"`
-}
 
 func readPoolMeta(path string) string {
 	data, err := os.ReadFile(path)
@@ -155,7 +142,7 @@ type latestPtr struct {
 	Latest string `json:"latest"`
 }
 
-func readLatestMeta(latestPath, reportsDir string) string {
+func readLatestMeta(latestPath string) string {
 	data, err := os.ReadFile(latestPath)
 	if err != nil {
 		return "reports/latest.json (unreadable)"

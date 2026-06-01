@@ -91,7 +91,8 @@ func writeMDAggregatedTable(w io.Writer, jr *JobReport, kValues []int) {
 	fmt.Fprintf(w, "### Aggregated Results\n\n")
 
 	t := newMDTable()
-	hdr := table.Row{"Engine"}
+	hdr := make(table.Row, 0, 1+2*len(kValues)+5)
+	hdr = append(hdr, "Engine")
 	for _, k := range kValues {
 		hdr = append(hdr, fmt.Sprintf("NDCG@%d", k))
 	}
@@ -204,7 +205,8 @@ func writeAggregatedTable(w io.Writer, jr *JobReport, kValues []int) {
 
 	t := newTable(w)
 
-	hdr := table.Row{"Engine"}
+	hdr := make(table.Row, 0, 1+2*len(kValues)+5)
+	hdr = append(hdr, "Engine")
 	for _, k := range kValues {
 		hdr = append(hdr, fmt.Sprintf("NDCG@%d", k))
 	}

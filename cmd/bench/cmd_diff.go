@@ -302,29 +302,6 @@ func fmtDelta(format string, a, b float64, higherBetter bool) string {
 	return fmt.Sprintf(format+"→"+format+" %s%+.1f%%", a, b, arrow, pct)
 }
 
-// fmtDeltaColored is fmtDelta with ANSI coloring — only call for the last
-// column of a tabwriter table to avoid misalignment on earlier columns.
-func fmtDeltaColored(format string, a, b float64, higherBetter bool) string {
-	d := b - a
-	if d == 0 {
-		return cDim.Sprintf(format+" (=)", a)
-	}
-	improved := (d > 0) == higherBetter
-	arrow := "↑"
-	if !improved {
-		arrow = "↓"
-	}
-	pct := 0.0
-	if a != 0 {
-		pct = d / a * 100
-	}
-	s := fmt.Sprintf(format+"→"+format+" %s%+.1f%%", a, b, arrow, pct)
-	if improved {
-		return cOK.Sprint(s)
-	}
-	return cFail.Sprint(s)
-}
-
 func fmtDurationDelta(a, b time.Duration) string {
 	if a == 0 && b == 0 {
 		return "—"

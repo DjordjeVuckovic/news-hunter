@@ -6,7 +6,7 @@ import (
 	"sync"
 )
 
-// Semantic version. Bump on every release that changes artifact schemas or CLI.
+// Semver is the semantic version. Bump on every release that changes artifact schemas or CLI.
 const Semver = "1.0.0"
 
 // Tool returns "bench/1.0.0" — the canonical identifier embedded in every

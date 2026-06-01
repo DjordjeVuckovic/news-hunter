@@ -73,7 +73,7 @@ type String struct {
 	DefaultOperator operator.Operator `json:"default_operator,omitempty"`
 }
 
-// Boolean: Structured queries using logical operators
+// Boolean is a structured query using logical operators.
 type Boolean struct {
 	// Expression: Boolean query string with operators
 	// Supported operators:
@@ -99,12 +99,12 @@ func (q *Boolean) GetLanguage() Language {
 	return q.Language
 }
 
-// Phrase: Phrase match query with optional slop
-// Searches for an exact phrase with optional positional flexibility
+// Phrase is a phrase match query with optional slop.
+// Searches for an exact phrase with optional positional flexibility.
 //
 // Elasticsearch: Translates to {"match_phrase": {"field": {"query": "text", "slop": N}}}
 // PostgreSQL: Uses phraseto_tsquery (slop=0) or to_tsquery with <N> operators (slop>0)
-
+//
 // Example:
 //
 //	{"query": "climate change", "fields": ["title", "content"], "slop": 2}
@@ -255,7 +255,7 @@ func (q *String) GetDefaultOperator() operator.Operator {
 	return q.DefaultOperator
 }
 
-// Match: Single-field match query
+// Match is a single-field match query.
 // Performs analyzed full-text search on a single field with relevance scoring
 // Elasticsearch: Translates to {"match": {"field": {"query": "text"}}}
 // PostgreSQL: Uses weighted tsvector on single field
@@ -364,7 +364,7 @@ const (
 	MultiMatchBestFields MultiMatchStrategy = "best_fields"
 )
 
-// MultiMatch: Multi-field match query (Elasticsearch terminology)
+// MultiMatch is a multi-field match query (Elasticsearch terminology).
 // Performs analyzed full-text search across multiple fields with per-field boosting
 //
 // Elasticsearch: Translates to {"multi_match": {"query": "text", "fields": ["title^3", "content"]}}

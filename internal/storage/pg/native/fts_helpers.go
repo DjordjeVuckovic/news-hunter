@@ -149,7 +149,7 @@ func buildTsWhereClause(fieldBoosts []FieldWeight, lang query.Language, op opera
 	queryExpr := buildTsQuery(op, lang, paramNum)
 
 	// Extract field names from FieldWeight
-	var fields []string
+	fields := make([]string, 0, len(fieldBoosts))
 	for _, fb := range fieldBoosts {
 		fields = append(fields, fb.Field)
 	}
@@ -173,41 +173,6 @@ func buildTsWhereClause(fieldBoosts []FieldWeight, lang query.Language, op opera
 	}
 
 	return result
-}
-
-// buildPhraseQuery constructs a PostgreSQL phrase tsquery expression
-// For slop=0: Uses phraseto_tsquery for exact phrase matching
-// For slop>0: Uses to_tsquery with distance operators (<N>) and OR logic
-//
-// Examples:
-//
-//	slop=0: phraseto_tsquery('english', 'climate change')
-//	        → 'climat <-> chang' (exact adjacent positions)
-//	slop=1: to_tsquery('english', 'climat <-> chang | climat <2> chang')
-//	        → matches "climate change" OR "climate X change"
-//	slop=2: to_tsquery('english', 'climat <-> chang | climat <2> chang | climat <3> chang')
-//	        → matches exact phrase OR 1 word apart OR 2 words apart
-func buildPhraseQuery(lang query.Language, slop int, paramNum int) string {
-	if slop == 0 {
-		// Exact phrase matching - simplest and most efficient
-		return fmt.Sprintf("phraseto_tsquery('%s'::regconfig, $%d)", lang, paramNum)
-	}
-
-	// For slop > 0, we need to construct OR query with distance operators
-	// PostgreSQL <N> operator expects exact distance, so we need to generate:
-	// term1 <-> term2 | term1 <2> term2 | term1 <3> term2 | ... up to slop+1
-	//
-	// Note: We'll construct this dynamically in the query by splitting the phrase
-	// and building the distance query. For now, return a helper expression.
-	//
-	// The actual query will be built in the SearchPhrase method by:
-	// 1. Splitting the phrase into tokens
-	// 2. Building OR query with distance operators
-	// 3. Using to_tsquery with the constructed expression
-
-	// For slop>0, we'll use a custom query builder that generates the OR expressions
-	// This is a placeholder - the actual query building happens in SearchPhrase
-	return fmt.Sprintf("phraseto_tsquery('%s'::regconfig, $%d)", lang, paramNum)
 }
 
 // buildPhraseSlopQuery constructs a phrase query with slop support
@@ -256,68 +221,6 @@ func buildPhraseSlopQuery(tokens []string, slop int) string {
 
 	// Join all distance variants with OR
 	return strings.Join(orParts, " | ")
-}
-
-// buildPhraseWhereClause constructs the WHERE clause for phrase search with field filtering
-// Uses same weight label filtering as regular FTS queries
-//
-// Examples:
-//
-//	fields=["title"]                    → search_vector @@ (query::text || ':A')::tsquery
-//	fields=["title", "description"]     → search_vector @@ (query::text || ':AB')::tsquery
-//	fields=[]                           → search_vector @@ query (all fields)
-func buildPhraseWhereClause(fields []string, lang query.Language, slop int, paramNum int) string {
-	vectorExpr := "search_vector"
-	queryExpr := buildPhraseQuery(lang, slop, paramNum)
-
-	// Build weight labels from field names
-	labels := buildWeightLabels(fields)
-
-	var result string
-	// If specific fields requested, use weight label filtering
-	if labels != "" {
-		result = fmt.Sprintf("%s @@ (%s::text || ':%s')::tsquery", vectorExpr, queryExpr, labels)
-		slog.Debug("Built phrase WHERE clause with label filtering",
-			"labels", labels,
-			"fields", fields,
-			"slop", slop,
-			"where_clause", result)
-	} else {
-		// No field filtering - search all fields
-		result = fmt.Sprintf("%s @@ %s", vectorExpr, queryExpr)
-		slog.Debug("Built phrase WHERE clause without filtering",
-			"slop", slop,
-			"where_clause", result)
-	}
-
-	return result
-}
-
-// buildPhraseRankExpression constructs a ts_rank expression for phrase queries
-// For phrase queries, we can optionally boost specific fields
-//
-// Returns: "ts_rank('{0.0, 1.0, 1.5, 3.0}', search_vector, query)" or "ts_rank(search_vector, query)"
-func buildPhraseRankExpression(fields []string, weights map[string]float64, lang query.Language, slop int, paramNum int) string {
-	vectorExpr := "search_vector"
-	queryExpr := buildPhraseQuery(lang, slop, paramNum)
-
-	// If custom weights specified, build field boosts
-	if len(weights) > 0 {
-		fieldBoosts := make([]FieldWeight, 0, len(fields))
-		for _, field := range fields {
-			weight := weights[field]
-			if weight == 0 {
-				weight = 1.0 // Default weight
-			}
-			fieldBoosts = append(fieldBoosts, FieldWeight{Field: field, Weight: weight})
-		}
-
-		weightsArray := buildWeightsArray(fieldBoosts)
-		return fmt.Sprintf("ts_rank('%s', %s, %s)", weightsArray, vectorExpr, queryExpr)
-	}
-
-	// Use default PostgreSQL weights
-	return fmt.Sprintf("ts_rank(%s, %s)", vectorExpr, queryExpr)
 }
 
 // extractLexemesFromTsquery extracts lexemes from a tsquery string

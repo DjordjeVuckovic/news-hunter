@@ -146,7 +146,7 @@ func (r *Runner) gradeQuery(ctx context.Context, entry pool.PoolEntry, prior map
 	}
 
 	q := GradingQuery{ID: entry.QueryID, Description: entry.QueryDesc}
-	gradedByID := r.dispatch(ctx, q, todo, docs, &prog)
+	gradedByID := r.dispatch(ctx, q, todo, docs)
 
 	// Append in original pool order — keeps doc ordering stable across runs.
 	for _, pd := range todo {
@@ -167,7 +167,7 @@ func (r *Runner) gradeQuery(ctx context.Context, entry pool.PoolEntry, prior map
 // Per-doc path uses bounded concurrency. Batched path uses sequential calls
 // because each call is already a large LLM operation — parallelising buys
 // little and increases the rate-limit risk.
-func (r *Runner) dispatch(ctx context.Context, q GradingQuery, todo []pool.PooledDoc, docs map[uuid.UUID]GradingDoc, prog *QueryProgress) map[uuid.UUID]int {
+func (r *Runner) dispatch(ctx context.Context, q GradingQuery, todo []pool.PooledDoc, docs map[uuid.UUID]GradingDoc) map[uuid.UUID]int {
 	gradedByID := make(map[uuid.UUID]int, len(todo))
 
 	gradables := make([]GradingDoc, 0, len(todo))
@@ -182,14 +182,14 @@ func (r *Runner) dispatch(ctx context.Context, q GradingQuery, todo []pool.Poole
 	}
 
 	if bs, ok := r.cfg.Strategy.(BatchStrategy); ok {
-		r.runBatched(ctx, bs, q, gradables, gradedByID, prog)
+		r.runBatched(ctx, bs, q, gradables, gradedByID)
 	} else {
 		r.runPerDoc(ctx, r.cfg.Strategy, q, gradables, gradedByID)
 	}
 	return gradedByID
 }
 
-func (r *Runner) runBatched(ctx context.Context, bs BatchStrategy, q GradingQuery, gradables []GradingDoc, into map[uuid.UUID]int, prog *QueryProgress) {
+func (r *Runner) runBatched(ctx context.Context, bs BatchStrategy, q GradingQuery, gradables []GradingDoc, into map[uuid.UUID]int) {
 	size := r.cfg.BatchSize
 	if size <= 0 {
 		size = bs.PreferredBatchSize()

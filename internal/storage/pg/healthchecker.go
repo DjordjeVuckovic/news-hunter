@@ -19,10 +19,5 @@ func (hc *HealthChecker) Healthy(ctx context.Context) bool {
 		return false
 	}
 
-	err := hc.pool.Ping(ctx)
-	if err != nil {
-		return false
-	}
-
-	return true
+	return hc.pool.Ping(ctx) == nil
 }

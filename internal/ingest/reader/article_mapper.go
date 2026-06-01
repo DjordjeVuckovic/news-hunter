@@ -43,10 +43,9 @@ func (m *ArticleMapper) Map(record map[string]string, _ *MappingOptions) (docume
 				if fm.Required {
 					slog.Error("failed to set nested field", "field", fm.Target, "error", err)
 					return document.Article{}, err
-				} else {
-					slog.Warn("skipping optional nested field", "field", fm.Target, "error", err)
-					continue
 				}
+				slog.Warn("skipping optional nested field", "field", fm.Target, "error", err)
+				continue
 			}
 
 			continue
@@ -57,10 +56,9 @@ func (m *ArticleMapper) Map(record map[string]string, _ *MappingOptions) (docume
 			if fm.Required {
 				slog.Error("failed to set flat field", "field", fm.Target, "error", err)
 				return document.Article{}, err
-			} else {
-				slog.Warn("skipping optional field", "field", fm.Target, "error", err)
-				continue
 			}
+			slog.Warn("skipping optional field", "field", fm.Target, "error", err)
+			continue
 		}
 	}
 	return article, nil

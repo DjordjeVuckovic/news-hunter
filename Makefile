@@ -11,7 +11,7 @@ GOOS ?= $(shell go env GOOS)
 GOARCH ?= $(shell go env GOARCH)
 
 # Build commands
-.PHONY: build build-all clean test fmt vet schema-gen build-bench bench-validate bench-run bench-pool bench-judge-lexical bench-judge-cli bench-judge-api bench-qrels bench-show-spec bench-show-pool bench-show-judgments
+.PHONY: build build-all clean test fmt vet lint lint-fix install-lint schema-gen build-bench bench-validate bench-run bench-pool bench-judge-lexical bench-judge-cli bench-judge-api bench-qrels bench-show-spec bench-show-pool bench-show-judgments
 
 migrate-up:
 	@echo "Running database migrations up..."
@@ -52,6 +52,20 @@ fmt:
 vet:
 	@echo "Vetting code..."
 	@go vet ./...
+
+GOLANGCI_LINT_VERSION ?= v2.12.2
+
+install-lint:
+	@echo "Installing golangci-lint $(GOLANGCI_LINT_VERSION)..."
+	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+
+lint:
+	@echo "Linting code..."
+	@golangci-lint run ./...
+
+lint-fix:
+	@echo "Linting code (with autofix)..."
+	@golangci-lint run --fix ./...
 
 # Database commands
 dc-up:
@@ -138,6 +152,6 @@ bench-qrels: build-bench
 	@./$(BIN_DIR)/bench qrels $(TRACK) --strategy lexical
 
 # Development workflow
-dev: fmt vet test build-all
+dev: fmt vet lint test build-all
 
 .DEFAULT_GOAL := build-all

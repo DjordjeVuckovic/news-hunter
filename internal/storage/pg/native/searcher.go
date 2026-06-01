@@ -303,7 +303,7 @@ func (r *Searcher) SearchFields(ctx context.Context, query *dquery.MultiMatch, b
 	operator := query.GetOperator()
 
 	// Convert Fields (MultiMatchField) to FieldWeight
-	var fieldBoosts []FieldWeight
+	fieldBoosts := make([]FieldWeight, 0, len(query.Fields))
 	for _, f := range query.Fields {
 		fieldBoosts = append(fieldBoosts, FieldWeight{
 			Field:  f.Name,

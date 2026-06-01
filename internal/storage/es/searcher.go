@@ -38,7 +38,7 @@ func NewSearcher(config ClientConfig) (*Searcher, error) {
 	}, nil
 }
 
-// SearchQuery implements storage.FtsSearcher interface
+// SearchStringQuery implements the storage.FtsSearcher interface.
 // Performs simple string-based search using Elasticsearch's multi_match query with BM25
 // Application determines optimal fields and weights based on index configuration
 func (r *Searcher) SearchStringQuery(ctx context.Context, query *dquery.String, baseOpts *dquery.BaseOptions) (*storage.SearchResult, error) {

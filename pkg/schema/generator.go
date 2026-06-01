@@ -122,7 +122,7 @@ func (g *Generator) GenerateSchema(t reflect.Type) (*JSONSchema, error) {
 
 func (g *Generator) generateSchemaForType(t reflect.Type, isRoot bool) (*JSONSchema, error) {
 	// Handle pointers
-	if t.Kind() == reflect.Ptr {
+	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 
