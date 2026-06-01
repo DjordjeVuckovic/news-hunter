@@ -1,0 +1,74 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: standard
+  enable:
+    - bodyclose      # HTTP/pgx rows leaks — relevant to storage + es layers
+    - errorlint      # correct %w wrapping / errors.As usage (apperr depends on it)
+    # - misspell     # opt-in: enable then `make lint-fix` to auto-correct typos in comments
+    - nilerr         # returning nil after a non-nil error
+    - prealloc       # slices in hot ingest/bench loops
+    - revive         # golint successor, lightweight style rules
+    - unconvert
+    - unparam
+    - usestdlibvars
+
+  settings:
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: range
+        - name: receiver-naming
+        - name: superfluous-else
+        - name: unreachable-code
+        - name: var-declaration
+    staticcheck:
+      # Keep the valuable correctness/simplification checks (SA*, S*); drop the
+      # stylistic families that are pure noise on an existing codebase:
+      #   ST1000 package-doc comments, ST1003 naming (in_mem etc.),
+      #   QF1008/QF1012 quickfix suggestions.
+      checks:
+        - all
+        - "-ST1000"
+        - "-ST1003"
+        - "-QF1008"
+        - "-QF1012"
+
+  exclusions:
+    generated: lax
+    presets:
+      - common-false-positives
+      - std-error-handling
+    rules:
+      # Tests favour readability over exhaustive error checks.
+      - path: _test\.go
+        linters:
+          - errcheck
+          - unparam
+          - prealloc
+      # Generated swagger docs.
+      - path: docs/
+        linters:
+          - revive
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  # Note: enabling goimports `local-prefixes` would force a separate import group
+  # for this module's packages — a large one-time diff. Left off intentionally.
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

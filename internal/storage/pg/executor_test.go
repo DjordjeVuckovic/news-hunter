@@ -2,6 +2,7 @@ package pg
 
 import (
 	"context"
+	"flag"
 	"os"
 	"testing"
 
@@ -17,6 +18,13 @@ var (
 )
 
 func TestMain(m *testing.M) {
+	flag.Parse()
+	if testing.Short() {
+		// These are integration tests backed by a Postgres container.
+		// Skip them in -short mode (used by CI) so a Docker daemon isn't required.
+		os.Exit(0)
+	}
+
 	testCtx = context.Background()
 
 	pg, err := pkgtesting.NewPGContainer(testCtx, pkgtesting.PGConfig{

@@ -42,3 +42,6 @@ benchmark_results/
 
 *.env
 .local
+
+# Local study/teaching notes (not part of the repo)
+.docs/
