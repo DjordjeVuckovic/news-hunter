@@ -24,6 +24,7 @@ type AppConfig struct {
 type DataImportConfig struct {
 	DatasetPath     string
 	DataMappingPath string
+	MappingEnabled  bool
 	BulkOptions     *struct {
 		Enabled bool
 		Size    int
@@ -45,8 +46,12 @@ func (as *AppConfig) Load() (*DataImportConfig, error) {
 		return nil, err
 	}
 
+	// Mapping is enabled by default. Set MAPPING_ENABLED=false to ingest an
+	// already-canonical dataset (produced by cmd/preprocessor) via the direct mapper.
+	mappingEnabled := os.Getenv("MAPPING_ENABLED") != "false"
+
 	mappingPath := os.Getenv("MAPPING_CONFIG_PATH")
-	if mappingPath == "" {
+	if mappingEnabled && mappingPath == "" {
 		slog.Error("MAPPING_CONFIG_PATH environment variable is not set")
 		return nil, fmt.Errorf("MAPPING_CONFIG_PATH environment variable is not set")
 	}
@@ -73,6 +78,7 @@ func (as *AppConfig) Load() (*DataImportConfig, error) {
 	cfg := &DataImportConfig{
 		DatasetPath:     dsPath,
 		DataMappingPath: mappingPath,
+		MappingEnabled:  mappingEnabled,
 		BulkOptions: &struct {
 			Enabled bool
 			Size    int

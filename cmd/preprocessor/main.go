@@ -12,12 +12,12 @@ import (
 	"time"
 
 	"github.com/DjordjeVuckovic/news-hunter/internal/ingest/reader"
-	"github.com/google/uuid"
 )
 
 type preprocessorConfig struct {
 	InputPath   string
 	OutputDir   string
+	MappingPath string
 	Workers     int
 	WriteReport bool
 }
@@ -35,6 +35,7 @@ func parseFlags() preprocessorConfig {
 	var cfg preprocessorConfig
 	flag.StringVar(&cfg.InputPath, "input", "", "Path to the input CSV file")
 	flag.StringVar(&cfg.OutputDir, "output", "", "Output directory for canonical dataset")
+	flag.StringVar(&cfg.MappingPath, "mapping", "", "Path to the YAML field-mapping config")
 	flag.IntVar(&cfg.Workers, "workers", 16, "Number of parallel workers")
 	flag.BoolVar(&cfg.WriteReport, "report", false, "Write validation report")
 	flag.Parse()
@@ -43,7 +44,7 @@ func parseFlags() preprocessorConfig {
 
 func main() {
 	cfg := parseFlags()
-	if cfg.InputPath == "" || cfg.OutputDir == "" {
+	if cfg.InputPath == "" || cfg.OutputDir == "" || cfg.MappingPath == "" {
 		flag.Usage()
 		os.Exit(1)
 	}
@@ -67,6 +68,18 @@ func runPreprocessor(ctx context.Context, cfg preprocessorConfig) error {
 	inputBasename := strings.TrimSuffix(filepath.Base(cfg.InputPath), filepath.Ext(cfg.InputPath))
 	outputFilename := fmt.Sprintf("%s_canonical.jsonl", inputBasename)
 	outputPath := filepath.Join(cfg.OutputDir, outputFilename)
+
+	mappingFile, err := os.Open(cfg.MappingPath)
+	if err != nil {
+		return fmt.Errorf("failed to open mapping config: %w", err)
+	}
+	defer mappingFile.Close()
+
+	mappingCfg, err := reader.NewYAMLConfigLoader(mappingFile).Load(true)
+	if err != nil {
+		return fmt.Errorf("failed to load mapping config: %w", err)
+	}
+	mapper := reader.NewArticleMapper(mappingCfg)
 
 	dataFile, err := os.Open(cfg.InputPath)
 	if err != nil {
@@ -101,11 +114,13 @@ func runPreprocessor(ctx context.Context, cfg preprocessorConfig) error {
 			continue
 		}
 
-		record := result.Record
+		article, err := mapper.Map(result.Record)
+		if err != nil {
+			slog.Warn("failed to map record", "error", err)
+			continue
+		}
 
-		record["id"] = uuid.New().String()
-
-		if err := encoder.Encode(record); err != nil {
+		if err := encoder.Encode(reader.ToCanonicalRecord(article)); err != nil {
 			return fmt.Errorf("failed to write record: %w", err)
 		}
 

@@ -25,7 +25,7 @@ func TestYAMLMapper_Map(t *testing.T) {
 		"url":       urlStr,
 	}
 
-	article, err := mapper.Map(record, nil)
+	article, err := mapper.Map(record)
 	require.NoError(t, err)
 
 	assert.Equal(t, "Test ArticleReflectTest", article.Title)

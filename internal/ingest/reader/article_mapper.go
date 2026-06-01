@@ -1,12 +1,17 @@
 package reader
 
 import (
+	"fmt"
 	"log/slog"
+	"net/url"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/DjordjeVuckovic/news-hunter/internal/types/document"
 	"github.com/DjordjeVuckovic/news-hunter/pkg/apis/datamapping"
+	"github.com/DjordjeVuckovic/news-hunter/pkg/utils"
+	"github.com/google/uuid"
 )
 
 type ArticleMapper struct {
@@ -19,7 +24,7 @@ func NewArticleMapper(cfg *datamapping.DataMapper) *ArticleMapper {
 	}
 }
 
-func (m *ArticleMapper) Map(record map[string]string, _ *MappingOptions) (document.Article, error) {
+func (m *ArticleMapper) Map(record map[string]string) (document.Article, error) {
 	if err := m.cfg.Validate(); err != nil {
 		return document.Article{}, err
 	}
@@ -43,9 +48,10 @@ func (m *ArticleMapper) Map(record map[string]string, _ *MappingOptions) (docume
 				if fm.Required {
 					slog.Error("failed to set nested field", "field", fm.Target, "error", err)
 					return document.Article{}, err
+				} else {
+					slog.Warn("skipping optional nested field", "field", fm.Target, "error", err)
+					continue
 				}
-				slog.Warn("skipping optional nested field", "field", fm.Target, "error", err)
-				continue
 			}
 
 			continue
@@ -56,10 +62,74 @@ func (m *ArticleMapper) Map(record map[string]string, _ *MappingOptions) (docume
 			if fm.Required {
 				slog.Error("failed to set flat field", "field", fm.Target, "error", err)
 				return document.Article{}, err
+			} else {
+				slog.Warn("skipping optional field", "field", fm.Target, "error", err)
+				continue
 			}
-			slog.Warn("skipping optional field", "field", fm.Target, "error", err)
-			continue
 		}
 	}
 	return article, nil
+}
+
+type ArticleDirectMapper struct{}
+
+func NewArticleDirectMapper() *ArticleDirectMapper {
+	return &ArticleDirectMapper{}
+}
+
+func (m *ArticleDirectMapper) Map(record map[string]string) (document.Article, error) {
+	id, err := uuid.Parse(record["id"])
+	if err != nil {
+		return document.Article{}, fmt.Errorf("invalid id: %w", err)
+	}
+
+	createdAt, err := utils.ParseTimeOptional(record["createdAt"])
+	if err != nil {
+		createdAt = time.Now()
+	}
+
+	title := record["title"]
+	subtitle := record["subtitle"]
+	content := record["content"]
+	author := record["author"]
+	description := record["description"]
+	language := record["language"]
+
+	var u url.URL
+	if record["url"] != "" {
+		parsed, err := url.Parse(record["url"])
+		if err == nil && parsed != nil {
+			u = *parsed
+		}
+	}
+
+	var publishedAt time.Time
+	if t, err := utils.ParseTimeOptional(record["publishedAt"]); err == nil {
+		publishedAt = t
+	}
+
+	var importedAt time.Time
+	if t, err := utils.ParseTimeOptional(record["importedAt"]); err == nil {
+		importedAt = t
+	}
+
+	return document.Article{
+		ID:          id,
+		Title:       title,
+		Subtitle:    subtitle,
+		Content:     content,
+		Author:      author,
+		Description: description,
+		Language:    language,
+		CreatedAt:   createdAt,
+		URL:         u,
+		Metadata: document.ArticleMetadata{
+			SourceId:    record["sourceId"],
+			SourceName:  record["sourceName"],
+			PublishedAt: publishedAt,
+			ImportedAt:  importedAt,
+			Category:    record["category"],
+		},
+		SearchVector: record["search_vector"],
+	}, nil
 }

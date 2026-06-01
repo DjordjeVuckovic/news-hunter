@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -19,18 +20,11 @@ func main() {
 	cfg, err := appSettings.Load()
 	if err != nil {
 		slog.Error("failed to load configuration", "error", err)
+		os.Exit(1)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	file, err := os.Open(cfg.DataMappingPath)
-	if err != nil {
-		slog.Error("failed to read configuration file", "error", err)
-		os.Exit(1)
-	}
-
-	loader := reader.NewYAMLConfigLoader(file)
 
 	dataFile, err := os.Open(cfg.DatasetPath)
 	if err != nil {
@@ -45,12 +39,11 @@ func main() {
 		articleReader = reader.NewCSVReader(dataFile)
 	}
 
-	mappingCfg, err := loader.Load(true)
+	mapper, err := newMapper(cfg)
 	if err != nil {
-		slog.Error("failed to load configuration", "error", err)
+		slog.Error("failed to create mapper", "error", err)
 		os.Exit(1)
 	}
-	mapper := reader.NewArticleMapper(mappingCfg)
 
 	c := ingest.NewArticleCollector(articleReader, mapper)
 
@@ -67,6 +60,28 @@ func main() {
 		os.Exit(1)
 	}
 
+}
+
+// newMapper selects the record-to-Article mapper. When mapping is disabled the
+// dataset is assumed to already be canonical (produced by cmd/preprocessor), so
+// the direct mapper is used and no YAML config is required.
+func newMapper(cfg *DataImportConfig) (reader.Mapper, error) {
+	if !cfg.MappingEnabled {
+		slog.Info("Mapping disabled — using direct mapper (expects canonical dataset)")
+		return reader.NewArticleDirectMapper(), nil
+	}
+
+	file, err := os.Open(cfg.DataMappingPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open mapping config: %w", err)
+	}
+	defer file.Close()
+
+	mappingCfg, err := reader.NewYAMLConfigLoader(file).Load(true)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load mapping config: %w", err)
+	}
+	return reader.NewArticleMapper(mappingCfg), nil
 }
 
 func newPipeline(

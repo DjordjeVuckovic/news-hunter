@@ -50,7 +50,7 @@ func (ac *ArticleCollector) Collect(ctx context.Context) (<-chan Result[document
 				}
 
 				// Map the record to an Article
-				article, err := ac.Mapper.Map(res.Record, nil)
+				article, err := ac.Mapper.Map(res.Record)
 				if err != nil {
 					collectionResult <- Result[document.Article]{Err: err}
 					slog.Error("failed to map record to article", "error", err)
