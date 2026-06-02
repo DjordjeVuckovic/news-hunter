@@ -1,0 +1,233 @@
+schema_version: 1
+id: news_semantic_v1
+name: "News Semantic Search Benchmark v1"
+description: "Concept-level queries that require semantic understanding beyond keyword overlap"
+version: "1.0.0"
+
+corpus:
+  name: news_hunter_articles
+  source: "postgres://localhost:54320/news_db (articles)"
+
+# NOTE: Vector queries use pre-computed embeddings. The {{embedding}} placeholder
+# must be replaced with the actual float array before execution.
+# Pre-compute with: scripts/embed_queries.py --model text-embedding-3-small
+# Each query has a corresponding embedding stored in trec/query_embeddings.json.
+#
+# Engine-specific details:
+#   pgvector-cosine: uses <=> (cosine distance) on the embedding column
+#   pgvector-l2:     uses <-> (L2 / Euclidean distance) on the embedding column
+#   elasticsearch:   uses knn with cosine similarity on the dense_vector field
+#
+# Prerequisites:
+#   CREATE EXTENSION IF NOT EXISTS vector;
+#   ALTER TABLE articles ADD COLUMN IF NOT EXISTS embedding vector(1536);
+#   CREATE INDEX articles_emb_hnsw_idx ON articles USING hnsw(embedding vector_cosine_ops);
+
+templates:
+  - id: pgvector_cosine
+    query: |
+      SELECT id FROM articles
+      WHERE embedding IS NOT NULL
+      ORDER BY embedding <=> '{{embedding}}'::vector
+      LIMIT {{limit}}
+
+  - id: pgvector_l2
+    query: |
+      SELECT id FROM articles
+      WHERE embedding IS NOT NULL
+      ORDER BY embedding <-> '{{embedding}}'::vector
+      LIMIT {{limit}}
+
+queries:
+  # Semantic queries test conceptual understanding: the relevant documents may
+  # not share exact keywords with the query text.
+
+  - id: sem-economic-crisis-consequences
+    description: "Articles about economic downturns, recessions, job losses — broader than 'recession'"
+    engines:
+      pgvector-cosine:
+        template: pgvector_cosine
+        params: { embedding: "{{precomputed}}", limit: 50 }
+      pgvector-l2:
+        template: pgvector_l2
+        params: { embedding: "{{precomputed}}", limit: 50 }
+      elasticsearch: |
+        {
+          "knn": {
+            "field": "embedding",
+            "query_vector": "{{precomputed}}",
+            "k": 50,
+            "num_candidates": 200
+          }
+        }
+
+  - id: sem-political-leadership-change
+    description: "Leadership transitions, elections, coups — not just 'election' keyword"
+    engines:
+      pgvector-cosine:
+        template: pgvector_cosine
+        params: { embedding: "{{precomputed}}", limit: 50 }
+      pgvector-l2:
+        template: pgvector_l2
+        params: { embedding: "{{precomputed}}", limit: 50 }
+      elasticsearch: |
+        {
+          "knn": {
+            "field": "embedding",
+            "query_vector": "{{precomputed}}",
+            "k": 50,
+            "num_candidates": 200
+          }
+        }
+
+  - id: sem-environmental-impact
+    description: "Environmental consequences of human activity — beyond 'climate change'"
+    engines:
+      pgvector-cosine:
+        template: pgvector_cosine
+        params: { embedding: "{{precomputed}}", limit: 50 }
+      pgvector-l2:
+        template: pgvector_l2
+        params: { embedding: "{{precomputed}}", limit: 50 }
+      elasticsearch: |
+        {
+          "knn": {
+            "field": "embedding",
+            "query_vector": "{{precomputed}}",
+            "k": 50,
+            "num_candidates": 200
+          }
+        }
+
+  - id: sem-tech-disruption
+    description: "Technology reshaping industries — not just 'AI' or 'startup'"
+    engines:
+      pgvector-cosine:
+        template: pgvector_cosine
+        params: { embedding: "{{precomputed}}", limit: 50 }
+      pgvector-l2:
+        template: pgvector_l2
+        params: { embedding: "{{precomputed}}", limit: 50 }
+      elasticsearch: |
+        {
+          "knn": {
+            "field": "embedding",
+            "query_vector": "{{precomputed}}",
+            "k": 50,
+            "num_candidates": 200
+          }
+        }
+
+  - id: sem-public-health-threat
+    description: "Disease outbreaks, health emergencies — broader than 'pandemic'"
+    engines:
+      pgvector-cosine:
+        template: pgvector_cosine
+        params: { embedding: "{{precomputed}}", limit: 50 }
+      pgvector-l2:
+        template: pgvector_l2
+        params: { embedding: "{{precomputed}}", limit: 50 }
+      elasticsearch: |
+        {
+          "knn": {
+            "field": "embedding",
+            "query_vector": "{{precomputed}}",
+            "k": 50,
+            "num_candidates": 200
+          }
+        }
+
+  - id: sem-military-conflict
+    description: "Armed conflict, war, military operations"
+    engines:
+      pgvector-cosine:
+        template: pgvector_cosine
+        params: { embedding: "{{precomputed}}", limit: 50 }
+      pgvector-l2:
+        template: pgvector_l2
+        params: { embedding: "{{precomputed}}", limit: 50 }
+      elasticsearch: |
+        {
+          "knn": {
+            "field": "embedding",
+            "query_vector": "{{precomputed}}",
+            "k": 50,
+            "num_candidates": 200
+          }
+        }
+
+  - id: sem-social-justice
+    description: "Civil rights, protests, inequality — conceptual, not keyword-driven"
+    engines:
+      pgvector-cosine:
+        template: pgvector_cosine
+        params: { embedding: "{{precomputed}}", limit: 50 }
+      pgvector-l2:
+        template: pgvector_l2
+        params: { embedding: "{{precomputed}}", limit: 50 }
+      elasticsearch: |
+        {
+          "knn": {
+            "field": "embedding",
+            "query_vector": "{{precomputed}}",
+            "k": 50,
+            "num_candidates": 200
+          }
+        }
+
+  - id: sem-energy-transition
+    description: "Shift from fossil fuels to renewables — policy + technology angle"
+    engines:
+      pgvector-cosine:
+        template: pgvector_cosine
+        params: { embedding: "{{precomputed}}", limit: 50 }
+      pgvector-l2:
+        template: pgvector_l2
+        params: { embedding: "{{precomputed}}", limit: 50 }
+      elasticsearch: |
+        {
+          "knn": {
+            "field": "embedding",
+            "query_vector": "{{precomputed}}",
+            "k": 50,
+            "num_candidates": 200
+          }
+        }
+
+  - id: sem-inflation-cost-of-living
+    description: "Rising prices, affordability crisis, central bank response"
+    engines:
+      pgvector-cosine:
+        template: pgvector_cosine
+        params: { embedding: "{{precomputed}}", limit: 50 }
+      pgvector-l2:
+        template: pgvector_l2
+        params: { embedding: "{{precomputed}}", limit: 50 }
+      elasticsearch: |
+        {
+          "knn": {
+            "field": "embedding",
+            "query_vector": "{{precomputed}}",
+            "k": 50,
+            "num_candidates": 200
+          }
+        }
+
+  - id: sem-diplomatic-relations
+    description: "International diplomacy, treaties, sanctions"
+    engines:
+      pgvector-cosine:
+        template: pgvector_cosine
+        params: { embedding: "{{precomputed}}", limit: 50 }
+      pgvector-l2:
+        template: pgvector_l2
+        params: { embedding: "{{precomputed}}", limit: 50 }
+      elasticsearch: |
+        {
+          "knn": {
+            "field": "embedding",
+            "query_vector": "{{precomputed}}",
+            "k": 50,
+            "num_candidates": 200
+          }
+        }

@@ -1,0 +1,405 @@
+schema_version: 1
+id: news_hybrid_v1
+name: "News Hybrid Search Benchmark v1"
+description: "Hybrid BM25 + vector queries testing RRF fusion approaches"
+version: "1.0.0"
+
+corpus:
+  name: news_hunter_articles
+  source: "postgres://localhost:54320/news_db (articles)"
+
+# NOTE: Hybrid queries combine keyword (BM25) and vector (embedding) signals.
+# The {{embedding}} placeholder is replaced with the pre-computed float array.
+#
+# RRF formula: score(d) = Σ 1/(k + rank_i(d))  where k=60 (standard constant)
+#
+# Prerequisites (PostgreSQL):
+#   CREATE EXTENSION IF NOT EXISTS vector;
+#   CREATE EXTENSION IF NOT EXISTS pg_trgm;
+#   ALTER TABLE articles ADD COLUMN IF NOT EXISTS embedding vector(1536);
+#   CREATE INDEX articles_emb_hnsw_idx ON articles USING hnsw(embedding vector_cosine_ops);
+#   -- Search vector GIN index must also exist for FTS component
+
+templates:
+  # pg-rrf: Reciprocal Rank Fusion of FTS + vector using CTEs.
+  # Both sub-queries rank by their own signal; RRF normalizes and combines.
+  - id: pg_rrf_fusion
+    query: |
+      WITH fts_ranked AS (
+        SELECT id, ROW_NUMBER() OVER (ORDER BY ts_rank(search_vector, plainto_tsquery('english', '{{terms}}')) DESC) AS rank
+        FROM articles
+        WHERE search_vector @@ plainto_tsquery('english', '{{terms}}')
+        LIMIT {{pool_size}}
+      ),
+      vec_ranked AS (
+        SELECT id, ROW_NUMBER() OVER (ORDER BY embedding <=> '{{embedding}}'::vector) AS rank
+        FROM articles
+        WHERE embedding IS NOT NULL
+        LIMIT {{pool_size}}
+      ),
+      rrf AS (
+        SELECT
+          COALESCE(fts.id, vec.id) AS id,
+          COALESCE(1.0 / (60 + fts.rank), 0) + COALESCE(1.0 / (60 + vec.rank), 0) AS rrf_score
+        FROM fts_ranked fts
+        FULL OUTER JOIN vec_ranked vec ON fts.id = vec.id
+      )
+      SELECT id FROM rrf ORDER BY rrf_score DESC LIMIT {{limit}}
+
+  # paradedb-hybrid: uses paradedb.score() for BM25 + pgvector cosine via RRF helper.
+  # See https://docs.paradedb.com/documentation/full-text/hybrid
+  - id: pdb_hybrid
+    query: |
+      SELECT id FROM articles
+      WHERE id @@@ paradedb.parse('{{terms}}')
+      ORDER BY pdb.score(id) + (1.0 / (60 + (
+        SELECT rank FROM (
+          SELECT id, ROW_NUMBER() OVER (ORDER BY embedding <=> '{{embedding}}'::vector) AS rank
+          FROM articles WHERE embedding IS NOT NULL LIMIT 200
+        ) sub WHERE sub.id = articles.id
+      ))) DESC NULLS LAST
+      LIMIT {{limit}}
+
+queries:
+  # Hybrid queries cover cases where neither pure keyword nor pure semantic
+  # is sufficient — the query has both a precise term and a semantic intent.
+
+  - id: hybrid-climate-energy-policy
+    description: "Keyword: 'climate'; Semantic: energy transition, policy implications"
+    engines:
+      pg-rrf:
+        template: pg_rrf_fusion
+        params: { terms: "climate energy policy", embedding: "{{precomputed}}", pool_size: 200, limit: 50 }
+      paradedb-hybrid:
+        template: pdb_hybrid
+        params: { terms: "climate energy policy", embedding: "{{precomputed}}", limit: 50 }
+      elasticsearch: |
+        {
+          "query": {
+            "bool": {
+              "should": [
+                {
+                  "multi_match": {
+                    "query": "climate energy policy",
+                    "fields": ["title^3", "description^2", "content"],
+                    "boost": 0.5
+                  }
+                }
+              ]
+            }
+          },
+          "knn": {
+            "field": "embedding",
+            "query_vector": "{{precomputed}}",
+            "k": 50,
+            "num_candidates": 200,
+            "boost": 0.5
+          },
+          "size": 50
+        }
+
+  - id: hybrid-election-democracy
+    description: "Keyword: 'election'; Semantic: democratic processes, voter rights"
+    engines:
+      pg-rrf:
+        template: pg_rrf_fusion
+        params: { terms: "election democracy voting", embedding: "{{precomputed}}", pool_size: 200, limit: 50 }
+      paradedb-hybrid:
+        template: pdb_hybrid
+        params: { terms: "election democracy voting", embedding: "{{precomputed}}", limit: 50 }
+      elasticsearch: |
+        {
+          "query": {
+            "bool": {
+              "should": [
+                {
+                  "multi_match": {
+                    "query": "election democracy voting",
+                    "fields": ["title^3", "description^2", "content"],
+                    "boost": 0.5
+                  }
+                }
+              ]
+            }
+          },
+          "knn": {
+            "field": "embedding",
+            "query_vector": "{{precomputed}}",
+            "k": 50,
+            "num_candidates": 200,
+            "boost": 0.5
+          },
+          "size": 50
+        }
+
+  - id: hybrid-covid-health-response
+    description: "Keyword: 'COVID'; Semantic: pandemic response, public health measures"
+    engines:
+      pg-rrf:
+        template: pg_rrf_fusion
+        params: { terms: "COVID pandemic health", embedding: "{{precomputed}}", pool_size: 200, limit: 50 }
+      paradedb-hybrid:
+        template: pdb_hybrid
+        params: { terms: "COVID pandemic health", embedding: "{{precomputed}}", limit: 50 }
+      elasticsearch: |
+        {
+          "query": {
+            "bool": {
+              "should": [
+                {
+                  "multi_match": {
+                    "query": "COVID pandemic health",
+                    "fields": ["title^3", "description^2", "content"],
+                    "boost": 0.5
+                  }
+                }
+              ]
+            }
+          },
+          "knn": {
+            "field": "embedding",
+            "query_vector": "{{precomputed}}",
+            "k": 50,
+            "num_candidates": 200,
+            "boost": 0.5
+          },
+          "size": 50
+        }
+
+  - id: hybrid-ai-jobs-economy
+    description: "Keyword: 'AI jobs'; Semantic: automation impact on labor market"
+    engines:
+      pg-rrf:
+        template: pg_rrf_fusion
+        params: { terms: "AI jobs automation economy", embedding: "{{precomputed}}", pool_size: 200, limit: 50 }
+      paradedb-hybrid:
+        template: pdb_hybrid
+        params: { terms: "AI jobs automation economy", embedding: "{{precomputed}}", limit: 50 }
+      elasticsearch: |
+        {
+          "query": {
+            "bool": {
+              "should": [
+                {
+                  "multi_match": {
+                    "query": "AI jobs automation economy",
+                    "fields": ["title^3", "description^2", "content"],
+                    "boost": 0.5
+                  }
+                }
+              ]
+            }
+          },
+          "knn": {
+            "field": "embedding",
+            "query_vector": "{{precomputed}}",
+            "k": 50,
+            "num_candidates": 200,
+            "boost": 0.5
+          },
+          "size": 50
+        }
+
+  - id: hybrid-ukraine-war-impact
+    description: "Keyword: 'Ukraine war'; Semantic: geopolitical consequences"
+    engines:
+      pg-rrf:
+        template: pg_rrf_fusion
+        params: { terms: "Ukraine war conflict", embedding: "{{precomputed}}", pool_size: 200, limit: 50 }
+      paradedb-hybrid:
+        template: pdb_hybrid
+        params: { terms: "Ukraine war conflict", embedding: "{{precomputed}}", limit: 50 }
+      elasticsearch: |
+        {
+          "query": {
+            "bool": {
+              "should": [
+                {
+                  "multi_match": {
+                    "query": "Ukraine war conflict",
+                    "fields": ["title^3", "description^2", "content"],
+                    "boost": 0.5
+                  }
+                }
+              ]
+            }
+          },
+          "knn": {
+            "field": "embedding",
+            "query_vector": "{{precomputed}}",
+            "k": 50,
+            "num_candidates": 200,
+            "boost": 0.5
+          },
+          "size": 50
+        }
+
+  - id: hybrid-interest-rates-inflation
+    description: "Keyword: 'interest rates'; Semantic: monetary policy and inflation"
+    engines:
+      pg-rrf:
+        template: pg_rrf_fusion
+        params: { terms: "interest rates inflation monetary", embedding: "{{precomputed}}", pool_size: 200, limit: 50 }
+      paradedb-hybrid:
+        template: pdb_hybrid
+        params: { terms: "interest rates inflation monetary", embedding: "{{precomputed}}", limit: 50 }
+      elasticsearch: |
+        {
+          "query": {
+            "bool": {
+              "should": [
+                {
+                  "multi_match": {
+                    "query": "interest rates inflation monetary",
+                    "fields": ["title^3", "description^2", "content"],
+                    "boost": 0.5
+                  }
+                }
+              ]
+            }
+          },
+          "knn": {
+            "field": "embedding",
+            "query_vector": "{{precomputed}}",
+            "k": 50,
+            "num_candidates": 200,
+            "boost": 0.5
+          },
+          "size": 50
+        }
+
+  - id: hybrid-china-trade-tension
+    description: "Keyword: 'China trade'; Semantic: geopolitical economic rivalry"
+    engines:
+      pg-rrf:
+        template: pg_rrf_fusion
+        params: { terms: "China trade tariffs", embedding: "{{precomputed}}", pool_size: 200, limit: 50 }
+      paradedb-hybrid:
+        template: pdb_hybrid
+        params: { terms: "China trade tariffs", embedding: "{{precomputed}}", limit: 50 }
+      elasticsearch: |
+        {
+          "query": {
+            "bool": {
+              "should": [
+                {
+                  "multi_match": {
+                    "query": "China trade tariffs",
+                    "fields": ["title^3", "description^2", "content"],
+                    "boost": 0.5
+                  }
+                }
+              ]
+            }
+          },
+          "knn": {
+            "field": "embedding",
+            "query_vector": "{{precomputed}}",
+            "k": 50,
+            "num_candidates": 200,
+            "boost": 0.5
+          },
+          "size": 50
+        }
+
+  - id: hybrid-social-media-misinformation
+    description: "Keyword: 'social media'; Semantic: misinformation, platform regulation"
+    engines:
+      pg-rrf:
+        template: pg_rrf_fusion
+        params: { terms: "social media misinformation", embedding: "{{precomputed}}", pool_size: 200, limit: 50 }
+      paradedb-hybrid:
+        template: pdb_hybrid
+        params: { terms: "social media misinformation", embedding: "{{precomputed}}", limit: 50 }
+      elasticsearch: |
+        {
+          "query": {
+            "bool": {
+              "should": [
+                {
+                  "multi_match": {
+                    "query": "social media misinformation",
+                    "fields": ["title^3", "description^2", "content"],
+                    "boost": 0.5
+                  }
+                }
+              ]
+            }
+          },
+          "knn": {
+            "field": "embedding",
+            "query_vector": "{{precomputed}}",
+            "k": 50,
+            "num_candidates": 200,
+            "boost": 0.5
+          },
+          "size": 50
+        }
+
+  - id: hybrid-housing-crisis
+    description: "Keyword: 'housing'; Semantic: affordability, rent, mortgage pressure"
+    engines:
+      pg-rrf:
+        template: pg_rrf_fusion
+        params: { terms: "housing prices affordability", embedding: "{{precomputed}}", pool_size: 200, limit: 50 }
+      paradedb-hybrid:
+        template: pdb_hybrid
+        params: { terms: "housing prices affordability", embedding: "{{precomputed}}", limit: 50 }
+      elasticsearch: |
+        {
+          "query": {
+            "bool": {
+              "should": [
+                {
+                  "multi_match": {
+                    "query": "housing prices affordability",
+                    "fields": ["title^3", "description^2", "content"],
+                    "boost": 0.5
+                  }
+                }
+              ]
+            }
+          },
+          "knn": {
+            "field": "embedding",
+            "query_vector": "{{precomputed}}",
+            "k": 50,
+            "num_candidates": 200,
+            "boost": 0.5
+          },
+          "size": 50
+        }
+
+  - id: hybrid-space-exploration
+    description: "Keyword: 'space'; Semantic: space exploration, commercial space, NASA"
+    engines:
+      pg-rrf:
+        template: pg_rrf_fusion
+        params: { terms: "space exploration NASA", embedding: "{{precomputed}}", pool_size: 200, limit: 50 }
+      paradedb-hybrid:
+        template: pdb_hybrid
+        params: { terms: "space exploration NASA", embedding: "{{precomputed}}", limit: 50 }
+      elasticsearch: |
+        {
+          "query": {
+            "bool": {
+              "should": [
+                {
+                  "multi_match": {
+                    "query": "space exploration NASA",
+                    "fields": ["title^3", "description^2", "content"],
+                    "boost": 0.5
+                  }
+                }
+              ]
+            }
+          },
+          "knn": {
+            "field": "embedding",
+            "query_vector": "{{precomputed}}",
+            "k": 50,
+            "num_candidates": 200,
+            "boost": 0.5
+          },
+          "size": 50
+        }

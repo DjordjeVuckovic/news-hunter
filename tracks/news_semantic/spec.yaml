@@ -1,0 +1,33 @@
+schema_version: 1
+id: news_semantic
+description: "Semantic / vector search: pgvector HNSW vs Elasticsearch dense_vector kNN"
+
+defaults:
+  pool_depth: 50
+  judgments: lexical
+
+engines:
+  pgvector-cosine:
+    type: postgres
+    connection: "postgresql://news_user:news_password@localhost:54320/news_db"
+  pgvector-l2:
+    type: postgres
+    connection: "postgresql://news_user:news_password@localhost:54320/news_db"
+  elasticsearch:
+    type: elasticsearch
+    connection: "http://localhost:9200"
+    index: articles
+
+metrics:
+  k_values: [3, 5, 10]
+  max_k: 50
+  relevance_threshold: 1
+
+runs:
+  warmup: 1
+  iterations: 3
+
+jobs:
+  - name: "pgvector-vs-es-knn"
+    suite: suite.yaml
+    engines: [pgvector-cosine, pgvector-l2, elasticsearch]
