@@ -10,6 +10,8 @@ DB_CONN := "postgresql://news_user:news_password@localhost:54320/news_db?sslmode
 GOOS ?= $(shell go env GOOS)
 GOARCH ?= $(shell go env GOARCH)
 
+ARGS ?=
+
 # Build commands
 .PHONY: build build-all clean test fmt vet lint lint-fix install-lint schema-gen build-bench bench-validate bench-run bench-pool bench-judge-lexical bench-judge-cli bench-judge-api bench-qrels bench-show-spec bench-show-pool bench-show-judgments
 
@@ -33,6 +35,11 @@ build-schemagen:
 	@echo "Building schema generator..."
 	@mkdir -p $(BIN_DIR)
 	@go build -o $(BIN_DIR)/schemagen $(CMD_DIR)/schemagen
+
+build-preprocessor:
+	@echo "Building preprocessor..."
+	@mkdir -p $(BIN_DIR)
+	@go build -o $(BIN_DIR)/preprocessor $(CMD_DIR)/preprocessor
 
 # Generate schemas from Go structs
 schema-gen: build-schemagen
@@ -113,6 +120,11 @@ run-api-pg: build-news-api
 run-api-es: build-news-api
 	@echo "Running news search service..."
 	@ENV_PATHS="cmd/news_api/.env,cmd/news_api/es.env" ./$(BIN_DIR)/news-api
+
+run-preprocessor: build-preprocessor
+	@echo "Running preprocessor..."
+	@ENV_PATHS="cmd/preprocessor/.env" ./$(BIN_DIR)/preprocessor
+
 # Benchmark commands
 build-bench:
 	@echo "Building bench..."
