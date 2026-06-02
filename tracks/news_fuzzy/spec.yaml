@@ -4,6 +4,9 @@ description: "Fuzzy / approximate search: pg_trgm similarity vs Elasticsearch fu
 
 defaults:
   pool_depth: 50
+  # Query descriptions are correctly spelled, so lexical token-overlap against
+  # candidate titles is a defensible baseline here. Switch to claude-cli if the
+  # lexical qrels prove too noisy.
   judgments: lexical
 
 engines:

@@ -4,7 +4,9 @@ description: "Hybrid search: RRF fusion of BM25 + vector vs Elasticsearch hybrid
 
 defaults:
   pool_depth: 50
-  judgments: lexical
+  # Hybrid pools mix keyword and semantic hits; token-overlap mis-grades the
+  # semantic half, so grade with Claude Code rather than lexical.
+  judgments: claude-cli
 
 engines:
   pg-rrf:

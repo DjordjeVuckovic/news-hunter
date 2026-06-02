@@ -138,6 +138,7 @@ func (r *Runner) runEnginesForQuery(
 	engineSem chan struct{},
 ) {
 	judgments := r.judgmentsFor(q)
+	extra := r.queryVectorParams(ctx, q)
 
 	type slot struct {
 		engName string
@@ -162,7 +163,7 @@ func (r *Runner) runEnginesForQuery(
 			engineSem <- struct{}{}
 			defer func() { <-engineSem }()
 
-			resolved, err := q.ResolveEngineQuery(engName, registry, suiteDir)
+			resolved, err := q.ResolveEngineQuery(engName, registry, suiteDir, extra)
 			if err != nil {
 				slots[idx] = slot{
 					engName: engName,
@@ -208,6 +209,24 @@ func (r *Runner) runEnginesForQuery(
 			jr.Results[q.ID][s.engName] = s.qr
 		}
 	}
+}
+
+// queryVectorParams embeds the query once (via the configured VectorStore) and
+// returns it under the reserved query-vector param, so resolution can inject it
+// into vector queries. Returns nil when there is no store or the query needs no
+// vector; an embedding failure is logged and the vector queries simply fail to
+// resolve (recorded per-engine, non-fatal).
+func (r *Runner) queryVectorParams(ctx context.Context, q *suite.Query) suite.TemplateParams {
+	if r.config.VectorStore == nil || !q.NeedsQueryVector() {
+		return nil
+	}
+	vec, err := r.config.VectorStore.QueryVector(ctx, q.Description)
+	if err != nil {
+		slog.Warn("query embedding failed; vector queries for this query will not resolve",
+			"query", q.ID, "error", err)
+		return nil
+	}
+	return suite.TemplateParams{suite.ReservedQueryVectorParam: suite.FormatVector(vec)}
 }
 
 // judgmentsFor returns the relevance grades for a query. Priority: the

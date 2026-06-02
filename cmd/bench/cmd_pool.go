@@ -77,6 +77,12 @@ func executePool(cmd *cobra.Command, f poolFlags, args []string) error {
 		QueryParallelism: runner.QueryParallelismUnlimited,
 	}
 
+	vectorStore, err := buildQueryVectorStore(cmd.Context(), bs)
+	if err != nil {
+		return fmt.Errorf("build vector store: %w", err)
+	}
+	runCfg.VectorStore = vectorStore
+
 	executors, cleanup, err := createExecutors(cmd.Context(), bs)
 	if err != nil {
 		return fmt.Errorf("create executors: %w", err)

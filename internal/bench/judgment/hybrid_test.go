@@ -1,0 +1,52 @@
+package judgment
+
+import (
+	"context"
+	"testing"
+
+	"github.com/google/uuid"
+)
+
+func TestHybridGradeBatch_FusesSignals(t *testing.T) {
+	// lexicalHit shares query keywords but is semantically far;
+	// semanticHit shares no keywords but is semantically close.
+	// Both should land above NotRelev thanks to fusion.
+	lexicalHit := GradingDoc{ID: uuid.New(), Title: "climate change policy summit", Description: "climate policy"}
+	semanticHit := GradingDoc{ID: uuid.New(), Title: "global warming accord", Description: "emissions treaty"}
+	cold := GradingDoc{ID: uuid.New(), Title: "celebrity gossip column", Description: "red carpet"}
+
+	store := fakeVectorStore{
+		query: []float32{1, 0},
+		docs: map[uuid.UUID][]float32{
+			lexicalHit.ID:  {0, 1},       // semantically far
+			semanticHit.ID: {0.95, 0.31}, // cos ~0.95 -> strong semantic
+			cold.ID:        {0, 1},       // far on both
+		},
+	}
+	s := NewHybridStrategyWithStore(store, "fake")
+
+	got, err := s.GradeBatch(context.Background(), GradingQuery{ID: "q", Description: "climate change policy"}, []GradingDoc{lexicalHit, semanticHit, cold})
+	if err != nil {
+		t.Fatalf("GradeBatch: %v", err)
+	}
+	byID := map[uuid.UUID]int{}
+	for _, g := range got {
+		byID[g.DocID] = g.Grade
+	}
+	if byID[lexicalHit.ID] <= GradeNotRelev {
+		t.Errorf("lexical hit should score > 0 via BM25 component, got %d", byID[lexicalHit.ID])
+	}
+	if byID[semanticHit.ID] <= GradeNotRelev {
+		t.Errorf("semantic hit should score > 0 via vector component, got %d", byID[semanticHit.ID])
+	}
+	if byID[cold.ID] != GradeNotRelev {
+		t.Errorf("cold doc grade = %d, want %d", byID[cold.ID], GradeNotRelev)
+	}
+}
+
+func TestHybridModelID(t *testing.T) {
+	s := NewHybridStrategyWithStore(fakeVectorStore{}, "qwen3")
+	if got := s.ModelID(); got != "hybrid:bm25+qwen3" {
+		t.Errorf("ModelID = %q, want %q", got, "hybrid:bm25+qwen3")
+	}
+}

@@ -17,13 +17,24 @@ type TemplateParams map[string]any
 var placeholderRegex = regexp.MustCompile(`\{\{(\w+)\}\}`)
 
 func (t *QueryTemplate) Render(params TemplateParams, suiteDir string) (*ResolvedQuery, error) {
-	result := placeholderRegex.ReplaceAllStringFunc(t.Query, func(match string) string {
-		key := match[2 : len(match)-2]
-		if val, ok := params[key]; ok {
-			return formatValue(val)
+	// Substitute repeatedly so placeholders introduced by a param's value also
+	// resolve — e.g. a query maps `embedding: "{{precomputed}}"` and the run-time
+	// vector is supplied under `precomputed`. Bounded to avoid self-referential
+	// cycles.
+	result := t.Query
+	for i := 0; i < 5; i++ {
+		next := placeholderRegex.ReplaceAllStringFunc(result, func(match string) string {
+			key := match[2 : len(match)-2]
+			if val, ok := params[key]; ok {
+				return formatValue(val)
+			}
+			return match
+		})
+		if next == result {
+			break
 		}
-		return match
-	})
+		result = next
+	}
 
 	missing := findMissingPlaceholders(result)
 	if len(missing) > 0 {

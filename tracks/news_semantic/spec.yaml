@@ -4,7 +4,9 @@ description: "Semantic / vector search: pgvector HNSW vs Elasticsearch dense_vec
 
 defaults:
   pool_depth: 50
-  judgments: lexical
+  # Semantic relevance can't be judged by token-overlap (relevant docs share no
+  # keywords with the query), so grade with Claude Code rather than lexical.
+  judgments: claude-cli
 
 engines:
   pgvector-cosine:

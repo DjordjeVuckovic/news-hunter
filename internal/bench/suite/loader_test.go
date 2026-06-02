@@ -190,14 +190,14 @@ func TestEngineQuery_Resolve_File(t *testing.T) {
 	require.NoError(t, os.WriteFile(queryFile, []byte("SELECT id FROM articles WHERE id = $1"), 0644))
 
 	eq := EngineQuery{File: "search.sql"}
-	resolved, err := eq.Resolve(nil, dir)
+	resolved, err := eq.Resolve(nil, dir, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "SELECT id FROM articles WHERE id = $1", resolved.Query)
 }
 
 func TestEngineQuery_Resolve_Inline(t *testing.T) {
 	eq := EngineQuery{Query: "SELECT 1"}
-	resolved, err := eq.Resolve(nil, "")
+	resolved, err := eq.Resolve(nil, "", nil)
 	require.NoError(t, err)
 	assert.Equal(t, "SELECT 1", resolved.Query)
 }
@@ -208,7 +208,7 @@ func TestEngineQuery_Resolve_Template(t *testing.T) {
 	require.NoError(t, reg.Register(tmpl))
 
 	eq := EngineQuery{Template: "fts", Params: TemplateParams{"term": "climate"}}
-	resolved, err := eq.Resolve(reg, "")
+	resolved, err := eq.Resolve(reg, "", nil)
 	require.NoError(t, err)
 	assert.Equal(t, "SELECT * WHERE term = 'climate'", resolved.Query)
 }

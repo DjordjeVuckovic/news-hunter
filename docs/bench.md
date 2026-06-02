@@ -54,12 +54,22 @@ Every command accepts a track name as a positional arg (`bench run fts_quality`)
 | Strategy     | Class     | Status   | Description                                              |
 |--------------|-----------|----------|----------------------------------------------------------|
 | `lexical`    | Heuristic | ✅        | Token-overlap baseline — fast, deterministic, no network |
-| `bm25`       | Heuristic | Reserved | BM25 score + threshold → grade                           |
-| `vector`     | Heuristic | Reserved | Cosine similarity + threshold → grade                    |
-| `hybrid`     | Heuristic | Reserved | Weighted combination                                     |
+| `bm25`       | Heuristic | ✅        | Pool-local Okapi BM25, normalised → grade (no network)   |
+| `vector`     | Heuristic | ✅        | Cosine similarity; doc vectors from the store → grade    |
+| `hybrid`     | Heuristic | ✅        | Weighted BM25 + vector fusion → grade                    |
 | `claude-cli` | LLM       | ✅        | `claude -p` subprocess per batch                         |
 | `claude-api` | LLM       | ✅        | Anthropic Messages API per batch                         |
 | `manual`     | Human     | ✅        | Emits `grade: -1` placeholders for hand-grading          |
+
+`vector`/`hybrid` are storage-agnostic: document vectors are read from a
+`storage.VectorStore` (Postgres `article_embeddings` today, ES later — PG takes
+precedence) and only the **query** is embedded at runtime via local Ollama. They
+do not re-embed documents. Configure with `--pg`/`PG_CONNECTION_STRING` and
+`--embedding-base`/`EMBEDDING_BASE_URL` (+ optional `EMBEDDING_MODEL`). The same
+`VectorStore` powers `pool`/`run`, which embed the query and inject it into
+vector queries via the reserved `{{precomputed}}` placeholder. `bm25` computes
+term statistics over each query's candidate pool, so it runs with no external
+services.
 
 File convention: `trec/annotations.<strategy>.yaml`, `trec/qrels.<strategy>.tsv`.
 

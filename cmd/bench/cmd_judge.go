@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -8,6 +9,7 @@ import (
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/meta"
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/pool"
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/trackctx"
+	"github.com/DjordjeVuckovic/news-hunter/internal/embedding"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage/factory"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage/pg"
@@ -15,18 +17,20 @@ import (
 )
 
 type judgeFlags struct {
-	trackArg    string
-	poolPath    string
-	output      string
-	strategy    string
-	pg          string
-	concurrency int
-	batchSize   int
-	resume      bool
-	apiKey      string
-	apiModel    string
-	apiBaseURL  string
-	cliBinary   string
+	trackArg       string
+	poolPath       string
+	output         string
+	strategy       string
+	pg             string
+	concurrency    int
+	batchSize      int
+	resume         bool
+	apiKey         string
+	apiModel       string
+	apiBaseURL     string
+	cliBinary      string
+	embeddingBase  string
+	embeddingModel string
 }
 
 func newJudgeCmd() *cobra.Command {
@@ -37,11 +41,13 @@ func newJudgeCmd() *cobra.Command {
 		Long: `Grades every (query, doc) pair in the track's pool using one of:
 
   lexical     — deterministic token-overlap baseline (no network, no LLM)
+  bm25        — pool-local Okapi BM25 (no network; rewards rare terms)
+  vector      — cosine similarity; doc vectors from PG, query embedded via
+                Ollama (needs --pg + EMBEDDING_BASE_URL)
+  hybrid      — BM25 + vector fusion (needs --pg + EMBEDDING_BASE_URL)
   claude-cli  — invokes 'claude -p' per batch (Anthropic LLM-as-judge batched)
   claude-api  — Anthropic Messages API in batches (set ANTHROPIC_API_KEY)
   manual      — writes grade:-1 placeholders for hand grading
-
-Reserved (not implemented): bm25, vector, hybrid
 
 Output goes to tracks/<name>/trec/annotations.<strategy>.yaml by default.
 Multiple strategies live side-by-side; switch which one bench run scores
@@ -69,6 +75,8 @@ graded. Atomic writes mean Ctrl-C is safe.`,
 	cmd.Flags().StringVar(&f.apiModel, "api-model", "", "Anthropic model id")
 	cmd.Flags().StringVar(&f.apiBaseURL, "api-base", "", "Anthropic API base URL")
 	cmd.Flags().StringVar(&f.cliBinary, "cli-binary", "", "claude CLI binary path")
+	cmd.Flags().StringVar(&f.embeddingBase, "embedding-base", "", "Embedding endpoint for vector/hybrid (or EMBEDDING_BASE_URL)")
+	cmd.Flags().StringVar(&f.embeddingModel, "embedding-model", "", "Embedding model for vector/hybrid (or EMBEDDING_MODEL)")
 	return cmd
 }
 
@@ -111,13 +119,23 @@ func executeJudge(cmd *cobra.Command, f judgeFlags, args []string) error {
 		return nil
 	}
 
-	strat, err := judgment.NewStrategy(kind, judgment.StrategyOptions{
+	opts := judgment.StrategyOptions{
 		APIKey:      envOrFlag("ANTHROPIC_API_KEY", f.apiKey),
 		APIModel:    f.apiModel,
 		APIBaseURL:  f.apiBaseURL,
 		CLIBinary:   f.cliBinary,
 		Concurrency: f.concurrency,
-	})
+	}
+	if kind == judgment.StrategyVector || kind == judgment.StrategyHybrid {
+		store, model, err := buildVectorStore(cmd.Context(), f)
+		if err != nil {
+			return err
+		}
+		opts.VectorStore = store
+		opts.EmbeddingModel = model
+	}
+
+	strat, err := judgment.NewStrategy(kind, opts)
 	if err != nil {
 		return err
 	}
@@ -224,6 +242,37 @@ func checkResumeCompat(prior *judgment.JudgmentFile, strat judgment.Strategy) er
 			prior.Meta.JudgePromptVersion, judgment.PromptVersion)
 	}
 	return nil
+}
+
+// buildVectorStore constructs the engine-agnostic vector store for the
+// vector/hybrid judges (PG precedence). Query text is embedded via local
+// Ollama; document vectors are read from the store — no document re-embedding.
+func buildVectorStore(ctx context.Context, f judgeFlags) (storage.VectorStore, string, error) {
+	pgConn := envOrFlag("PG_CONNECTION_STRING", f.pg)
+	if pgConn == "" {
+		return nil, "", fmt.Errorf("vector/hybrid judging requires --pg or PG_CONNECTION_STRING")
+	}
+	baseURL := envOrFlag("EMBEDDING_BASE_URL", f.embeddingBase)
+	if baseURL == "" {
+		return nil, "", fmt.Errorf("vector/hybrid judging requires --embedding-base or EMBEDDING_BASE_URL (ollama endpoint)")
+	}
+	client, err := embedding.NewOllamaClient(baseURL)
+	if err != nil {
+		return nil, "", fmt.Errorf("embedding client: %w", err)
+	}
+	model := envOrFlag("EMBEDDING_MODEL", f.embeddingModel)
+	store, err := factory.NewVectorStore(ctx, factory.VectorStoreConfig{
+		PgConnStr:       pgConn,
+		EmbeddingClient: client,
+		Model:           model,
+	})
+	if err != nil {
+		return nil, "", err
+	}
+	if model == "" {
+		model = embedding.DefaultModel
+	}
+	return store, model, nil
 }
 
 // openArticleReader creates a PG reader for article enrichment. Centralised so

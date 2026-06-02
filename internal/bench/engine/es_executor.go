@@ -81,7 +81,15 @@ func (e *EsExecutor) Close() error { return nil }
 // Validate posts the query to <index>/_validate/query?explain=true. ES parses
 // the JSON, type-checks fields, and returns "valid: false" with an explanation
 // for malformed queries — no documents scanned.
+//
+// Bodies that use top-level `knn` (vector search) are routed to
+// validateKnnBody: _validate/query only understands the Query DSL and rejects
+// `knn` outright ("request does not support [knn]"), so the knn clause is
+// checked structurally instead.
 func (e *EsExecutor) Validate(ctx context.Context, rawQuery string) error {
+	if hasKnn(rawQuery) {
+		return e.validateKnnBody(ctx, rawQuery)
+	}
 	url := fmt.Sprintf("%s/%s/_validate/query?explain=true", e.baseURL, e.index)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBufferString(rawQuery))
 	if err != nil {
@@ -171,6 +179,79 @@ func stripToQueryBody(raw string) ([]byte, bool) {
 		return nil, false
 	}
 	return out, true
+}
+
+// hasKnn reports whether the search body carries a top-level `knn` clause.
+func hasKnn(raw string) bool {
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(raw), &m); err != nil {
+		return false
+	}
+	_, ok := m["knn"]
+	return ok
+}
+
+// validateKnnBody validates a vector-search body. The `knn` clause is checked
+// structurally (shape, not data — the query_vector may still be an unresolved
+// placeholder at validate time); an accompanying `query` block, if present, is
+// validated against _validate/query as usual.
+func (e *EsExecutor) validateKnnBody(ctx context.Context, rawQuery string) error {
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(rawQuery), &m); err != nil {
+		return fmt.Errorf("es invalid: body is not JSON: %w", err)
+	}
+	if err := validateKnnClause(m["knn"]); err != nil {
+		return fmt.Errorf("es invalid: %w", err)
+	}
+	if q, ok := m["query"]; ok {
+		body, err := json.Marshal(map[string]json.RawMessage{"query": q})
+		if err != nil {
+			return fmt.Errorf("es invalid: %w", err)
+		}
+		return e.validateBody(ctx, body, []byte(rawQuery))
+	}
+	return nil
+}
+
+// validateKnnClause accepts a single knn object or an array of them.
+func validateKnnClause(raw json.RawMessage) error {
+	if len(raw) == 0 {
+		return fmt.Errorf("knn clause is empty")
+	}
+	var single map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &single); err == nil {
+		return validateKnnEntry(single)
+	}
+	var many []map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &many); err != nil {
+		return fmt.Errorf("knn must be an object or array of objects")
+	}
+	if len(many) == 0 {
+		return fmt.Errorf("knn array is empty")
+	}
+	for i, entry := range many {
+		if err := validateKnnEntry(entry); err != nil {
+			return fmt.Errorf("knn[%d]: %w", i, err)
+		}
+	}
+	return nil
+}
+
+func validateKnnEntry(entry map[string]json.RawMessage) error {
+	field, ok := entry["field"]
+	if !ok {
+		return fmt.Errorf("knn missing required \"field\"")
+	}
+	var fieldName string
+	if err := json.Unmarshal(field, &fieldName); err != nil || fieldName == "" {
+		return fmt.Errorf("knn \"field\" must be a non-empty string")
+	}
+	_, hasVec := entry["query_vector"]
+	_, hasBuilder := entry["query_vector_builder"]
+	if !hasVec && !hasBuilder {
+		return fmt.Errorf("knn requires \"query_vector\" or \"query_vector_builder\"")
+	}
+	return nil
 }
 
 type esValidateResponse struct {
