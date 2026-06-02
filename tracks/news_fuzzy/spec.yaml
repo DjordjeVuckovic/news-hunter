@@ -1,0 +1,36 @@
+schema_version: 1
+id: news_fuzzy
+description: "Fuzzy / approximate search: pg_trgm similarity vs Elasticsearch fuzziness"
+
+defaults:
+  pool_depth: 50
+  # Query descriptions are correctly spelled, so lexical token-overlap against
+  # candidate titles is a defensible baseline here. Switch to claude-cli if the
+  # lexical qrels prove too noisy.
+  judgments: lexical
+
+engines:
+  pg-trgm:
+    type: postgres
+    connection: "postgresql://news_user:news_password@localhost:54320/news_db"
+  pg-levenshtein:
+    type: postgres
+    connection: "postgresql://news_user:news_password@localhost:54320/news_db"
+  elasticsearch:
+    type: elasticsearch
+    connection: "http://localhost:9200"
+    index: articles
+
+metrics:
+  k_values: [3, 5, 10]
+  max_k: 100
+  relevance_threshold: 1
+
+runs:
+  warmup: 1
+  iterations: 3
+
+jobs:
+  - name: "fuzzy-pg-vs-es"
+    suite: suite.yaml
+    engines: [pg-trgm, pg-levenshtein, elasticsearch]

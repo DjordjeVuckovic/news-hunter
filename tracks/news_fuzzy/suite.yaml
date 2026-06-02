@@ -1,0 +1,254 @@
+schema_version: 1
+id: news_fuzzy_v1
+name: "News Fuzzy Search Benchmark v1"
+description: "Typo-tolerant and approximate search queries for fuzzy paradigm evaluation"
+version: "1.0.0"
+
+corpus:
+  name: news_hunter_articles
+  source: "postgres://localhost:54320/news_db (articles)"
+
+templates:
+  # pg_trgm: trigram similarity — handles typos, transpositions, prefix variants.
+  # Requires: CREATE EXTENSION pg_trgm; GIN index on (title gin_trgm_ops).
+  - id: pg_trgm_title
+    query: |
+      SELECT id FROM articles
+      WHERE similarity(title, '{{terms}}') > 0.2
+      ORDER BY similarity(title, '{{terms}}') DESC
+      LIMIT {{limit}}
+
+  - id: pg_trgm_multi
+    query: |
+      SELECT id FROM articles
+      WHERE similarity(title || ' ' || coalesce(description,''), '{{terms}}') > 0.15
+      ORDER BY similarity(title || ' ' || coalesce(description,''), '{{terms}}') DESC
+      LIMIT {{limit}}
+
+  # pg_levenshtein: edit-distance search via levenshtein_less_equal.
+  # Good for exact typo correction on single-token fields.
+  - id: pg_levenshtein_title
+    query: |
+      SELECT id FROM articles
+      WHERE EXISTS (
+        SELECT 1 FROM unnest(string_to_array(lower(title), ' ')) AS w
+        WHERE levenshtein_less_equal(w, lower('{{term}}'), {{max_dist}}) <= {{max_dist}}
+      )
+      ORDER BY ts_rank(
+        to_tsvector('english', title || ' ' || coalesce(description,'')),
+        plainto_tsquery('english', '{{terms}}')
+      ) DESC
+      LIMIT {{limit}}
+
+queries:
+  # Queries intentionally contain misspellings to test fuzzy tolerance.
+
+  - id: fuzzy-climat-chanje
+    description: "Misspelled 'climate change' → tests trigram tolerance"
+    engines:
+      pg-trgm:
+        template: pg_trgm_multi
+        params: { terms: "climat chanje", limit: 50 }
+      pg-levenshtein:
+        template: pg_levenshtein_title
+        params: { terms: "climate change", term: "climat", max_dist: 2, limit: 50 }
+      elasticsearch: |
+        {
+          "query": {
+            "multi_match": {
+              "query": "climat chanje",
+              "fields": ["title^3", "description^2"],
+              "fuzziness": "AUTO"
+            }
+          },
+          "size": 50
+        }
+
+  - id: fuzzy-electon-results
+    description: "Misspelled 'election results' → tests trigram tolerance"
+    engines:
+      pg-trgm:
+        template: pg_trgm_multi
+        params: { terms: "electon results", limit: 50 }
+      pg-levenshtein:
+        template: pg_levenshtein_title
+        params: { terms: "election results", term: "electon", max_dist: 2, limit: 50 }
+      elasticsearch: |
+        {
+          "query": {
+            "multi_match": {
+              "query": "electon results",
+              "fields": ["title^3", "description^2"],
+              "fuzziness": "AUTO"
+            }
+          },
+          "size": 50
+        }
+
+  - id: fuzzy-coronavrus-pandmic
+    description: "Misspelled 'coronavirus pandemic'"
+    engines:
+      pg-trgm:
+        template: pg_trgm_multi
+        params: { terms: "coronavrus pandmic", limit: 50 }
+      pg-levenshtein:
+        template: pg_levenshtein_title
+        params: { terms: "coronavirus pandemic", term: "coronavrus", max_dist: 2, limit: 50 }
+      elasticsearch: |
+        {
+          "query": {
+            "multi_match": {
+              "query": "coronavrus pandmic",
+              "fields": ["title^3", "description^2"],
+              "fuzziness": "AUTO"
+            }
+          },
+          "size": 50
+        }
+
+  - id: fuzzy-artifical-inteligence
+    description: "Misspelled 'artificial intelligence'"
+    engines:
+      pg-trgm:
+        template: pg_trgm_multi
+        params: { terms: "artifical inteligence", limit: 50 }
+      pg-levenshtein:
+        template: pg_levenshtein_title
+        params: { terms: "artificial intelligence", term: "artifical", max_dist: 2, limit: 50 }
+      elasticsearch: |
+        {
+          "query": {
+            "multi_match": {
+              "query": "artifical inteligence",
+              "fields": ["title^3", "description^2"],
+              "fuzziness": "AUTO"
+            }
+          },
+          "size": 50
+        }
+
+  - id: fuzzy-renewble-enrgy
+    description: "Misspelled 'renewable energy'"
+    engines:
+      pg-trgm:
+        template: pg_trgm_multi
+        params: { terms: "renewble enrgy", limit: 50 }
+      pg-levenshtein:
+        template: pg_levenshtein_title
+        params: { terms: "renewable energy", term: "renewble", max_dist: 2, limit: 50 }
+      elasticsearch: |
+        {
+          "query": {
+            "multi_match": {
+              "query": "renewble enrgy",
+              "fields": ["title^3", "description^2"],
+              "fuzziness": "AUTO"
+            }
+          },
+          "size": 50
+        }
+
+  - id: fuzzy-goverment-shudown
+    description: "Misspelled 'government shutdown'"
+    engines:
+      pg-trgm:
+        template: pg_trgm_multi
+        params: { terms: "goverment shudown", limit: 50 }
+      pg-levenshtein:
+        template: pg_levenshtein_title
+        params: { terms: "government shutdown", term: "goverment", max_dist: 2, limit: 50 }
+      elasticsearch: |
+        {
+          "query": {
+            "multi_match": {
+              "query": "goverment shudown",
+              "fields": ["title^3", "description^2"],
+              "fuzziness": "AUTO"
+            }
+          },
+          "size": 50
+        }
+
+  - id: fuzzy-ukrain-conflct
+    description: "Misspelled 'ukraine conflict'"
+    engines:
+      pg-trgm:
+        template: pg_trgm_multi
+        params: { terms: "ukrain conflct", limit: 50 }
+      pg-levenshtein:
+        template: pg_levenshtein_title
+        params: { terms: "ukraine conflict", term: "ukrain", max_dist: 2, limit: 50 }
+      elasticsearch: |
+        {
+          "query": {
+            "multi_match": {
+              "query": "ukrain conflct",
+              "fields": ["title^3", "description^2"],
+              "fuzziness": "AUTO"
+            }
+          },
+          "size": 50
+        }
+
+  - id: fuzzy-stockmarket-cras
+    description: "Misspelled 'stock market crash'"
+    engines:
+      pg-trgm:
+        template: pg_trgm_multi
+        params: { terms: "stockmarket cras", limit: 50 }
+      pg-levenshtein:
+        template: pg_levenshtein_title
+        params: { terms: "stock market crash", term: "cras", max_dist: 2, limit: 50 }
+      elasticsearch: |
+        {
+          "query": {
+            "multi_match": {
+              "query": "stockmarket cras",
+              "fields": ["title^3", "description^2"],
+              "fuzziness": "AUTO"
+            }
+          },
+          "size": 50
+        }
+
+  - id: fuzzy-vacine-effectivness
+    description: "Misspelled 'vaccine effectiveness'"
+    engines:
+      pg-trgm:
+        template: pg_trgm_multi
+        params: { terms: "vacine effectivness", limit: 50 }
+      pg-levenshtein:
+        template: pg_levenshtein_title
+        params: { terms: "vaccine effectiveness", term: "vacine", max_dist: 2, limit: 50 }
+      elasticsearch: |
+        {
+          "query": {
+            "multi_match": {
+              "query": "vacine effectivness",
+              "fields": ["title^3", "description^2"],
+              "fuzziness": "AUTO"
+            }
+          },
+          "size": 50
+        }
+
+  - id: fuzzy-imigration-polcy
+    description: "Misspelled 'immigration policy'"
+    engines:
+      pg-trgm:
+        template: pg_trgm_multi
+        params: { terms: "imigration polcy", limit: 50 }
+      pg-levenshtein:
+        template: pg_levenshtein_title
+        params: { terms: "immigration policy", term: "imigration", max_dist: 2, limit: 50 }
+      elasticsearch: |
+        {
+          "query": {
+            "multi_match": {
+              "query": "imigration polcy",
+              "fields": ["title^3", "description^2"],
+              "fuzziness": "AUTO"
+            }
+          },
+          "size": 50
+        }

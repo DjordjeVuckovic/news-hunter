@@ -1,0 +1,35 @@
+schema_version: 1
+id: news_hybrid
+description: "Hybrid search: RRF fusion of BM25 + vector vs Elasticsearch hybrid"
+
+defaults:
+  pool_depth: 50
+  # Hybrid pools mix keyword and semantic hits; token-overlap mis-grades the
+  # semantic half, so grade with Claude Code rather than lexical.
+  judgments: claude-cli
+
+engines:
+  pg-rrf:
+    type: postgres
+    connection: "postgresql://news_user:news_password@localhost:54320/news_db"
+  paradedb-hybrid:
+    type: postgres
+    connection: "postgresql://news_user:news_password@localhost:54321/news_db"
+  elasticsearch:
+    type: elasticsearch
+    connection: "http://localhost:9200"
+    index: articles
+
+metrics:
+  k_values: [3, 5, 10]
+  max_k: 50
+  relevance_threshold: 1
+
+runs:
+  warmup: 1
+  iterations: 3
+
+jobs:
+  - name: "hybrid-pg-vs-paradedb-vs-es"
+    suite: suite.yaml
+    engines: [pg-rrf, paradedb-hybrid, elasticsearch]
