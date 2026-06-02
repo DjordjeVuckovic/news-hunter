@@ -32,7 +32,7 @@ keys are free-form labels — verified working.
 | track           | result        | notes |
 |-----------------|---------------|-------|
 | `news_fuzzy`    | **30/30 OK**  | green after adding the `fuzzystrmatch` migration (005) |
-| `news_semantic` | 0/30          | 20 `TEMPLATE_ERR` (precomputed), 10 ES `INVALID` (knn) — see blockers |
+| `news_semantic` | 10/30 OK      | ES green after knn fix; 20 `TEMPLATE_ERR` (precomputed) on pgvector-* |
 | `news_hybrid`   | 10/30 OK      | ES OK; 20 `TEMPLATE_ERR` (precomputed) on pg-rrf + paradedb-hybrid |
 | `fts_quality`   | 120/120 OK    | regression check — unchanged |
 
@@ -43,8 +43,16 @@ keys are free-form labels — verified working.
 - **Missing `trec/` + `reports/` dirs** — the hand-scaffolded tracks lacked the
   `trec/` folder that `trackctx.Resolve` requires; added (with `.gitkeep`).
 - **Judging strategy** — semantic/hybrid specs point at `claude-cli`.
+- **ES top-level `knn` validation** — `EsExecutor.Validate` now routes bodies
+  with a `knn` clause to a structural check (`validateKnnBody`), since
+  `_validate/query` rejects `knn` outright. All 10 semantic ES rows now pass
+  (were `INVALID`); hybrid ES still validates its `query` block too.
 
 ## Remaining blockers (out of scope here)
+
+The remaining `TEMPLATE_ERR` rows (semantic `pgvector-*`, hybrid `pg-rrf` /
+`paradedb-hybrid`) all reduce to one interlocked effort — the embedding
+pipeline — which is a sizeable, decision- and compute-heavy piece on its own:
 
 1. **`{{precomputed}}` embedding placeholder has no injection mechanism.**
    The renderer (`internal/bench/suite/template.go`) only substitutes declared
@@ -59,16 +67,10 @@ keys are free-form labels — verified working.
    `db/migrations/004_*`, and that table is currently **empty (0 rows)** while
    `articles` has 105,375. Templates must be rewritten to JOIN `article_embeddings`
    at 1024 dims, and embeddings must be generated (`cmd/embed_ingest`,
-   `scripts/embed_qwen3.ipynb`) before pooling returns anything.
+   `scripts/embed_qwen3.ipynb`) before pooling returns anything. The ES `articles`
+   index also needs a `dense_vector` `embedding` field + reindex.
 
-3. **ES top-level `knn` is not validatable.** `_validate/query` rejects `knn`
-   (`request does not support [knn]`), so the semantic ES rows show `INVALID`
-   even though the query is well-formed. Options: special-case knn bodies in
-   `EsExecutor.Validate` (skip or validate only the inner query), or accept that
-   knn is verified at pool time rather than validate time. (Hybrid ES bodies pass
-   because they carry a top-level `query` block alongside `knn`.)
-
-4. **ParadeDB (`paradedb-hybrid` @ 54321)** — better than expected: `pg_search`
+3. **ParadeDB (`paradedb-hybrid` @ 54321)** — better than expected: `pg_search`
    and `vector` extensions are installed and the `articles` table exists. Only
    blocked by #1 and #2 (precomputed binding + embeddings). The `pdb_hybrid`
    template's `@@@` / `paradedb.parse` / `pdb.score` usage is still unverified by
