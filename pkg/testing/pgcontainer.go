@@ -89,7 +89,7 @@ func createPGContainer(ctx context.Context, cfg PGConfig) (*PGContainer, error) 
 	}
 
 	pgContainer, err := postgres.Run(ctx,
-		"postgres:17.5",
+		"pgvector/pgvector:pg18",
 		postgres.WithDatabase(cfg.Database),
 		postgres.WithUsername(cfg.Username),
 		postgres.WithPassword(cfg.Password),
