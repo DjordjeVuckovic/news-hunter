@@ -1,6 +1,7 @@
 // Package trackctx resolves the "track" — the self-contained folder that
 // owns a benchmark's spec, suite, pool, annotations, and reports. Every
-// subcommand goes through Resolve() to figure out which paths it operates on.
+// subcommand goes through Resolve (single track) or ResolveGlob (a group) to
+// figure out which paths it operates on.
 //
 // Resolution precedence (highest wins):
 //  1. Explicit --spec/--suite/--pool/--judgments/--output flags.
@@ -9,14 +10,24 @@
 //  4. Walk-up from cwd: search parent dirs for a track-shaped folder
 //     (one that contains spec.yaml + suite.yaml + trec/).
 //
-// A "track name" without slashes maps to ./tracks/<name>/. A path-like value
-// (containing /) is used verbatim.
+// A track arg is one of:
+//   - a verbatim filesystem path — absolute, ./- or ../-prefixed, or a *.yaml
+//     etc. — used as-is (the escape hatch for tracks outside ./tracks).
+//   - a track name → mapped under ./tracks/. Two layouts are supported:
+//     flat (fts_quality → tracks/fts_quality) and nested with "/"
+//     (news/fts → tracks/news/fts).
+//   - a glob (news/*) → expanded by ResolveGlob across track-shaped matches.
+//
+// Grouping is explicit: only a glob fans out. A bare name always means exactly
+// one track — there is no implicit "directory becomes a group" behaviour.
 package trackctx
 
 import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 )
 
 const (
@@ -46,28 +57,64 @@ type Track struct {
 	Spec  string
 	Suite string
 	Pool  string
-	// JudgmentsForStrategy returns the conventional path for an annotations
-	// file produced by the given strategy, inside this track.
+
+	name       string // tracks-relative id, e.g. "fts_quality" or "news/fts"
 	trecDir    string
 	reportsDir string
 }
 
-// Resolve performs the precedence walk described in the package doc and
-// returns a Track or a descriptive error suggesting the next step.
+// Resolve resolves a single track and layers any explicit overrides on top.
 func Resolve(in Inputs) (*Track, error) {
-	root, err := resolveRoot(in.TrackArg)
+	root, name, err := resolveRoot(in.TrackArg)
 	if err != nil {
 		return nil, err
 	}
+	t := newTrack(root, name)
+	t.Spec = firstNonEmpty(in.SpecPath, t.Spec)
+	t.Suite = firstNonEmpty(in.SuitePath, t.Suite)
+	t.Pool = firstNonEmpty(in.PoolPath, t.Pool)
+	return t, nil
+}
+
+// ResolveGlob expands a glob pattern (news/*) under tracks/ to every
+// track-shaped match, sorted, naming each by its path relative to tracks/.
+func ResolveGlob(pattern string) ([]*Track, error) {
+	matches, err := filepath.Glob(filepath.Join(tracksDir, nameToRel(pattern)))
+	if err != nil {
+		return nil, fmt.Errorf("bad track pattern %q: %w", pattern, err)
+	}
+	sort.Strings(matches)
+	tracks := make([]*Track, 0, len(matches))
+	for _, m := range matches {
+		abs, err := filepath.Abs(m)
+		if err != nil || !isTrackShaped(abs) {
+			continue
+		}
+		tracks = append(tracks, newTrack(canonicalise(abs), relName(m)))
+	}
+	if len(tracks) == 0 {
+		return nil, fmt.Errorf("no tracks match pattern %q under %s/", pattern, tracksDir)
+	}
+	return tracks, nil
+}
+
+// IsPattern reports whether arg is a glob (news/*) rather than a single name.
+func IsPattern(arg string) bool {
+	return strings.ContainsAny(arg, "*?[")
+}
+
+// newTrack builds a Track with all paths derived from the convention.
+func newTrack(root, name string) *Track {
 	t := &Track{
 		Root:       root,
+		name:       name,
 		trecDir:    filepath.Join(root, trecDir),
 		reportsDir: filepath.Join(root, reportsDir),
 	}
-	t.Spec = firstNonEmpty(in.SpecPath, filepath.Join(root, specFile))
-	t.Suite = firstNonEmpty(in.SuitePath, filepath.Join(root, suiteFile))
-	t.Pool = firstNonEmpty(in.PoolPath, filepath.Join(t.trecDir, poolFile))
-	return t, nil
+	t.Spec = filepath.Join(root, specFile)
+	t.Suite = filepath.Join(root, suiteFile)
+	t.Pool = filepath.Join(t.trecDir, poolFile)
+	return t
 }
 
 // JudgmentsPath resolves --judgments. Three shapes:
@@ -106,48 +153,75 @@ func (t *Track) LatestReportPath() string {
 	return filepath.Join(t.reportsDir, latestReport)
 }
 
-// Name returns the track folder's basename — used to derive default spec.id.
+// Name returns the track's tracks-relative id (e.g. "fts_quality" or
+// "news/fts") — used for display and to derive default spec.id.
 func (t *Track) Name() string {
+	if t.name != "" {
+		return t.name
+	}
 	return filepath.Base(t.Root)
 }
 
-// resolveRoot does the precedence walk for the track folder itself.
-func resolveRoot(arg string) (string, error) {
+// resolveRoot does the precedence walk for the track folder itself, returning
+// the absolute root and the tracks-relative name.
+func resolveRoot(arg string) (root, name string, err error) {
 	if arg != "" {
 		return absTrackPath(arg)
 	}
 	cwd, err := os.Getwd()
 	if err != nil {
-		return "", fmt.Errorf("getwd: %w", err)
+		return "", "", fmt.Errorf("getwd: %w", err)
 	}
-	if root := walkUp(cwd); root != "" {
-		return canonicalise(root), nil
+	if r := walkUp(cwd); r != "" {
+		r = canonicalise(r)
+		return r, filepath.Base(r), nil
 	}
-	return "", fmt.Errorf(
+	return "", "", fmt.Errorf(
 		"no track specified and current directory is not inside a track folder.\n" +
 			"  Pass a track name: bench <cmd> <track>\n" +
 			"  Or scaffold one:   bench init <name>",
 	)
 }
 
-func absTrackPath(arg string) (string, error) {
-	var raw string
-	if isPath(arg) {
-		raw = arg
-	} else {
-		raw = filepath.Join(tracksDir, arg)
+func absTrackPath(arg string) (root, name string, err error) {
+	if isVerbatimPath(arg) {
+		abs, err := filepath.Abs(arg)
+		if err != nil {
+			return "", "", fmt.Errorf("abs %q: %w", arg, err)
+		}
+		if !isTrackShaped(abs) {
+			return "", "", fmt.Errorf("path %q is not a track folder (missing spec.yaml / suite.yaml / trec/)", arg)
+		}
+		abs = canonicalise(abs)
+		return abs, filepath.Base(abs), nil
 	}
-	abs, err := filepath.Abs(raw)
+	// Track name, flat or nested (news/fts). Map under tracks/.
+	rel := nameToRel(arg)
+	abs, err := filepath.Abs(filepath.Join(tracksDir, rel))
 	if err != nil {
-		return "", fmt.Errorf("abs %q: %w", raw, err)
+		return "", "", fmt.Errorf("abs %q: %w", rel, err)
 	}
 	if !isTrackShaped(abs) {
-		if isPath(arg) {
-			return "", fmt.Errorf("path %q is not a track folder (missing spec.yaml / suite.yaml / trec/)", arg)
-		}
-		return "", fmt.Errorf("track %q not found at %s (run: bench init %s)", arg, abs, arg)
+		return "", "", fmt.Errorf("track %q not found at %s (run: bench init %s)", arg, abs, arg)
 	}
-	return canonicalise(abs), nil
+	return canonicalise(abs), rel, nil
+}
+
+// nameToRel maps a track name to its path relative to tracks/, tolerating a
+// leading "tracks/" so that `fts_quality` and `tracks/fts_quality` (the form
+// used by --track in the docs) resolve to the same track.
+func nameToRel(arg string) string {
+	rel := filepath.ToSlash(filepath.Clean(arg))
+	return strings.TrimPrefix(rel, tracksDir+"/")
+}
+
+// relName strips the leading tracks/ segment from a matched path, yielding the
+// tracks-relative track id (tracks/news/fts → news/fts).
+func relName(match string) string {
+	if rel, err := filepath.Rel(tracksDir, match); err == nil {
+		return filepath.ToSlash(rel)
+	}
+	return filepath.Base(match)
 }
 
 // canonicalise resolves symlinks so a track's Root is stable across OS quirks
@@ -196,6 +270,28 @@ func isDir(p string) bool {
 	return err == nil && info.IsDir()
 }
 
+// isVerbatimPath reports whether a track arg is a filesystem path to use as-is,
+// rather than a name mapped under tracks/. True for absolute paths, ./- or
+// ../-prefixed paths, and anything carrying a recognised file extension. A
+// plain or slash-nested name (news, news/fts) is NOT verbatim.
+func isVerbatimPath(s string) bool {
+	if s == "" {
+		return false
+	}
+	if filepath.IsAbs(s) {
+		return true
+	}
+	if s == "." || s == ".." ||
+		strings.HasPrefix(s, "./") || strings.HasPrefix(s, "../") ||
+		strings.HasPrefix(s, "."+string(filepath.Separator)) ||
+		strings.HasPrefix(s, ".."+string(filepath.Separator)) {
+		return true
+	}
+	return hasYAMLExt(s)
+}
+
+// isPath classifies a --judgments value: any separator or file extension means
+// it's a path rather than a strategy name.
 func isPath(s string) bool {
 	if s == "" {
 		return false

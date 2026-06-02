@@ -81,15 +81,16 @@ graded. Atomic writes mean Ctrl-C is safe.`,
 }
 
 func executeJudge(cmd *cobra.Command, f judgeFlags, args []string) error {
-	tr, err := trackctx.Resolve(trackctx.Inputs{
+	return forEachTrack(cmd.OutOrStdout(), trackctx.Inputs{
 		TrackArg:   trackArg(f.trackArg, args),
 		PoolPath:   f.poolPath,
 		OutputPath: f.output,
+	}, func(tr *trackctx.Track) error {
+		return judgeTrack(cmd, f, tr)
 	})
-	if err != nil {
-		return err
-	}
+}
 
+func judgeTrack(cmd *cobra.Command, f judgeFlags, tr *trackctx.Track) error {
 	poolPath := f.poolPath
 	if poolPath == "" {
 		poolPath = tr.Pool

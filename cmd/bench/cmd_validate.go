@@ -56,15 +56,16 @@ type validateRow struct {
 }
 
 func executeValidate(cmd *cobra.Command, f validateFlags, args []string) error {
-	tr, err := trackctx.Resolve(trackctx.Inputs{
+	return forEachTrack(cmd.OutOrStdout(), trackctx.Inputs{
 		TrackArg:  trackArg(f.trackArg, args),
 		SpecPath:  f.specPath,
 		SuitePath: f.suitePath,
+	}, func(tr *trackctx.Track) error {
+		return validateTrack(cmd, f, tr)
 	})
-	if err != nil {
-		return err
-	}
+}
 
+func validateTrack(cmd *cobra.Command, f validateFlags, tr *trackctx.Track) error {
 	bs, err := spec.LoadFromFile(tr.Spec)
 	if err != nil {
 		return fmt.Errorf("load spec: %w", err)
