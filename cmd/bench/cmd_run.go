@@ -112,6 +112,12 @@ func executeRun(cmd *cobra.Command, f runFlags, args []string) error {
 		runCfg.KValues = bs.Metrics.KValues
 	}
 
+	vectorStore, err := buildQueryVectorStore(cmd.Context(), bs)
+	if err != nil {
+		return fmt.Errorf("build vector store: %w", err)
+	}
+	runCfg.VectorStore = vectorStore
+
 	// Apply --jobs filter: keep only the named jobs.
 	if f.jobs != "" {
 		wanted := make(map[string]bool)

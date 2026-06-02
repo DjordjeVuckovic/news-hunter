@@ -4,44 +4,36 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"strings"
 
-	"github.com/DjordjeVuckovic/news-hunter/internal/embedding"
-	"github.com/DjordjeVuckovic/news-hunter/internal/types/document"
+	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
+	"github.com/google/uuid"
 )
 
-// defaultEmbeddingModel mirrors embedding.defaultModel (unexported there) so the
-// vector judge can report an accurate model id when none is configured.
-const defaultEmbeddingModel = "qwen3-embedding:0.6b"
-
-// Embedder is the subset of *embedding.Embedder the vector/hybrid judges need.
-// Declaring it here keeps the scoring logic testable with a fake backend.
-type Embedder interface {
-	EmbedQuery(ctx context.Context, query string) (*embedding.Vec, error)
-	EmbedDocs(ctx context.Context, docs []document.Article) ([]embedding.Vec, error)
-}
-
 // VectorStrategy grades candidates by cosine similarity between the query
-// embedding and each document embedding. Unlike lexical/bm25 it captures
-// semantic relevance — paraphrases and related concepts with no shared
-// keywords — which is what the semantic and hybrid tracks need. It requires an
-// embedding backend (ollama) configured via StrategyOptions.
+// embedding and each document's stored embedding. Unlike lexical/bm25 it
+// captures semantic relevance — paraphrases and related concepts with no shared
+// keywords — which is what the semantic and hybrid tracks need.
+//
+// It is storage-agnostic: document vectors come from a storage.VectorStore
+// (Postgres today, ES later) and only the query is embedded at runtime. It does
+// not re-embed documents.
 type VectorStrategy struct {
-	embedder Embedder
-	model    string
+	store storage.VectorStore
+	model string
 }
 
+// NewVectorStrategy builds the strategy from options. A VectorStore must be
+// supplied by the caller (cmd_judge wires it from the PG pool + embedder).
 func NewVectorStrategy(opts StrategyOptions) (*VectorStrategy, error) {
-	emb, model, err := embedderFromOptions(opts)
-	if err != nil {
-		return nil, err
+	if opts.VectorStore == nil {
+		return nil, errNoVectorStore(StrategyVector)
 	}
-	return &VectorStrategy{embedder: emb, model: model}, nil
+	return &VectorStrategy{store: opts.VectorStore, model: opts.EmbeddingModel}, nil
 }
 
-// NewVectorStrategyWithEmbedder injects an embedder directly (used in tests).
-func NewVectorStrategyWithEmbedder(e Embedder, model string) *VectorStrategy {
-	return &VectorStrategy{embedder: e, model: model}
+// NewVectorStrategyWithStore injects a store directly (used in tests).
+func NewVectorStrategyWithStore(store storage.VectorStore, model string) *VectorStrategy {
+	return &VectorStrategy{store: store, model: model}
 }
 
 func (VectorStrategy) Name() string { return string(StrategyVector) }
@@ -60,80 +52,59 @@ func (s VectorStrategy) GradeBatch(ctx context.Context, q GradingQuery, docs []G
 	if len(docs) == 0 {
 		return nil, nil
 	}
-	sims, err := s.similarities(ctx, q, docs)
+	qVec, vecs, err := s.vectors(ctx, q, docs)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]GradedDoc, len(docs))
-	for i, d := range docs {
-		out[i] = GradedDoc{DocID: d.ID, Grade: gradeFromCosine(sims[i])}
+	// Return grades only for docs that have a stored embedding. Docs without one
+	// are simply omitted; the runner records them as Unjudged, leaving them for
+	// another strategy rather than scoring them 0.
+	out := make([]GradedDoc, 0, len(docs))
+	for _, d := range docs {
+		if dv, ok := vecs[d.ID]; ok {
+			out = append(out, GradedDoc{DocID: d.ID, Grade: gradeFromCosine(cosine(qVec, dv))})
+		}
 	}
 	return out, nil
 }
 
 func (s VectorStrategy) Grade(ctx context.Context, q GradingQuery, doc GradingDoc) (int, error) {
-	sims, err := s.similarities(ctx, q, []GradingDoc{doc})
+	qVec, vecs, err := s.vectors(ctx, q, []GradingDoc{doc})
 	if err != nil {
 		return GradeUnjudged, err
 	}
-	return gradeFromCosine(sims[0]), nil
+	dv, ok := vecs[doc.ID]
+	if !ok {
+		return GradeUnjudged, fmt.Errorf("vector strategy: no stored embedding for doc %s", doc.ID)
+	}
+	return gradeFromCosine(cosine(qVec, dv)), nil
 }
 
-// similarities embeds the query once and all docs in one batch, returning the
-// cosine similarity per doc in the same order as docs.
-func (s VectorStrategy) similarities(ctx context.Context, q GradingQuery, docs []GradingDoc) ([]float64, error) {
-	if s.embedder == nil {
-		return nil, fmt.Errorf("vector strategy: no embedder configured")
+// vectors embeds the query once and fetches all candidate doc vectors from the
+// store in one round-trip.
+func (s VectorStrategy) vectors(ctx context.Context, q GradingQuery, docs []GradingDoc) ([]float32, map[uuid.UUID][]float32, error) {
+	if s.store == nil {
+		return nil, nil, fmt.Errorf("vector strategy: no vector store configured")
 	}
-	qVec, err := s.embedder.EmbedQuery(ctx, q.Description)
+	qVec, err := s.store.QueryVector(ctx, q.Description)
 	if err != nil {
-		return nil, fmt.Errorf("embed query %q: %w", q.ID, err)
+		return nil, nil, fmt.Errorf("embed query %q: %w", q.ID, err)
 	}
-
-	articles := make([]document.Article, len(docs))
+	ids := make([]uuid.UUID, len(docs))
 	for i, d := range docs {
-		articles[i] = document.Article{
-			ID:      d.ID,
-			Title:   d.Title,
-			Content: strings.TrimSpace(d.Description + " " + d.Content),
-		}
+		ids[i] = d.ID
 	}
-	docVecs, err := s.embedder.EmbedDocs(ctx, articles)
+	vecs, err := s.store.DocVectors(ctx, ids)
 	if err != nil {
-		return nil, fmt.Errorf("embed docs: %w", err)
+		return nil, nil, fmt.Errorf("fetch doc vectors: %w", err)
 	}
-	if len(docVecs) != len(docs) {
-		return nil, fmt.Errorf("vector strategy: expected %d doc embeddings, got %d", len(docs), len(docVecs))
-	}
-
-	sims := make([]float64, len(docs))
-	for i := range docs {
-		sims[i] = cosine(qVec.Embedding, docVecs[i].Embedding)
-	}
-	return sims, nil
+	return qVec, vecs, nil
 }
 
-func embedderFromOptions(opts StrategyOptions) (Embedder, string, error) {
-	if opts.EmbeddingBaseURL == "" {
-		return nil, "", fmt.Errorf(
-			"%s/%s strategy requires an embedding endpoint: set --embedding-base or EMBEDDING_BASE_URL (e.g. http://localhost:11434)",
-			StrategyVector, StrategyHybrid)
-	}
-	client, err := embedding.NewOllamaClient(opts.EmbeddingBaseURL)
-	if err != nil {
-		return nil, "", fmt.Errorf("embedding client: %w", err)
-	}
-	model := opts.EmbeddingModel
-	var eopts []embedding.EmbedderOption
-	if model != "" {
-		eopts = append(eopts, embedding.WithExecutorModel(model))
-	} else {
-		model = defaultEmbeddingModel
-	}
-	if opts.EmbeddingMaxLen != nil {
-		eopts = append(eopts, embedding.WithExecutorMaxLength(*opts.EmbeddingMaxLen))
-	}
-	return embedding.NewEmbedder(client, eopts...), model, nil
+func errNoVectorStore(kind StrategyKind) error {
+	return fmt.Errorf(
+		"%s strategy requires a vector store: set --pg/PG_CONNECTION_STRING and an embedding endpoint (--embedding-base / EMBEDDING_BASE_URL)",
+		kind)
 }
 
 func cosine(a, b []float32) float64 {

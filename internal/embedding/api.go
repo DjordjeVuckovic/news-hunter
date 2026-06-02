@@ -4,7 +4,10 @@ import (
 	"context"
 )
 
-const defaultModel = "qwen3-embedding:0.6b"
+// DefaultModel is the embedding model used when none is configured. Stored
+// document vectors are tagged with the model name, so query embedding and
+// document lookups must agree on it.
+const DefaultModel = "qwen3-embedding:0.6b"
 
 type Request struct {
 	Model string `json:"model"`

@@ -4,26 +4,26 @@ import (
 	"context"
 	"testing"
 
-	"github.com/DjordjeVuckovic/news-hunter/internal/embedding"
-	"github.com/DjordjeVuckovic/news-hunter/internal/types/document"
 	"github.com/google/uuid"
 )
 
-// fakeEmbedder returns canned vectors so the scoring logic can be tested with
-// no embedding backend.
-type fakeEmbedder struct {
+// fakeVectorStore returns canned vectors so the scoring logic can be tested
+// with no embedding backend or database.
+type fakeVectorStore struct {
 	query []float32
 	docs  map[uuid.UUID][]float32
 }
 
-func (f fakeEmbedder) EmbedQuery(_ context.Context, _ string) (*embedding.Vec, error) {
-	return &embedding.Vec{Embedding: f.query}, nil
+func (f fakeVectorStore) QueryVector(context.Context, string) ([]float32, error) {
+	return f.query, nil
 }
 
-func (f fakeEmbedder) EmbedDocs(_ context.Context, docs []document.Article) ([]embedding.Vec, error) {
-	out := make([]embedding.Vec, len(docs))
-	for i, d := range docs {
-		out[i] = embedding.Vec{ID: d.ID, Embedding: f.docs[d.ID]}
+func (f fakeVectorStore) DocVectors(_ context.Context, ids []uuid.UUID) (map[uuid.UUID][]float32, error) {
+	out := make(map[uuid.UUID][]float32)
+	for _, id := range ids {
+		if v, ok := f.docs[id]; ok {
+			out[id] = v
+		}
 	}
 	return out, nil
 }
@@ -33,7 +33,7 @@ func TestVectorGradeBatch(t *testing.T) {
 	related := GradingDoc{ID: uuid.New(), Title: "b"}    // cos 0.6  -> Relevant
 	orthogonal := GradingDoc{ID: uuid.New(), Title: "c"} // cos 0.0  -> NotRelev
 
-	fe := fakeEmbedder{
+	store := fakeVectorStore{
 		query: []float32{1, 0},
 		docs: map[uuid.UUID][]float32{
 			identical.ID:  {1, 0},
@@ -41,7 +41,7 @@ func TestVectorGradeBatch(t *testing.T) {
 			orthogonal.ID: {0, 1},
 		},
 	}
-	s := NewVectorStrategyWithEmbedder(fe, "fake-model")
+	s := NewVectorStrategyWithStore(store, "fake-model")
 
 	got, err := s.GradeBatch(context.Background(), GradingQuery{ID: "q"}, []GradingDoc{identical, related, orthogonal})
 	if err != nil {
@@ -62,8 +62,27 @@ func TestVectorGradeBatch(t *testing.T) {
 	}
 }
 
+func TestVectorGradeBatch_OmitsDocsWithoutVectors(t *testing.T) {
+	have := GradingDoc{ID: uuid.New(), Title: "a"}
+	missing := GradingDoc{ID: uuid.New(), Title: "b"}
+	store := fakeVectorStore{
+		query: []float32{1, 0},
+		docs:  map[uuid.UUID][]float32{have.ID: {1, 0}}, // missing has no vector
+	}
+	s := NewVectorStrategyWithStore(store, "fake")
+
+	got, err := s.GradeBatch(context.Background(), GradingQuery{ID: "q"}, []GradingDoc{have, missing})
+	if err != nil {
+		t.Fatalf("GradeBatch: %v", err)
+	}
+	// missing doc is omitted so the runner records it as Unjudged.
+	if len(got) != 1 || got[0].DocID != have.ID {
+		t.Fatalf("expected only the doc with a vector, got %+v", got)
+	}
+}
+
 func TestVectorModelID(t *testing.T) {
-	s := NewVectorStrategyWithEmbedder(fakeEmbedder{}, "qwen3")
+	s := NewVectorStrategyWithStore(fakeVectorStore{}, "qwen3")
 	if got := s.ModelID(); got != "vector:qwen3" {
 		t.Errorf("ModelID = %q, want %q", got, "vector:qwen3")
 	}
@@ -88,11 +107,5 @@ func TestCosine(t *testing.T) {
 				t.Errorf("cosine = %v, want %v", got, c.want)
 			}
 		})
-	}
-}
-
-func TestEmbedderFromOptions_RequiresEndpoint(t *testing.T) {
-	if _, _, err := embedderFromOptions(StrategyOptions{}); err == nil {
-		t.Fatal("expected error when EmbeddingBaseURL is empty")
 	}
 }

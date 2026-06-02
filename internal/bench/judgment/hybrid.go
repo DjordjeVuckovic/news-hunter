@@ -3,6 +3,8 @@ package judgment
 import (
 	"context"
 	"fmt"
+
+	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
 )
 
 // Fusion weights for the hybrid score. Equal weighting is the common default
@@ -22,6 +24,9 @@ type HybridStrategy struct {
 }
 
 func NewHybridStrategy(opts StrategyOptions) (*HybridStrategy, error) {
+	if opts.VectorStore == nil {
+		return nil, errNoVectorStore(StrategyHybrid)
+	}
 	v, err := NewVectorStrategy(opts)
 	if err != nil {
 		return nil, err
@@ -29,16 +34,16 @@ func NewHybridStrategy(opts StrategyOptions) (*HybridStrategy, error) {
 	return &HybridStrategy{vector: v}, nil
 }
 
-// NewHybridStrategyWithEmbedder injects an embedder directly (used in tests).
-func NewHybridStrategyWithEmbedder(e Embedder, model string) *HybridStrategy {
-	return &HybridStrategy{vector: NewVectorStrategyWithEmbedder(e, model)}
+// NewHybridStrategyWithStore injects a vector store directly (used in tests).
+func NewHybridStrategyWithStore(store storage.VectorStore, model string) *HybridStrategy {
+	return &HybridStrategy{vector: NewVectorStrategyWithStore(store, model)}
 }
 
 func (HybridStrategy) Name() string { return string(StrategyHybrid) }
 
 // ModelID stamps meta.JudgeModel with both components.
 func (s HybridStrategy) ModelID() string {
-	model := defaultEmbeddingModel
+	model := "embedding"
 	if s.vector != nil && s.vector.model != "" {
 		model = s.vector.model
 	}
@@ -52,19 +57,25 @@ func (s HybridStrategy) GradeBatch(ctx context.Context, q GradingQuery, docs []G
 		return nil, nil
 	}
 	bm25Norms := s.bm25.normScores(q, docs)
-	sims, err := s.vector.similarities(ctx, q, docs)
+	qVec, vecs, err := s.vector.vectors(ctx, q, docs)
 	if err != nil {
 		return nil, fmt.Errorf("hybrid vector component: %w", err)
 	}
 
-	out := make([]GradedDoc, len(docs))
+	// Docs without a stored embedding are omitted (recorded Unjudged by the
+	// runner) rather than fused on the lexical signal alone.
+	out := make([]GradedDoc, 0, len(docs))
 	for i, d := range docs {
-		cos := sims[i]
+		dv, ok := vecs[d.ID]
+		if !ok {
+			continue
+		}
+		cos := cosine(qVec, dv)
 		if cos < 0 {
 			cos = 0 // cosine can be negative; clamp so it doesn't cancel BM25
 		}
 		combined := hybridBM25Weight*bm25Norms[i] + hybridVectorWeight*cos
-		out[i] = GradedDoc{DocID: d.ID, Grade: gradeFromNorm(combined)}
+		out = append(out, GradedDoc{DocID: d.ID, Grade: gradeFromNorm(combined)})
 	}
 	return out, nil
 }

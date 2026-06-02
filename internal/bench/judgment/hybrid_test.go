@@ -15,7 +15,7 @@ func TestHybridGradeBatch_FusesSignals(t *testing.T) {
 	semanticHit := GradingDoc{ID: uuid.New(), Title: "global warming accord", Description: "emissions treaty"}
 	cold := GradingDoc{ID: uuid.New(), Title: "celebrity gossip column", Description: "red carpet"}
 
-	fe := fakeEmbedder{
+	store := fakeVectorStore{
 		query: []float32{1, 0},
 		docs: map[uuid.UUID][]float32{
 			lexicalHit.ID:  {0, 1},       // semantically far
@@ -23,7 +23,7 @@ func TestHybridGradeBatch_FusesSignals(t *testing.T) {
 			cold.ID:        {0, 1},       // far on both
 		},
 	}
-	s := NewHybridStrategyWithEmbedder(fe, "fake")
+	s := NewHybridStrategyWithStore(store, "fake")
 
 	got, err := s.GradeBatch(context.Background(), GradingQuery{ID: "q", Description: "climate change policy"}, []GradingDoc{lexicalHit, semanticHit, cold})
 	if err != nil {
@@ -45,7 +45,7 @@ func TestHybridGradeBatch_FusesSignals(t *testing.T) {
 }
 
 func TestHybridModelID(t *testing.T) {
-	s := NewHybridStrategyWithEmbedder(fakeEmbedder{}, "qwen3")
+	s := NewHybridStrategyWithStore(fakeVectorStore{}, "qwen3")
 	if got := s.ModelID(); got != "hybrid:bm25+qwen3" {
 		t.Errorf("ModelID = %q, want %q", got, "hybrid:bm25+qwen3")
 	}

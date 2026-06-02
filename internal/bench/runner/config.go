@@ -1,5 +1,7 @@
 package runner
 
+import "github.com/DjordjeVuckovic/news-hunter/internal/storage"
+
 var DefaultKValues = []int{3, 5, 10}
 
 const (
@@ -36,6 +38,10 @@ type Config struct {
 	// resolved annotations file. When nil, queries are scored without
 	// relevance grades and the report flags them as unjudged.
 	Judgments map[string]map[string]int
+	// VectorStore, when set, embeds queries that reference the reserved
+	// query-vector placeholder and injects the result before execution. nil for
+	// non-vector tracks (and validate, which is structural only).
+	VectorStore storage.VectorStore
 }
 
 func DefaultConfig() Config {

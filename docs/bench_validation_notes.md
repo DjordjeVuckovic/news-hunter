@@ -38,8 +38,8 @@ keys are free-form labels — verified working.
 | track           | result        | notes |
 |-----------------|---------------|-------|
 | `news_fuzzy`    | **30/30 OK**  | green after adding the `fuzzystrmatch` migration (005) |
-| `news_semantic` | 10/30 OK      | ES green after knn fix; 20 `TEMPLATE_ERR` (precomputed) on pgvector-* |
-| `news_hybrid`   | 10/30 OK      | ES OK; 20 `TEMPLATE_ERR` (precomputed) on pg-rrf + paradedb-hybrid |
+| `news_semantic` | 10/30 OK      | ES green; pgvector-* now reach EXPLAIN → `INVALID` (`column "embedding" does not exist`, blocker #1) |
+| `news_hybrid`   | 10/30 OK      | ES OK; pg-rrf/paradedb reach EXPLAIN → schema `INVALID` (blocker #1) |
 | `fts_quality`   | 120/120 OK    | regression check — unchanged |
 
 ## Fixed in this change
@@ -53,31 +53,26 @@ keys are free-form labels — verified working.
   with a `knn` clause to a structural check (`validateKnnBody`), since
   `_validate/query` rejects `knn` outright. All 10 semantic ES rows now pass
   (were `INVALID`); hybrid ES still validates its `query` block too.
+- **`{{precomputed}}` query-vector injection** — a storage-agnostic
+  `storage.VectorStore` (PG impl now, ES stubbed) embeds the query at run time;
+  `pool`/`run` inject it via the reserved `precomputed` param (renderer now
+  resolves param-introduced placeholders). The `vector`/`hybrid` judges read
+  document vectors from the same store instead of re-embedding. Semantic/hybrid
+  PG rows now reach EXPLAIN, exposing the real schema blocker below.
 
 ## Remaining blockers (out of scope here)
 
-The remaining `TEMPLATE_ERR` rows (semantic `pgvector-*`, hybrid `pg-rrf` /
-`paradedb-hybrid`) all reduce to one interlocked effort — the embedding
-pipeline — which is a sizeable, decision- and compute-heavy piece on its own:
-
-1. **`{{precomputed}}` embedding placeholder has no injection mechanism.**
-   The renderer (`internal/bench/suite/template.go`) only substitutes declared
-   `params`; `embedding: "{{precomputed}}"` renders the literal `{{precomputed}}`
-   and `findMissingPlaceholders` rejects it. A per-query embedding feed is needed
-   (e.g. load `trec/query_embeddings.json` keyed by query id and bind it before
-   render). Blocks: semantic `pgvector-cosine`/`pgvector-l2`, hybrid `pg-rrf`/`paradedb-hybrid`.
-
-2. **Embedding schema mismatch + empty table.** Suites query
+1. **Embedding schema mismatch + empty table.** Suites query
    `articles.embedding vector(1536)`, but there is no `embedding` column on
    `articles`; embeddings live in `article_embeddings vector(1024)` (Qwen3) per
-   `db/migrations/004_*`, and that table is currently **empty (0 rows)** while
-   `articles` has 105,375. Templates must be rewritten to JOIN `article_embeddings`
-   at 1024 dims, and embeddings must be generated (`cmd/embed_ingest`,
-   `scripts/embed_qwen3.ipynb`) before pooling returns anything. The ES `articles`
-   index also needs a `dense_vector` `embedding` field + reindex.
+   `db/migrations/004_*`, currently **empty (0 rows)** while `articles` has
+   105,375. The pgvector templates must JOIN `article_embeddings` at 1024 dims,
+   and embeddings must be generated (`cmd/embed_ingest`, `scripts/embed_qwen3.ipynb`)
+   before pooling returns anything. The ES `articles` index also needs a
+   `dense_vector` `embedding` field + reindex. (Ingestion handled separately.)
 
-3. **ParadeDB (`paradedb-hybrid` @ 54321)** — better than expected: `pg_search`
+2. **ParadeDB (`paradedb-hybrid` @ 54321)** — better than expected: `pg_search`
    and `vector` extensions are installed and the `articles` table exists. Only
-   blocked by #1 and #2 (precomputed binding + embeddings). The `pdb_hybrid`
-   template's `@@@` / `paradedb.parse` / `pdb.score` usage is still unverified by
-   EXPLAIN because the template error fails before reaching the engine.
+   blocked by #1 (schema + embeddings). The `pdb_hybrid` template's `@@@` /
+   `paradedb.parse` / `pdb.score` usage will be exercised by EXPLAIN once the
+   embeddings/schema land.

@@ -27,7 +27,7 @@ type EmbedderOption func(executor *Embedder)
 
 func NewEmbedder(client Client, opts ...EmbedderOption) *Embedder {
 	base := &Embedder{
-		model:  defaultModel,
+		model:  DefaultModel,
 		client: client,
 	}
 

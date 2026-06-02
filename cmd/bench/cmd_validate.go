@@ -129,7 +129,14 @@ func executeValidate(cmd *cobra.Command, f validateFlags, args []string) error {
 }
 
 func validateOne(ctx context.Context, row validateRow, q suite.Query, engName string, ls *suite.LoadedSuite, exec engine.Executor) validateRow {
-	resolved, err := q.ResolveEngineQuery(engName, ls.Registry, ls.Dir)
+	// validate is structural and has no embedder: inject a placeholder vector so
+	// vector queries parse (PG '[…]'::vector cast / ES knn JSON array). The real
+	// embedding is computed at pool/run time.
+	var extra suite.TemplateParams
+	if q.NeedsQueryVector() {
+		extra = suite.TemplateParams{suite.ReservedQueryVectorParam: "[0]"}
+	}
+	resolved, err := q.ResolveEngineQuery(engName, ls.Registry, ls.Dir, extra)
 	if err != nil {
 		row.status = "TEMPLATE_ERR"
 		row.detail = err.Error()

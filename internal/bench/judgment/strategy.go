@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
 	"github.com/google/uuid"
 )
 
@@ -97,10 +98,12 @@ type StrategyOptions struct {
 	CLIBinary   string
 	Concurrency int
 
-	// Embedding backend for the vector / hybrid strategies.
-	EmbeddingBaseURL string
-	EmbeddingModel   string
-	EmbeddingMaxLen  *int
+	// VectorStore backs the vector / hybrid strategies: document vectors are
+	// read from it and the query is embedded through it. Engine-agnostic
+	// (Postgres today, ES later); built by the caller via storage/factory.
+	VectorStore storage.VectorStore
+	// EmbeddingModel labels meta.JudgeModel via ModelID().
+	EmbeddingModel string
 }
 
 func NewStrategy(kind StrategyKind, opts StrategyOptions) (Strategy, error) {

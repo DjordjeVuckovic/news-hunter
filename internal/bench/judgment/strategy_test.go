@@ -21,20 +21,20 @@ func TestNewStrategy_KnownNames(t *testing.T) {
 	assert.Equal(t, "bm25", s.Name())
 }
 
-func TestNewStrategy_VectorHybridRequireEmbeddingEndpoint(t *testing.T) {
-	// vector/hybrid are implemented but need an embedding backend; without one
-	// they must fail loudly rather than silently producing no grades.
+func TestNewStrategy_VectorHybridRequireVectorStore(t *testing.T) {
+	// vector/hybrid are implemented but need a vector store; without one they
+	// must fail loudly rather than silently producing no grades.
 	for _, kind := range []StrategyKind{StrategyVector, StrategyHybrid} {
 		_, err := NewStrategy(kind, StrategyOptions{})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "embedding endpoint",
-			"strategy %q should require an embedding endpoint", kind)
+		assert.Contains(t, err.Error(), "vector store",
+			"strategy %q should require a vector store", kind)
 	}
 }
 
-func TestNewStrategy_VectorHybridWithEndpoint(t *testing.T) {
+func TestNewStrategy_VectorHybridWithStore(t *testing.T) {
 	for _, kind := range []StrategyKind{StrategyVector, StrategyHybrid} {
-		s, err := NewStrategy(kind, StrategyOptions{EmbeddingBaseURL: "http://localhost:11434"})
+		s, err := NewStrategy(kind, StrategyOptions{VectorStore: fakeVectorStore{}})
 		require.NoError(t, err)
 		assert.Equal(t, string(kind), s.Name())
 	}
