@@ -1,0 +1,48 @@
+# Worktrunk project config — shared with the team, committed.
+# Goal: when a worktree is created off `main`, leave the Go service ready to run.
+#
+# NOTE: worktree-path (where trees land on disk) is a per-machine choice, so it
+# lives in the personal user config (~/.config/worktrunk/config.toml), not here.
+
+# ---------------------------------------------------------------------------
+# Gitignored state to carry into a fresh worktree.
+# A new worktree does NOT inherit gitignored files, so the per-cmd `.env`
+# config files (cmd/*/*.env, *.env) would be missing — they're tiny and
+# required, and copy-ignored copies them by default.
+# We exclude the heavy, regenerable gitignored dirs so we don't duplicate
+# ~1.2GB (948M dataset/ + 267M bin/) into every tree.
+# ---------------------------------------------------------------------------
+[step.copy-ignored]
+exclude = [
+  "dataset/",           # ~948M Kaggle CSV/JSON corpora — large, not per-branch
+  "bin/",               # ~267M built binaries — rebuilt via `make build-all`
+  "benchmark_results/",
+  "*.test",
+  "*.out",
+  "coverage.*",
+]
+
+# ---------------------------------------------------------------------------
+# After the worktree exists, warm the Go module cache and copy the per-cmd
+# .env files that the Makefile's `run-*` targets load via ENV_PATHS. These are
+# gitignored + untracked, so a fresh tree won't have them. copy-ignored above
+# also grabs them, but we copy them explicitly here so the set stays pinned to
+# the Makefile. Commands in this step run concurrently; post-* hooks don't block.
+# ---------------------------------------------------------------------------
+[[post-start]]
+deps = "go mod download"
+# Mirror of the ENV_PATHS files in Makefile run-ds-ingest-* / run-api-* targets.
+copy-env = "for f in cmd/ds_ingest/.env cmd/ds_ingest/pg.env cmd/ds_ingest/es.env cmd/news_api/.env cmd/news_api/pg.env cmd/news_api/es.env; do cp {{ primary_worktree_path }}/$f {{ worktree_path }}/$f 2>/dev/null || true; done"
+# Mirror the full .claude/ working dir (tracked files arrive via checkout; this
+# also brings settings.local.json and any untracked notes/plans).
+copy-claude = "cp -R {{ primary_worktree_path }}/.claude/. {{ worktree_path }}/.claude/ 2>/dev/null || true"
+
+# ---------------------------------------------------------------------------
+# Guard the trunk: a tree that doesn't build/vet/test cleanly aborts the merge.
+# Pre-* hooks block on failure.
+# ---------------------------------------------------------------------------
+[[pre-merge]]
+vet = "go vet ./..."
+
+[[pre-merge]]
+test = "go test ./..."
