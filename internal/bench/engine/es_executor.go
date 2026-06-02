@@ -198,15 +198,15 @@ func hasKnn(raw string) bool {
 func (e *EsExecutor) validateKnnBody(ctx context.Context, rawQuery string) error {
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(rawQuery), &m); err != nil {
-		return fmt.Errorf("es invalid: body is not JSON: %v", err)
+		return fmt.Errorf("es invalid: body is not JSON: %w", err)
 	}
 	if err := validateKnnClause(m["knn"]); err != nil {
-		return fmt.Errorf("es invalid: %v", err)
+		return fmt.Errorf("es invalid: %w", err)
 	}
 	if q, ok := m["query"]; ok {
 		body, err := json.Marshal(map[string]json.RawMessage{"query": q})
 		if err != nil {
-			return fmt.Errorf("es invalid: %v", err)
+			return fmt.Errorf("es invalid: %w", err)
 		}
 		return e.validateBody(ctx, body, []byte(rawQuery))
 	}
@@ -231,7 +231,7 @@ func validateKnnClause(raw json.RawMessage) error {
 	}
 	for i, entry := range many {
 		if err := validateKnnEntry(entry); err != nil {
-			return fmt.Errorf("knn[%d]: %v", i, err)
+			return fmt.Errorf("knn[%d]: %w", i, err)
 		}
 	}
 	return nil
