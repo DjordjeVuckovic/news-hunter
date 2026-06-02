@@ -27,6 +27,7 @@ type PreprocessReport struct {
 	TotalRecords      int       `json:"total_records"`
 	ProcessedRecords  int       `json:"processed_records"`
 	DuplicatesRemoved int       `json:"duplicates_removed"`
+	InvalidURLs       int       `json:"invalid_urls"`
 	ProcessingTime    float64   `json:"processing_time_seconds"`
 	OutputFile        string    `json:"output_file"`
 	Timestamp         time.Time `json:"timestamp"`
@@ -44,7 +45,7 @@ func parseFlags() preprocessorConfig {
 }
 
 func main() {
-	_ = env.LoadDotEnv("", "cmd/preprocessor/.env")
+	_ = env.LoadDotEnv(os.Getenv("ENV"), "cmd/preprocessor/.env")
 
 	cfg := parseFlags()
 	if cfg.InputPath == "" || cfg.OutputDir == "" || cfg.MappingPath == "" {
@@ -84,6 +85,14 @@ func runPreprocessor(ctx context.Context, cfg preprocessorConfig) error {
 	}
 	mapper := reader.NewArticleMapper(mappingCfg)
 
+	// Source field mapped to URL, used to detect invalid URLs that get blanked.
+	urlSourceKey := ""
+	for _, fm := range mappingCfg.FieldMappings {
+		if fm.Target == "URL" {
+			urlSourceKey = fm.Source
+		}
+	}
+
 	dataFile, err := os.Open(cfg.InputPath)
 	if err != nil {
 		return fmt.Errorf("failed to open input file: %w", err)
@@ -121,6 +130,10 @@ func runPreprocessor(ctx context.Context, cfg preprocessorConfig) error {
 		if err != nil {
 			slog.Warn("failed to map record", "error", err)
 			continue
+		}
+
+		if urlSourceKey != "" && result.Record[urlSourceKey] != "" && article.URL == "" {
+			report.InvalidURLs++
 		}
 
 		if err := encoder.Encode(reader.ToCanonicalRecord(article)); err != nil {
@@ -167,6 +180,7 @@ func logSummary(report *PreprocessReport) {
 		"total_records", report.TotalRecords,
 		"processed_records", report.ProcessedRecords,
 		"duplicates_removed", report.DuplicatesRemoved,
+		"invalid_urls", report.InvalidURLs,
 		"processing_time", fmt.Sprintf("%.2fs", report.ProcessingTime),
 	)
 }

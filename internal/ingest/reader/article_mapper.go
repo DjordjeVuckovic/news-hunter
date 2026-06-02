@@ -92,6 +92,8 @@ func (m *ArticleDirectMapper) Map(record map[string]string) (document.Article, e
 	description := record["description"]
 	language := record["language"]
 
+	articleURL, _ := NormalizeURL(record["url"])
+
 	var publishedAt time.Time
 	if t, err := utils.ParseTimeOptional(record["publishedAt"]); err == nil {
 		publishedAt = t
@@ -111,7 +113,7 @@ func (m *ArticleDirectMapper) Map(record map[string]string) (document.Article, e
 		Description: description,
 		Language:    language,
 		CreatedAt:   createdAt,
-		URL:         record["url"],
+		URL:         articleURL,
 		Metadata: document.ArticleMetadata{
 			SourceId:    record["sourceId"],
 			SourceName:  record["sourceName"],
