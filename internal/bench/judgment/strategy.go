@@ -3,6 +3,7 @@ package judgment
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 )
@@ -62,9 +63,9 @@ type StrategyKind string
 const (
 	// Heuristic.
 	StrategyLexical StrategyKind = "lexical" // token-overlap baseline
-	StrategyBM25    StrategyKind = "bm25"    // reserved (not implemented)
-	StrategyVector  StrategyKind = "vector"  // reserved (not implemented)
-	StrategyHybrid  StrategyKind = "hybrid"  // reserved (not implemented)
+	StrategyBM25    StrategyKind = "bm25"    // pool-local Okapi BM25
+	StrategyVector  StrategyKind = "vector"  // embedding cosine similarity
+	StrategyHybrid  StrategyKind = "hybrid"  // BM25 + vector fusion
 
 	// LLM.
 	StrategyClaudeCLI StrategyKind = "claude-cli"
@@ -74,9 +75,9 @@ const (
 	StrategyManual StrategyKind = "manual"
 )
 
-// KnownStrategies returns every strategy kind the runner can instantiate
-// (including reserved ones). Used by the spec validator to reject
-// spec.defaults.judgments typos at load time.
+// KnownStrategies returns every strategy kind the runner can instantiate.
+// Used by the spec validator to reject spec.defaults.judgments typos at load
+// time.
 func KnownStrategies() []string {
 	return []string{
 		string(StrategyLexical),
@@ -95,21 +96,30 @@ type StrategyOptions struct {
 	APIBaseURL  string
 	CLIBinary   string
 	Concurrency int
+
+	// Embedding backend for the vector / hybrid strategies.
+	EmbeddingBaseURL string
+	EmbeddingModel   string
+	EmbeddingMaxLen  *int
 }
 
 func NewStrategy(kind StrategyKind, opts StrategyOptions) (Strategy, error) {
 	switch kind {
 	case StrategyLexical:
 		return NewLexicalStrategy(), nil
+	case StrategyBM25:
+		return NewBM25Strategy(), nil
+	case StrategyVector:
+		return NewVectorStrategy(opts)
+	case StrategyHybrid:
+		return NewHybridStrategy(opts)
 	case StrategyClaudeCLI:
 		return NewClaudeCLIStrategy(opts), nil
 	case StrategyClaudeAPI:
 		return NewClaudeAPIStrategy(opts)
 	case StrategyManual:
 		return NewManualStrategy(), nil
-	case StrategyBM25, StrategyVector, StrategyHybrid:
-		return nil, fmt.Errorf("strategy %q is reserved but not yet implemented", kind)
 	default:
-		return nil, fmt.Errorf("unknown strategy %q (known: lexical, claude-cli, claude-api, manual)", kind)
+		return nil, fmt.Errorf("unknown strategy %q (known: %s)", kind, strings.Join(KnownStrategies(), ", "))
 	}
 }

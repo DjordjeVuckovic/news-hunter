@@ -15,18 +15,20 @@ import (
 )
 
 type judgeFlags struct {
-	trackArg    string
-	poolPath    string
-	output      string
-	strategy    string
-	pg          string
-	concurrency int
-	batchSize   int
-	resume      bool
-	apiKey      string
-	apiModel    string
-	apiBaseURL  string
-	cliBinary   string
+	trackArg       string
+	poolPath       string
+	output         string
+	strategy       string
+	pg             string
+	concurrency    int
+	batchSize      int
+	resume         bool
+	apiKey         string
+	apiModel       string
+	apiBaseURL     string
+	cliBinary      string
+	embeddingBase  string
+	embeddingModel string
 }
 
 func newJudgeCmd() *cobra.Command {
@@ -37,11 +39,12 @@ func newJudgeCmd() *cobra.Command {
 		Long: `Grades every (query, doc) pair in the track's pool using one of:
 
   lexical     — deterministic token-overlap baseline (no network, no LLM)
+  bm25        — pool-local Okapi BM25 (no network; rewards rare terms)
+  vector      — embedding cosine similarity (needs EMBEDDING_BASE_URL)
+  hybrid      — BM25 + vector fusion (needs EMBEDDING_BASE_URL)
   claude-cli  — invokes 'claude -p' per batch (Anthropic LLM-as-judge batched)
   claude-api  — Anthropic Messages API in batches (set ANTHROPIC_API_KEY)
   manual      — writes grade:-1 placeholders for hand grading
-
-Reserved (not implemented): bm25, vector, hybrid
 
 Output goes to tracks/<name>/trec/annotations.<strategy>.yaml by default.
 Multiple strategies live side-by-side; switch which one bench run scores
@@ -69,6 +72,8 @@ graded. Atomic writes mean Ctrl-C is safe.`,
 	cmd.Flags().StringVar(&f.apiModel, "api-model", "", "Anthropic model id")
 	cmd.Flags().StringVar(&f.apiBaseURL, "api-base", "", "Anthropic API base URL")
 	cmd.Flags().StringVar(&f.cliBinary, "cli-binary", "", "claude CLI binary path")
+	cmd.Flags().StringVar(&f.embeddingBase, "embedding-base", "", "Embedding endpoint for vector/hybrid (or EMBEDDING_BASE_URL)")
+	cmd.Flags().StringVar(&f.embeddingModel, "embedding-model", "", "Embedding model for vector/hybrid (or EMBEDDING_MODEL)")
 	return cmd
 }
 
@@ -112,11 +117,13 @@ func executeJudge(cmd *cobra.Command, f judgeFlags, args []string) error {
 	}
 
 	strat, err := judgment.NewStrategy(kind, judgment.StrategyOptions{
-		APIKey:      envOrFlag("ANTHROPIC_API_KEY", f.apiKey),
-		APIModel:    f.apiModel,
-		APIBaseURL:  f.apiBaseURL,
-		CLIBinary:   f.cliBinary,
-		Concurrency: f.concurrency,
+		APIKey:           envOrFlag("ANTHROPIC_API_KEY", f.apiKey),
+		APIModel:         f.apiModel,
+		APIBaseURL:       f.apiBaseURL,
+		CLIBinary:        f.cliBinary,
+		Concurrency:      f.concurrency,
+		EmbeddingBaseURL: envOrFlag("EMBEDDING_BASE_URL", f.embeddingBase),
+		EmbeddingModel:   envOrFlag("EMBEDDING_MODEL", f.embeddingModel),
 	})
 	if err != nil {
 		return err

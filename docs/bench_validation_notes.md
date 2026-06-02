@@ -6,8 +6,12 @@ stack (pgvector @ 54320, paradedb @ 54321, ES @ 9200).
 
 ## Judging strategy (gap 3)
 
-The reserved `bm25` / `vector` / `hybrid` strategies are still unimplemented
-stubs (`internal/bench/judgment/strategy.go`). Until they land:
+The full strategy taxonomy is now implemented — `bm25` (pool-local Okapi BM25),
+`vector` (embedding cosine similarity), and `hybrid` (BM25 + vector fusion) join
+the existing `lexical`, `claude-cli`, `claude-api`, and `manual` judges. `vector`
+and `hybrid` need an embedding backend (`EMBEDDING_BASE_URL` / `--embedding-base`).
+
+Track defaults:
 
 | track          | `defaults.judgments` | rationale                                                            |
 |----------------|----------------------|----------------------------------------------------------------------|
@@ -15,6 +19,8 @@ stubs (`internal/bench/judgment/strategy.go`). Until they land:
 | `news_semantic`| `claude-cli`         | semantic relevance has no keyword overlap; needs an LLM judge        |
 | `news_hybrid`  | `claude-cli`         | semantic half of the pool is mis-graded by token-overlap             |
 
+The `vector`/`hybrid` judges are an alternative to `claude-cli` for the semantic
+and hybrid tracks once embeddings are available, with no LLM cost.
 `claude-cli` is a first-class strategy and is accepted by the spec validator.
 Note: `bench judge` needs a populated `pool.yaml`, which `bench pool` only
 produces by executing the engine queries — so the semantic/hybrid judge cannot

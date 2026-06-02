@@ -54,12 +54,17 @@ Every command accepts a track name as a positional arg (`bench run fts_quality`)
 | Strategy     | Class     | Status   | Description                                              |
 |--------------|-----------|----------|----------------------------------------------------------|
 | `lexical`    | Heuristic | ✅        | Token-overlap baseline — fast, deterministic, no network |
-| `bm25`       | Heuristic | Reserved | BM25 score + threshold → grade                           |
-| `vector`     | Heuristic | Reserved | Cosine similarity + threshold → grade                    |
-| `hybrid`     | Heuristic | Reserved | Weighted combination                                     |
+| `bm25`       | Heuristic | ✅        | Pool-local Okapi BM25, normalised → grade (no network)   |
+| `vector`     | Heuristic | ✅        | Embedding cosine similarity → grade (needs embedding API)|
+| `hybrid`     | Heuristic | ✅        | Weighted BM25 + vector fusion → grade (needs embedding API)|
 | `claude-cli` | LLM       | ✅        | `claude -p` subprocess per batch                         |
 | `claude-api` | LLM       | ✅        | Anthropic Messages API per batch                         |
 | `manual`     | Human     | ✅        | Emits `grade: -1` placeholders for hand-grading          |
+
+`vector` and `hybrid` need an embedding backend — set `EMBEDDING_BASE_URL`
+(ollama endpoint) and optionally `EMBEDDING_MODEL`, or pass `--embedding-base` /
+`--embedding-model`. `bm25` computes term statistics over each query's candidate
+pool, so it runs with no external services.
 
 File convention: `trec/annotations.<strategy>.yaml`, `trec/qrels.<strategy>.tsv`.
 

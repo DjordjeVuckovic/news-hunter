@@ -130,7 +130,7 @@ TREC-style IR evaluation pipeline. Full docs: [docs/bench.md](docs/bench.md).
 
 **Track convention**: `tracks/<name>/spec.yaml` + `suite.yaml` + `trec/` + `reports/`. Every subcommand resolves paths from a track name, `--track` flag, or walk-up from CWD.
 
-**Strategy taxonomy**: `lexical` (token-overlap), `claude-cli` / `claude-api` (LLM batched), `manual` (human placeholders). Reserved: `bm25`, `vector`, `hybrid`.
+**Strategy taxonomy**: `lexical` (token-overlap), `bm25` (pool-local Okapi BM25), `vector` (embedding cosine), `hybrid` (BM25 + vector fusion), `claude-cli` / `claude-api` (LLM batched), `manual` (human placeholders). `vector`/`hybrid` need an embedding backend (`EMBEDDING_BASE_URL`).
 
 **Schema v1**: every artifact has `schema_version: 1` + `meta:` block. Loading without it is a hard error — no backward-compat tolerance.
 
