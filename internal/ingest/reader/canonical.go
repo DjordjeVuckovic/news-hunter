@@ -18,7 +18,7 @@ func ToCanonicalRecord(a document.Article) map[string]string {
 		"author":      a.Author,
 		"description": a.Description,
 		"language":    a.Language,
-		"url":         a.URL.String(),
+		"url":         a.URL,
 		"sourceId":    a.Metadata.SourceId,
 		"sourceName":  a.Metadata.SourceName,
 		"category":    a.Metadata.Category,

@@ -1,7 +1,6 @@
 package document
 
 import (
-	"net/url"
 	"reflect"
 	"time"
 
@@ -19,7 +18,7 @@ type Article struct {
 	Description  string          `json:"description,omitempty"`
 	Language     string          `json:"language,omitempty"`
 	CreatedAt    time.Time       `json:"createdAt"`
-	URL          url.URL         `json:"url,omitempty" format:"uri"`
+	URL          string          `json:"url,omitempty" format:"uri"`
 	Metadata     ArticleMetadata `json:"metadata"`
 	SearchVector any             `json:"search_vector"`
 }

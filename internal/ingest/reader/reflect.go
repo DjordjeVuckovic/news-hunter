@@ -184,7 +184,7 @@ func convertValueToType(value string, fieldType string, dateFormat string) (inte
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse url value '%s': %w", value, err)
 		}
-		return *u, nil
+		return u.String(), nil
 	default:
 		return nil, fmt.Errorf("unsupported type: %s", fieldType)
 	}

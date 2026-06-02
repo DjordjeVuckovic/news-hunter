@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/DjordjeVuckovic/news-hunter/internal/ingest/reader"
+	"github.com/DjordjeVuckovic/news-hunter/pkg/config/env"
 )
 
 type preprocessorConfig struct {
@@ -33,9 +34,9 @@ type PreprocessReport struct {
 
 func parseFlags() preprocessorConfig {
 	var cfg preprocessorConfig
-	flag.StringVar(&cfg.InputPath, "input", "", "Path to the input CSV file")
-	flag.StringVar(&cfg.OutputDir, "output", "", "Output directory for canonical dataset")
-	flag.StringVar(&cfg.MappingPath, "mapping", "", "Path to the YAML field-mapping config")
+	flag.StringVar(&cfg.InputPath, "input", os.Getenv("INPUT_PATH"), "Path to the input CSV file")
+	flag.StringVar(&cfg.OutputDir, "output", os.Getenv("OUTPUT_PATH"), "Output directory for canonical dataset")
+	flag.StringVar(&cfg.MappingPath, "mapping", os.Getenv("MAPPING_CONFIG_PATH"), "Path to the YAML field-mapping config")
 	flag.IntVar(&cfg.Workers, "workers", 16, "Number of parallel workers")
 	flag.BoolVar(&cfg.WriteReport, "report", false, "Write validation report")
 	flag.Parse()
@@ -43,6 +44,8 @@ func parseFlags() preprocessorConfig {
 }
 
 func main() {
+	_ = env.LoadDotEnv("", "cmd/preprocessor/.env")
+
 	cfg := parseFlags()
 	if cfg.InputPath == "" || cfg.OutputDir == "" || cfg.MappingPath == "" {
 		flag.Usage()
