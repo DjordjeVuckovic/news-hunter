@@ -2,7 +2,6 @@ package reader
 
 import (
 	"fmt"
-	"net/url"
 	"reflect"
 	"strconv"
 	"time"
@@ -180,11 +179,10 @@ func convertValueToType(value string, fieldType string, dateFormat string) (inte
 		}
 		return id, nil
 	case "url":
-		u, err := url.Parse(value)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse url value '%s': %w", value, err)
-		}
-		return *u, nil
+		// Invalid URLs normalize to "" — the article is kept (URL is optional
+		// provenance metadata), not dropped.
+		normalized, _ := NormalizeURL(value)
+		return normalized, nil
 	default:
 		return nil, fmt.Errorf("unsupported type: %s", fieldType)
 	}

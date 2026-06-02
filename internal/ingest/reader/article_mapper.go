@@ -3,7 +3,6 @@ package reader
 import (
 	"fmt"
 	"log/slog"
-	"net/url"
 	"reflect"
 	"strings"
 	"time"
@@ -93,13 +92,7 @@ func (m *ArticleDirectMapper) Map(record map[string]string) (document.Article, e
 	description := record["description"]
 	language := record["language"]
 
-	var u url.URL
-	if record["url"] != "" {
-		parsed, err := url.Parse(record["url"])
-		if err == nil && parsed != nil {
-			u = *parsed
-		}
-	}
+	articleURL, _ := NormalizeURL(record["url"])
 
 	var publishedAt time.Time
 	if t, err := utils.ParseTimeOptional(record["publishedAt"]); err == nil {
@@ -120,7 +113,7 @@ func (m *ArticleDirectMapper) Map(record map[string]string) (document.Article, e
 		Description: description,
 		Language:    language,
 		CreatedAt:   createdAt,
-		URL:         u,
+		URL:         articleURL,
 		Metadata: document.ArticleMetadata{
 			SourceId:    record["sourceId"],
 			SourceName:  record["sourceName"],

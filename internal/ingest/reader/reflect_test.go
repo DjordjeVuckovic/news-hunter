@@ -1,7 +1,6 @@
 package reader
 
 import (
-	"net/url"
 	"reflect"
 	"testing"
 	"time"
@@ -14,7 +13,7 @@ import (
 type ArticleReflectTest struct {
 	ID          uuid.UUID
 	Title       string
-	URL         url.URL
+	URL         string
 	Published   time.Time
 	ViewCount   int64
 	Rating      float64
@@ -44,7 +43,7 @@ func TestSetFlatField(t *testing.T) {
 	// Test URL
 	err = SetFlatField(val, "URL", "https://example.com", "url", "")
 	require.NoError(t, err)
-	assert.Equal(t, "https://example.com", article.URL.String())
+	assert.Equal(t, "https://example.com", article.URL)
 
 	// Test datetime
 	err = SetFlatField(val, "Published", "2024-10-01T12:00:00Z", "datetime", time.RFC3339)

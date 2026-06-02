@@ -15,7 +15,7 @@ func LoadDotEnv(env string, paths ...string) error {
 	if os.Getenv("ENV_PATHS") != "" {
 		envPath = os.Getenv("ENV_PATHS")
 	} else {
-		slog.Info("ENV_PATHS is not set, using only provided paths", "paths", paths)
+		slog.Debug("ENV_PATHS is not set, using only provided paths", "paths", paths)
 	}
 
 	decodedPaths := strings.Split(envPath, ",")
@@ -25,7 +25,7 @@ func LoadDotEnv(env string, paths ...string) error {
 
 	err := godotenv.Load(append(decodedPaths, paths...)...)
 	if err != nil {
-		if env == "local" || env == "" {
+		if env == "local" {
 			slog.Info("Failed to load environment variables in local mode", "error", err)
 			return err
 		}

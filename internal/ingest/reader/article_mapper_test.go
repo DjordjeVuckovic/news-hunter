@@ -1,7 +1,6 @@
 package reader
 
 import (
-	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -31,8 +30,7 @@ func TestYAMLMapper_Map(t *testing.T) {
 	assert.Equal(t, "Test ArticleReflectTest", article.Title)
 	assert.Equal(t, published, article.Metadata.PublishedAt)
 
-	expectedURL, _ := url.Parse(urlStr)
-	assert.Equal(t, *expectedURL, article.URL)
+	assert.Equal(t, urlStr, article.URL)
 }
 
 func createMapper(t *testing.T) *ArticleMapper {

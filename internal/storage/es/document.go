@@ -48,7 +48,7 @@ func (b *IndexBuilder) mapToESDocument(article document.Article) ArticleDocument
 		Description: article.Description,
 		Content:     article.Content,
 		Author:      article.Author,
-		URL:         article.URL.String(),
+		URL:         article.URL,
 		Language:    article.Language,
 		CreatedAt:   article.CreatedAt,
 		SourceId:    article.Metadata.SourceId,
