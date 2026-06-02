@@ -97,3 +97,25 @@ func TestEmbedder_SaveBulk_UpsertAndSkipOrphans(t *testing.T) {
 		t.Errorf("expected upserted embedding to match, got L2 distance %v", dist)
 	}
 }
+
+func TestEmbedder_SaveBulk_DuplicateIDsInBatch(t *testing.T) {
+	pool := newEmbedTestPool(t)
+	embedder := NewEmbedder(pool)
+
+	a1 := insertArticle(t, pool, "dup")
+	const model = "qwen3-embedding:0.6b"
+
+	// Same (article_id, model_name) twice in one batch must not abort the upsert.
+	batch := []*embedding.Vec{
+		{ID: a1, Model: model, Embedding: vec(1024, 0.1)},
+		{ID: a1, Model: model, Embedding: vec(1024, 0.2)},
+	}
+
+	if err := embedder.SaveBulk(testCtx, batch); err != nil {
+		t.Fatalf("SaveBulk with duplicate ids: %v", err)
+	}
+
+	if got := countEmbeddings(t, pool); got != 1 {
+		t.Fatalf("expected 1 embedding after de-dup, got %d", got)
+	}
+}

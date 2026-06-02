@@ -72,6 +72,8 @@ func (r *Reader) Meta() Meta { return r.meta }
 // Read fills buf with up to len(buf) records, returning the count read.
 // It returns io.EOF when the file is exhausted (possibly with n > 0).
 func (r *Reader) Read(buf []Record) (int, error) {
+	// Fresh slice per call: the decoded float slices are handed out to callers
+	// (and retained in embedding.Vec), so they must not be reused across batches.
 	rows := make([]parquetRow, len(buf))
 	n, err := r.pr.Read(rows)
 	for i := 0; i < n; i++ {

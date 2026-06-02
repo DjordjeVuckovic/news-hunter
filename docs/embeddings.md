@@ -55,6 +55,11 @@ Re-runnable: each batch is COPYed into a temp staging table, then upserted
 (`ON CONFLICT (article_id, model_name) DO UPDATE`), so partial runs can be
 repeated safely.
 
+When loading from S3 the file is first downloaded to a temp file (via
+`os.CreateTemp`, cleaned up on exit). The corpus embeddings file can be several
+GB — ensure the system temp dir (`$TMPDIR`) has enough space, or set
+`EMBEDDING_FILE_PATH` to point at a pre-downloaded local copy.
+
 ### Configuration
 
 | Env | Description |

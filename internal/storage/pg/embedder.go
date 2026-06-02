@@ -47,9 +47,11 @@ func (e *Embedder) Save(ctx context.Context, article *embedding.Vec) (uuid.UUID,
 
 // SaveBulk upserts a batch of embeddings. It COPYs into a temporary staging
 // table, then inserts only rows whose article_id exists (orphans are skipped and
-// logged) with ON CONFLICT upsert, making the operation re-runnable.
-func (e *Embedder) SaveBulk(ctx context.Context, article []*embedding.Vec) error {
-	if len(article) == 0 {
+// logged) with ON CONFLICT upsert, making the operation re-runnable. DISTINCT ON
+// collapses duplicate (article_id, model_name) rows within the batch, which would
+// otherwise abort the upsert (Postgres forbids hitting a conflict row twice).
+func (e *Embedder) SaveBulk(ctx context.Context, vecs []*embedding.Vec) error {
+	if len(vecs) == 0 {
 		return nil
 	}
 
@@ -70,9 +72,9 @@ func (e *Embedder) SaveBulk(ctx context.Context, article []*embedding.Vec) error
 		return fmt.Errorf("failed to create staging table: %w", err)
 	}
 
-	rows := make([][]any, len(article))
-	for i, ar := range article {
-		rows[i] = []any{ar.ID, ar.Model, pgvector.NewVector(ar.Embedding)}
+	rows := make([][]any, len(vecs))
+	for i, v := range vecs {
+		rows[i] = []any{v.ID, v.Model, pgvector.NewVector(v.Embedding)}
 	}
 
 	_, err = tx.CopyFrom(
@@ -87,9 +89,11 @@ func (e *Embedder) SaveBulk(ctx context.Context, article []*embedding.Vec) error
 
 	tag, err := tx.Exec(ctx, `
 		INSERT INTO article_embeddings (article_id, model_name, embedding)
-		SELECT s.article_id, s.model_name, s.embedding
+		SELECT DISTINCT ON (s.article_id, s.model_name)
+			s.article_id, s.model_name, s.embedding
 		FROM _embed_stage s
 		JOIN articles a ON a.id = s.article_id
+		ORDER BY s.article_id, s.model_name
 		ON CONFLICT (article_id, model_name) DO UPDATE
 		SET embedding = EXCLUDED.embedding
 	`)
@@ -97,8 +101,9 @@ func (e *Embedder) SaveBulk(ctx context.Context, article []*embedding.Vec) error
 		return fmt.Errorf("failed to upsert article embeddings: %w", err)
 	}
 
-	if skipped := int64(len(article)) - tag.RowsAffected(); skipped > 0 {
-		slog.Warn("skipped embeddings with no matching article",
+	// Skipped = orphan article_id (no matching article) and/or in-batch duplicates.
+	if skipped := int64(len(vecs)) - tag.RowsAffected(); skipped > 0 {
+		slog.Warn("skipped embeddings (orphan article or duplicate id)",
 			"skipped", skipped,
 			"upserted", tag.RowsAffected(),
 		)

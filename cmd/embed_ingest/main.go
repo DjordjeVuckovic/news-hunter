@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
-	"path/filepath"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/DjordjeVuckovic/news-hunter/internal/embedding"
@@ -26,7 +28,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
 	if err := run(ctx, cfg); err != nil {
@@ -51,9 +53,21 @@ func run(ctx context.Context, cfg *EmbedIngestConfig) error {
 	defer reader.Close()
 
 	meta := reader.Meta()
+
+	// The file's declared dimension, when present, must match the column width.
+	if meta.Dim != 0 && meta.Dim != expectedDim {
+		return fmt.Errorf("embeddings file dim %d does not match expected %d", meta.Dim, expectedDim)
+	}
+
 	model := meta.Model
 	if cfg.Embedding.Model != "" {
-		model = cfg.Embedding.Model // explicit override
+		if meta.Model != "" && cfg.Embedding.Model != meta.Model {
+			slog.Warn("overriding embeddings file model metadata",
+				"file_model", meta.Model,
+				"override", cfg.Embedding.Model,
+			)
+		}
+		model = cfg.Embedding.Model
 	}
 	if model == "" {
 		return errors.New("embeddings file has no model metadata; set EMBEDDING_MODEL")
@@ -77,6 +91,10 @@ func run(ctx context.Context, cfg *EmbedIngestConfig) error {
 	processed, badIDs, badDim, err := ingest(ctx, reader, indexer, model, cfg.BatchSize)
 	if err != nil {
 		return err
+	}
+
+	if processed == 0 && badIDs+badDim > 0 {
+		return fmt.Errorf("ingested 0 embeddings: %d parse failures, %d dim mismatches", badIDs, badDim)
 	}
 
 	slog.Info("✅ Embedding ingest complete",
@@ -173,13 +191,21 @@ func resolveFile(ctx context.Context, cfg embedding.ObjectStoreConfig) (string, 
 		return "", func() {}, err
 	}
 
-	tmp := filepath.Join(os.TempDir(), "embeddings-"+filepath.Base(cfg.Key))
+	tmpFile, err := os.CreateTemp("", "embeddings-*.parquet")
+	if err != nil {
+		return "", func() {}, fmt.Errorf("create temp file: %w", err)
+	}
+	tmp := tmpFile.Name()
+	_ = tmpFile.Close()
+	cleanup := func() { _ = os.Remove(tmp) }
+
 	slog.Info("Downloading embeddings file", "bucket", cfg.Bucket, "key", cfg.Key, "dst", tmp)
 	n, err := client.Download(ctx, cfg.Key, tmp)
 	if err != nil {
+		cleanup()
 		return "", func() {}, err
 	}
 	slog.Info("Downloaded embeddings file", "bytes", n)
 
-	return tmp, func() { _ = os.Remove(tmp) }, nil
+	return tmp, cleanup, nil
 }
