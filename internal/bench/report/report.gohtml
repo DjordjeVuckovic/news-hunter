@@ -101,13 +101,13 @@ footer{text-align:center;color:#9ca3af;font-size:12px;padding-top:8px}
 <details class="glossary">
   <summary>Metric Definitions</summary>
   <div class="glossary-body">
-    <div class="glossary-entry"><dt>NDCG@K</dt><dd>Normalized Discounted Cumulative Gain — measures ranking quality by rewarding relevant documents found at higher ranks. Score 0–1; 1 = perfect ranking.</dd></div>
-    <div class="glossary-entry"><dt>MAP</dt><dd>Mean Average Precision — average of precision values at every rank position where a relevant document appears, averaged across queries. Sensitive to recall.</dd></div>
-    <div class="glossary-entry"><dt>MRR</dt><dd>Mean Reciprocal Rank — 1 ÷ rank of first relevant result, averaged across queries. Measures how quickly the first correct answer appears.</dd></div>
-    <div class="glossary-entry"><dt>Bpref</dt><dd>Binary Preference — fraction of relevant documents ranked above non-relevant ones. More robust than MAP when judgments are incomplete.</dd></div>
-    <div class="glossary-entry"><dt>P@K</dt><dd>Precision at K — fraction of top-K results that are relevant. Straightforward but ignores rank within the K results.</dd></div>
-    <div class="glossary-entry"><dt>Wilcoxon test</dt><dd>Non-parametric paired significance test across queries. ns = not significant; * p&lt;0.05; ** p&lt;0.01. With n=10 queries the test has limited power — treat ns as "inconclusive".</dd></div>
-    <div class="glossary-entry"><dt>NDCG ±stddev</dt><dd>Sample standard deviation of per-query NDCG values. High stddev means inconsistent ranking quality — some queries are handled well, others poorly.</dd></div>
+    <div class="glossary-entry"><dt>NDCG@K</dt><dd>Normalized Discounted Cumulative Gain - measures ranking quality by rewarding relevant documents found at higher ranks. Score 0–1; 1 = perfect ranking.</dd></div>
+    <div class="glossary-entry"><dt>MAP</dt><dd>Mean Average Precision - average of precision values at every rank position where a relevant document appears, averaged across queries. Sensitive to recall.</dd></div>
+    <div class="glossary-entry"><dt>MRR</dt><dd>Mean Reciprocal Rank - 1 ÷ rank of first relevant result, averaged across queries. Measures how quickly the first correct answer appears.</dd></div>
+    <div class="glossary-entry"><dt>Bpref</dt><dd>Binary Preference - fraction of relevant documents ranked above non-relevant ones. More robust than MAP when judgments are incomplete.</dd></div>
+    <div class="glossary-entry"><dt>P@K</dt><dd>Precision at K - fraction of top-K results that are relevant. Straightforward but ignores rank within the K results.</dd></div>
+    <div class="glossary-entry"><dt>Wilcoxon test</dt><dd>Non-parametric paired significance test across queries. ns = not significant; * p&lt;0.05; ** p&lt;0.01. With n=10 queries the test has limited power - treat ns as "inconclusive".</dd></div>
+    <div class="glossary-entry"><dt>NDCG ±stddev</dt><dd>Sample standard deviation of per-query NDCG values. High stddev means inconsistent ranking quality - some queries are handled well, others poorly.</dd></div>
     <div class="glossary-entry"><dt>Latency chart</dt><dd>p50 (median) latency on a logarithmic scale. Log scale is used because the range spans multiple orders of magnitude (µs → seconds).</dd></div>
   </div>
 </details>

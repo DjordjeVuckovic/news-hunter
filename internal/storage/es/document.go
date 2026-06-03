@@ -5,6 +5,7 @@ import (
 
 	"github.com/DjordjeVuckovic/news-hunter/internal/types/document"
 	"github.com/elastic/go-elasticsearch/v8/typedapi/types"
+	"github.com/elastic/go-elasticsearch/v8/typedapi/types/enums/densevectorsimilarity"
 	"github.com/google/uuid"
 )
 
@@ -90,8 +91,24 @@ func (b *IndexBuilder) buildMapping() types.TypeMapping {
 			"category":     types.NewKeywordProperty(),
 			"imported_at":  types.NewDateProperty(),
 			"indexed_at":   types.NewDateProperty(),
+			// Document embedding lives on the article doc (see embedder.go).
+			"embedding":       b.denseVectorProperty(),
+			"embedding_model": types.NewKeywordProperty(),
 		},
 	}
+}
+
+// denseVectorProperty defines the kNN-searchable embedding field. The Qwen
+// vectors are L2-normalised, so cosine similarity is the right metric.
+func (b *IndexBuilder) denseVectorProperty() *types.DenseVectorProperty {
+	p := types.NewDenseVectorProperty()
+	dims := EmbeddingDims
+	indexed := true
+	sim := densevectorsimilarity.Cosine
+	p.Dims = &dims
+	p.Index = &indexed
+	p.Similarity = &sim
+	return p
 }
 
 func (b *IndexBuilder) createTextProperty(analyzer string) types.Property {

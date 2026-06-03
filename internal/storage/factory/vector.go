@@ -12,7 +12,7 @@ import (
 
 // VectorStoreConfig selects and configures a storage.VectorStore. Postgres
 // takes precedence: when a PG connection is available the PG store is used;
-// Elasticsearch is supported as a (currently stubbed) fallback.
+// Elasticsearch is the fallback when only an ES backend is configured.
 type VectorStoreConfig struct {
 	PgConnStr string
 	Es        *es.ClientConfig
@@ -51,7 +51,18 @@ func NewVectorStore(ctx context.Context, cfg VectorStoreConfig) (storage.VectorS
 		return pg.NewVectorStore(embedder, pool, model), nil
 
 	case cfg.Es != nil:
-		return es.NewVectorStore(), nil
+		if cfg.EmbeddingClient == nil {
+			return nil, fmt.Errorf("vector store: embedding client is required for query embedding")
+		}
+		model := cfg.Model
+		if model == "" {
+			model = embedding.DefaultModel
+		}
+		embedder := embedding.NewEmbedder(cfg.EmbeddingClient,
+			embedding.WithExecutorMaxLength(1024),
+			embedding.WithExecutorModel(model),
+		)
+		return es.NewVectorStore(*cfg.Es, embedder, model)
 
 	default:
 		return nil, fmt.Errorf("vector store: no Postgres or Elasticsearch backend configured")

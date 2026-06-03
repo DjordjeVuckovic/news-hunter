@@ -59,7 +59,10 @@ func NewEmbedderIndexer(ctx context.Context, cfg StorageConfig) (storage.EmbedIn
 		return pg.NewEmbedder(pool), nil
 
 	case storage.ES:
-		return nil, fmt.Errorf("elasticsearch embedder not yet implemented")
+		if cfg.Es == nil {
+			return nil, fmt.Errorf("elasticsearch config is not set")
+		}
+		return es.NewEmbedder(ctx, *cfg.Es)
 	}
 	return nil, fmt.Errorf(string(storage.ErrUnsupportedStorer), cfg.Type)
 }

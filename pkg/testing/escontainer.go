@@ -27,7 +27,7 @@ func NewESContainer(ctx context.Context, tb testing.TB) *ESContainer {
 		testcontainers.WithWaitStrategy(
 			wait.ForHTTP("/").
 				WithPort("9200").
-				WithStartupTimeout(60*time.Second),
+				WithStartupTimeout(180*time.Second),
 		),
 	)
 	if err != nil {
