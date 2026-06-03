@@ -23,6 +23,18 @@ services:
     volumes:
       - pg_news_parade_data:/var/lib/postgresql
 
+  pg-news-tiger:
+    image: timescale/timescaledb-ha:pg18
+    container_name: pg-tiger-news
+    environment:
+      POSTGRES_USER: news_user
+      POSTGRES_PASSWORD: news_password
+      POSTGRES_DB: news_db
+    ports:
+      - "54322:5432"
+    volumes:
+      - pg_news_tiger_data:/home/postgres/pgdata/data
+
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
     container_name: es-news
@@ -63,4 +75,6 @@ volumes:
   es_news_data:
     driver: local
   pg_news_parade_data:
+    driver: local
+  pg_news_tiger_data:
     driver: local

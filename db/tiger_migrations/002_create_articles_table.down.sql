@@ -1,0 +1,4 @@
+BEGIN;
+DROP INDEX IF EXISTS idx_articles_bm25;
+DROP TABLE IF EXISTS articles;
+COMMIT;
