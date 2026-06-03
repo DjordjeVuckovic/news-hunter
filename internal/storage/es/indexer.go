@@ -75,15 +75,12 @@ func (e *Indexer) SaveBulk(ctx context.Context, articles []document.Article) err
 		return fmt.Errorf("failed to create bulk indexer: %w", err)
 	}
 
-	var successful, failed int64
-
 	for _, article := range articles {
 		doc := e.indexBuilder.mapToESDocument(article)
 
 		docBytes, err := json.Marshal(doc)
 		if err != nil {
 			slog.Error("failed to marshal document", "error", err, "id", doc.ID)
-			failed++
 			continue
 		}
 
@@ -93,11 +90,7 @@ func (e *Indexer) SaveBulk(ctx context.Context, articles []document.Article) err
 				Action:     "index",
 				DocumentID: doc.ID,
 				Body:       bytes.NewReader(docBytes),
-				OnSuccess: func(ctx context.Context, item esutil.BulkIndexerItem, res esutil.BulkIndexerResponseItem) {
-					successful++
-				},
 				OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, res esutil.BulkIndexerResponseItem, err error) {
-					failed++
 					if err != nil {
 						slog.Error("bulk index error", "error", err, "id", item.DocumentID)
 					} else {
@@ -107,7 +100,6 @@ func (e *Indexer) SaveBulk(ctx context.Context, articles []document.Article) err
 			},
 		)
 		if err != nil {
-			failed++
 			slog.Error("failed to add document to bulk indexer", "error", err, "id", doc.ID)
 		}
 	}
@@ -117,14 +109,19 @@ func (e *Indexer) SaveBulk(ctx context.Context, articles []document.Article) err
 		return fmt.Errorf("failed to close bulk indexer: %w", err)
 	}
 
+	stats := bi.Stats()
+	indexed := stats.NumCreated + stats.NumUpdated
+
 	slog.Info("Bulk indexing completed",
-		"successful", successful,
-		"failed", failed,
+		"indexed", indexed,
+		"created", stats.NumCreated,
+		"updated", stats.NumUpdated,
+		"failed", stats.NumFailed,
 		"total", len(articles),
 		"index", e.indexName)
 
-	if failed > 0 {
-		return fmt.Errorf("failed to index %d out of %d articles", failed, len(articles))
+	if stats.NumFailed > 0 {
+		return fmt.Errorf("failed to index %d out of %d articles", stats.NumFailed, len(articles))
 	}
 
 	return nil
