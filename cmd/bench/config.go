@@ -3,11 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/engine"
 	"github.com/DjordjeVuckovic/news-hunter/internal/bench/spec"
+	"github.com/DjordjeVuckovic/news-hunter/internal/bench/trackctx"
 	"github.com/DjordjeVuckovic/news-hunter/internal/embedding"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage/factory"
@@ -81,4 +83,43 @@ func trackArg(flag string, args []string) string {
 		return args[0]
 	}
 	return ""
+}
+
+// forEachTrack runs fn once per track. A glob arg (news/*) fans out across every
+// matching track; anything else is a single track. Grouping is explicit — only a
+// glob expands. Path overrides (--spec/--suite/--pool/--output) target one track,
+// so combining them with a glob is rejected. In group mode a per-track failure is
+// logged and the loop continues; the aggregate error names every track that failed.
+func forEachTrack(w io.Writer, in trackctx.Inputs, fn func(*trackctx.Track) error) error {
+	if !trackctx.IsPattern(in.TrackArg) {
+		tr, err := trackctx.Resolve(in)
+		if err != nil {
+			return err
+		}
+		return fn(tr)
+	}
+
+	if in.SpecPath != "" || in.SuitePath != "" || in.PoolPath != "" || in.OutputPath != "" {
+		return fmt.Errorf("--spec/--suite/--pool/--output cannot be combined with a glob pattern %q", in.TrackArg)
+	}
+	tracks, err := trackctx.ResolveGlob(in.TrackArg)
+	if err != nil {
+		return err
+	}
+	if len(tracks) == 1 {
+		return fn(tracks[0])
+	}
+
+	var failed []string
+	for _, tr := range tracks {
+		fmt.Fprintf(w, "\n%s %s\n", cBold.Sprint("━━"), cBold.Sprint(tr.Name()))
+		if err := fn(tr); err != nil {
+			printWarn(w, fmt.Sprintf("%s failed: %v", tr.Name(), err))
+			failed = append(failed, tr.Name())
+		}
+	}
+	if len(failed) > 0 {
+		return fmt.Errorf("%d of %d track(s) failed: %s", len(failed), len(tracks), strings.Join(failed, ", "))
+	}
+	return nil
 }

@@ -35,6 +35,10 @@ Typical pipeline (pass the track name as a positional arg):
   bench status <name>               see where you left off
   bench diff   <name>               compare latest two runs
   bench clean  <name>               remove old report files (keep N newest)
+
+Tracks live under ./tracks as either a flat folder (fts_quality) or nested as
+<dataset>/<paradigm> (news/fts). validate/pool/judge/run/status accept a glob
+(news/*) to run every paradigm of a dataset at once — quote it: bench run 'news/*'.
 `
 )
 

@@ -109,6 +109,97 @@ func TestResolve_NoTrackNoWalkUp(t *testing.T) {
 	assert.Contains(t, err.Error(), "no track specified")
 }
 
+func TestResolve_TracksPrefixedNameIsBackwardCompatible(t *testing.T) {
+	// The docs use `--track tracks/fts_quality`; that must resolve to the same
+	// track as the bare name, not tracks/tracks/fts_quality.
+	dir := t.TempDir()
+	track := filepath.Join(dir, "tracks", "fts_quality")
+	makeTrack(t, track)
+
+	cwd, _ := os.Getwd()
+	t.Cleanup(func() { _ = os.Chdir(cwd) })
+	require.NoError(t, os.Chdir(dir))
+
+	tr, err := Resolve(Inputs{TrackArg: "tracks/fts_quality"})
+	require.NoError(t, err)
+	assert.Equal(t, canonical(t, track), tr.Root)
+	assert.Equal(t, "fts_quality", tr.Name())
+}
+
+func TestResolve_NestedSingleName(t *testing.T) {
+	dir := t.TempDir()
+	track := filepath.Join(dir, "tracks", "news", "fts")
+	makeTrack(t, track)
+
+	cwd, _ := os.Getwd()
+	t.Cleanup(func() { _ = os.Chdir(cwd) })
+	require.NoError(t, os.Chdir(dir))
+
+	tr, err := Resolve(Inputs{TrackArg: "news/fts"})
+	require.NoError(t, err)
+	assert.Equal(t, canonical(t, track), tr.Root)
+	assert.Equal(t, "news/fts", tr.Name(), "nested name carries the dataset prefix")
+}
+
+func TestResolve_BareDatasetDirIsError(t *testing.T) {
+	// "news" is a directory of tracks but not itself a track. Grouping is
+	// explicit (via glob), so a bare name must NOT implicitly expand — it errors.
+	dir := t.TempDir()
+	makeTrack(t, filepath.Join(dir, "tracks", "news", "fts"))
+	makeTrack(t, filepath.Join(dir, "tracks", "news", "fuzzy"))
+
+	cwd, _ := os.Getwd()
+	t.Cleanup(func() { _ = os.Chdir(cwd) })
+	require.NoError(t, os.Chdir(dir))
+
+	_, err := Resolve(Inputs{TrackArg: "news"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+}
+
+func TestResolveGlob_Expands(t *testing.T) {
+	dir := t.TempDir()
+	makeTrack(t, filepath.Join(dir, "tracks", "news", "fts"))
+	makeTrack(t, filepath.Join(dir, "tracks", "news", "fuzzy"))
+	makeTrack(t, filepath.Join(dir, "tracks", "wiki", "fts"))
+	// A glob match that isn't track-shaped must be skipped.
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "tracks", "news", "scratch"), 0755))
+
+	cwd, _ := os.Getwd()
+	t.Cleanup(func() { _ = os.Chdir(cwd) })
+	require.NoError(t, os.Chdir(dir))
+
+	tracks, err := ResolveGlob("news/*")
+	require.NoError(t, err)
+
+	var names []string
+	for _, tr := range tracks {
+		names = append(names, tr.Name())
+	}
+	assert.Equal(t, []string{"news/fts", "news/fuzzy"}, names, "track-shaped matches only, sorted")
+}
+
+func TestResolveGlob_NoMatchErrors(t *testing.T) {
+	dir := t.TempDir()
+	makeTrack(t, filepath.Join(dir, "tracks", "news", "fts"))
+
+	cwd, _ := os.Getwd()
+	t.Cleanup(func() { _ = os.Chdir(cwd) })
+	require.NoError(t, os.Chdir(dir))
+
+	_, err := ResolveGlob("wiki/*")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no tracks match pattern")
+}
+
+func TestIsPattern(t *testing.T) {
+	assert.True(t, IsPattern("news/*"))
+	assert.True(t, IsPattern("news/f?ts"))
+	assert.False(t, IsPattern("news/fts"))
+	assert.False(t, IsPattern("fts_quality"))
+	assert.False(t, IsPattern(""))
+}
+
 func TestJudgmentsPath_StrategyVsExplicitPath(t *testing.T) {
 	dir := t.TempDir()
 	track := filepath.Join(dir, "tracks", "demo")
