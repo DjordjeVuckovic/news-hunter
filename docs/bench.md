@@ -193,7 +193,9 @@ For per-track documentation, see `tracks/<name>/README.md`.
 
 ## Track naming convention
 
-Tracks follow `<dataset>_<paradigm>` naming, one track per (dataset × IR paradigm):
+One track per (dataset × IR paradigm). Two layouts are supported side by side:
+
+**Flat** — `tracks/<dataset>_<paradigm>/`, addressed by its name:
 
 | Track           | Paradigm            | Engines                                 |
 |-----------------|---------------------|-----------------------------------------|
@@ -202,4 +204,24 @@ Tracks follow `<dataset>_<paradigm>` naming, one track per (dataset × IR paradi
 | `news_semantic` | Semantic / vector   | pgvector, ES dense_vector kNN           |
 | `news_hybrid`   | Hybrid (RRF fusion) | pgvector+BM25, ES hybrid                |
 
+**Nested** — `tracks/<dataset>/<paradigm>/`, addressed by a slash path
+(`news/fts`), grouping a dataset's paradigms under one directory:
+
+```
+tracks/news/fts/        bench run news/fts     # one paradigm
+tracks/news/fuzzy/      bench run 'news/*'     # every paradigm of the dataset
+tracks/news/semantic/
+tracks/news/hybrid/
+```
+
 This decomposition ensures that pools and judgments are paradigm-specific (different query types, different relevance criteria) and that statistical comparisons are between equivalent systems.
+
+### Track resolution & grouping
+
+A track arg is interpreted as:
+
+1. **Verbatim path** — absolute, `./`-/`../`-prefixed, or a `*.yaml` etc. — used as-is (escape hatch for tracks outside `./tracks`).
+2. **Name** — mapped under `tracks/`. May be nested with `/` (`news/fts` → `tracks/news/fts`).
+3. **Glob** — `news/*` fans out across every track-shaped match; `validate`, `pool`, `judge`, `run`, and `status` run once per matched track.
+
+Grouping is **explicit**: only a glob expands. A bare name always means exactly one track — there is no implicit "directory becomes a group" behaviour, so `bench run news` (when `news` is a directory of tracks, not a track) is an error. Glob mode forbids the single-track path overrides (`--spec`/`--suite`/`--pool`/`--output`). A per-track failure is logged and the run continues; the command exits non-zero listing the tracks that failed. Quote a glob so the shell doesn't expand it first: `bench run 'news/*'`.

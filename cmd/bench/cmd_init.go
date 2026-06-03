@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"text/template"
 
 	"github.com/spf13/cobra"
@@ -39,8 +40,11 @@ func newInitCmd() *cobra.Command {
     README.md          # workflow notes
 
 The folder IS the track — no hidden state, no selector. Run any subcommand
-either by name (bench run my_track) or path (bench run --track ./elsewhere).`,
-		Example: "  bench init fts_quality_v2",
+either by name (bench run my_track) or path (bench run --track ./elsewhere).
+
+A name may nest with "/" to group paradigms under a dataset:
+  bench init news/fts   → tracks/news/fts/   (run the group with: bench run 'news/*')`,
+		Example: "  bench init fts_quality_v2\n  bench init news/fts",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return executeInit(cmd, f, args[0])
@@ -98,25 +102,26 @@ func executeInit(cmd *cobra.Command, f initFlags, name string) error {
 	_ = os.WriteFile(filepath.Join(root, "trec", ".gitkeep"), nil, 0644)
 	_ = os.WriteFile(filepath.Join(root, "reports", ".gitkeep"), nil, 0644)
 
+	// Refer to the track by its tracks-relative name (news/fts), not the bare
+	// basename, so nested tracks get a runnable hint.
+	hint := name
+	if pathLike(name) {
+		hint = root
+	}
 	cmd.Printf("Track created: %s/\n", root)
 	cmd.Printf("Next: edit %s/suite.yaml, then run:\n", root)
-	cmd.Printf("  bench validate %s\n", filepath.Base(root))
+	cmd.Printf("  bench validate %s\n", hint)
 	return nil
 }
 
+// pathLike reports whether the arg is a verbatim filesystem path (absolute or
+// dot-prefixed) rather than a track name. A slash-nested name like "news/fts"
+// is NOT path-like — it maps under tracks/ as a nested track.
 func pathLike(s string) bool {
 	if s == "" {
 		return false
 	}
-	if s[0] == '/' || s[0] == '.' {
-		return true
-	}
-	for _, r := range s {
-		if r == '/' {
-			return true
-		}
-	}
-	return false
+	return s[0] == '/' || s[0] == '.'
 }
 
 func renderTemplate(srcPath, destPath string, ctx initContext, force bool) error {
@@ -145,14 +150,19 @@ func validateTrackName(name string) error {
 	if name == "" {
 		return fmt.Errorf("track name is empty")
 	}
+	// "/" nests a track under a dataset dir (news/fts), but it must separate
+	// non-empty segments — no leading, trailing, or doubled slashes.
+	if strings.HasPrefix(name, "/") || strings.HasSuffix(name, "/") || strings.Contains(name, "//") {
+		return fmt.Errorf("track name has an empty path segment: %q", name)
+	}
 	for _, r := range name {
 		switch {
 		case r >= 'a' && r <= 'z',
 			r >= 'A' && r <= 'Z',
 			r >= '0' && r <= '9',
-			r == '-' || r == '_':
+			r == '-' || r == '_' || r == '/':
 		default:
-			return fmt.Errorf("track name may only contain [a-zA-Z0-9_-]: %q", name)
+			return fmt.Errorf("track name may only contain [a-zA-Z0-9_-] and / for nesting: %q", name)
 		}
 	}
 	return nil

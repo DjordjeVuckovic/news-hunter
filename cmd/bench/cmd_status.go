@@ -34,11 +34,12 @@ you left off.`,
 }
 
 func executeStatus(w io.Writer, track string, args []string) error {
-	tr, err := trackctx.Resolve(trackctx.Inputs{TrackArg: trackArg(track, args)})
-	if err != nil {
-		return err
-	}
+	return forEachTrack(w, trackctx.Inputs{TrackArg: trackArg(track, args)}, func(tr *trackctx.Track) error {
+		return statusTrack(w, tr)
+	})
+}
 
+func statusTrack(w io.Writer, tr *trackctx.Track) error {
 	fmt.Fprintf(w, "%s %s\n", cBold.Sprint("Track:"), cBold.Sprint(tr.Name()))
 	fmt.Fprintf(w, "  %s %s\n\n", cDim.Sprint("root:"), tr.Root)
 

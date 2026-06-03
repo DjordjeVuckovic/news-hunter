@@ -37,13 +37,17 @@ func newRunCmd() *cobra.Command {
 		Long: `Runs every job in the track's spec.yaml against its engines, computes IR
 metrics + latency, writes a JSON report under tracks/<name>/reports/.
 
+The track arg accepts a flat name (fts_quality), a nested name (news/fts), or a
+glob (news/*) that runs every matching track, writing one report per track.
+
 The judgments file used for scoring resolves in this order:
   1. --judgments <name|path>      (CLI override)
   2. spec.defaults.judgments      (per-track default)
   3. none → metrics-less report, warning printed`,
 		Example: `  bench run fts_quality
-  bench run fts_quality --judgments claude-api
-  bench run --track tracks/fts_quality --judgments /tmp/ad-hoc-grades.yaml`,
+  bench run news/fts                       # nested track
+  bench run 'news/*'                       # every paradigm of the news dataset
+  bench run news/fts --judgments claude-api`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return executeRun(cmd, f, args)
@@ -67,17 +71,17 @@ func executeRun(cmd *cobra.Command, f runFlags, args []string) error {
 	if err != nil {
 		return err
 	}
-
-	tr, err := trackctx.Resolve(trackctx.Inputs{
+	return forEachTrack(cmd.OutOrStdout(), trackctx.Inputs{
 		TrackArg:   trackArg(f.trackArg, args),
 		SpecPath:   f.specPath,
 		SuitePath:  f.suitePath,
 		OutputPath: f.output,
+	}, func(tr *trackctx.Track) error {
+		return runTrack(cmd, f, ks, tr)
 	})
-	if err != nil {
-		return err
-	}
+}
 
+func runTrack(cmd *cobra.Command, f runFlags, ks []int, tr *trackctx.Track) error {
 	bs, err := spec.LoadFromFile(tr.Spec)
 	if err != nil {
 		return fmt.Errorf("load spec: %w", err)

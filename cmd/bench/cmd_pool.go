@@ -48,15 +48,16 @@ artifacts can attest which pool they were derived from.`,
 }
 
 func executePool(cmd *cobra.Command, f poolFlags, args []string) error {
-	tr, err := trackctx.Resolve(trackctx.Inputs{
+	return forEachTrack(cmd.OutOrStdout(), trackctx.Inputs{
 		TrackArg:   trackArg(f.trackArg, args),
 		SpecPath:   f.specPath,
 		OutputPath: f.output,
+	}, func(tr *trackctx.Track) error {
+		return poolTrack(cmd, f, tr)
 	})
-	if err != nil {
-		return err
-	}
+}
 
+func poolTrack(cmd *cobra.Command, f poolFlags, tr *trackctx.Track) error {
 	bs, err := spec.LoadFromFile(tr.Spec)
 	if err != nil {
 		return fmt.Errorf("load spec: %w", err)
