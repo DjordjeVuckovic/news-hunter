@@ -29,8 +29,11 @@ type Record struct {
 }
 
 type parquetRow struct {
-	ID        string    `parquet:"id"`
-	Embedding []float32 `parquet:"embedding"`
+	ID string `parquet:"id"`
+	// `,list` matches the 3-level LIST encoding pyarrow writes
+	// (group embedding (LIST) { repeated group list { float element } }).
+	// Without it parquet-go expects a flat repeated field and decodes to nil.
+	Embedding []float32 `parquet:"embedding,list"`
 }
 
 // Reader streams Records from a Parquet embeddings file.

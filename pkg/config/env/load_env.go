@@ -18,9 +18,11 @@ func LoadDotEnv(env string, paths ...string) error {
 		slog.Debug("ENV_PATHS is not set, using only provided paths", "paths", paths)
 	}
 
-	decodedPaths := strings.Split(envPath, ",")
-	for i, path := range decodedPaths {
-		decodedPaths[i] = strings.TrimSpace(path)
+	var decodedPaths []string
+	for _, path := range strings.Split(envPath, ",") {
+		if path = strings.TrimSpace(path); path != "" {
+			decodedPaths = append(decodedPaths, path)
+		}
 	}
 
 	err := godotenv.Load(append(decodedPaths, paths...)...)

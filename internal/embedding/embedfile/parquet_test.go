@@ -10,7 +10,15 @@ import (
 	"github.com/parquet-go/parquet-go"
 )
 
-func writeFixture(t *testing.T, rows []parquetRow, meta map[string]string) string {
+// fixtureRow is intentionally independent of parquetRow and forces the 3-level
+// LIST encoding that pyarrow produces. If parquetRow ever loses its `,list` tag,
+// reading this fixture decodes to nil and the tests fail (regression guard).
+type fixtureRow struct {
+	ID        string    `parquet:"id"`
+	Embedding []float32 `parquet:"embedding,list"`
+}
+
+func writeFixture(t *testing.T, rows []fixtureRow, meta map[string]string) string {
 	t.Helper()
 
 	path := filepath.Join(t.TempDir(), "embeddings.parquet")
@@ -25,7 +33,7 @@ func writeFixture(t *testing.T, rows []parquetRow, meta map[string]string) strin
 		kv = append(kv, parquet.KeyValueMetadata(k, v))
 	}
 
-	w := parquet.NewGenericWriter[parquetRow](f, kv...)
+	w := parquet.NewGenericWriter[fixtureRow](f, kv...)
 	if _, err := w.Write(rows); err != nil {
 		t.Fatalf("write rows: %v", err)
 	}
@@ -36,7 +44,7 @@ func writeFixture(t *testing.T, rows []parquetRow, meta map[string]string) strin
 }
 
 func TestReadRecordsAndMeta(t *testing.T) {
-	rows := []parquetRow{
+	rows := []fixtureRow{
 		{ID: "11111111-1111-1111-1111-111111111111", Embedding: []float32{0.1, 0.2, 0.3}},
 		{ID: "22222222-2222-2222-2222-222222222222", Embedding: []float32{0.4, 0.5, 0.6}},
 		{ID: "33333333-3333-3333-3333-333333333333", Embedding: []float32{0.7, 0.8, 0.9}},
