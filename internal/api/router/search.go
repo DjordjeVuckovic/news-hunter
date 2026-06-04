@@ -52,6 +52,34 @@ func (r *SearchRouter) Bind() {
 	if r.semanticSearcher != nil {
 		r.e.GET("/v1/articles/semantic_search", r.handleSematicQuery)
 	}
+
+	// Capabilities discovery endpoint
+	r.e.GET("/v1/capabilities", r.capabilitiesHandler)
+}
+
+// capabilitiesHandler reports which search paradigms the running backend supports (GET)
+//
+// The full-text searcher is always wired, so string_query, match, multi_match,
+// phrase and boolean are always available. Semantic search is reported as
+// available only when a semantic searcher has been wired into the router.
+//
+// @Summary Report supported search paradigms
+// @Description Returns the search paradigms exposed by the running backend. Useful for clients to discover available capabilities (e.g. whether semantic search is enabled).
+// @Tags capabilities
+// @Produce json
+// @Success 200 {object} dquery.Capabilities "Supported search paradigms"
+// @Router /v1/capabilities [get]
+func (r *SearchRouter) capabilitiesHandler(c echo.Context) error {
+	caps := dquery.Capabilities{
+		StringQuery: true,
+		Match:       true,
+		MultiMatch:  true,
+		Phrase:      true,
+		Boolean:     true,
+		Semantic:    r.semanticSearcher != nil,
+	}
+
+	return c.JSON(http.StatusOK, caps)
 }
 
 // searchHandler handles simple query string search (GET)
