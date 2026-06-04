@@ -128,7 +128,17 @@ func NewSemanticSearcher(ctx context.Context, cfg StorageConfig, client embeddin
 		return pg.NewSemanticSearcher(embedder, pool), nil
 
 	case storage.ES:
-		return nil, fmt.Errorf("elasticsearch semantic searcher not yet implemented")
+		if cfg.Es == nil {
+			return nil, fmt.Errorf("elasticsearch config is not set")
+		}
+
+		model := embedding.DefaultModel
+		embedder := embedding.NewEmbedder(client,
+			embedding.WithExecutorMaxLength(1024),
+			embedding.WithExecutorModel(model),
+		)
+
+		return es.NewSemanticSearcher(*cfg.Es, embedder, model)
 
 	case storage.Solr:
 		return nil, fmt.Errorf("solr semantic searcher not yet implemented")
