@@ -30,20 +30,8 @@ func NewHybridSearcher(embedder *embedding.Embedder, pool *ConnectionPool) *Hybr
 	}
 }
 
-// rrfScore is the RRF contribution for a document at lexRank/vecRank; rank 0 means absent.
-// score = 1/(k + lexRank) + 1/(k + vecRank)
-func rrfScore(k, lexRank, vecRank int) float64 {
-	var score float64
-	if lexRank > 0 {
-		score += 1.0 / float64(k+lexRank)
-	}
-	if vecRank > 0 {
-		score += 1.0 / float64(k+vecRank)
-	}
-	return score
-}
-
 // SearchHybrid fuses a lexical FTS ranking with a vector ranking via RRF in SQL.
+// RRF fused scores are not a stable keyset, so hybrid returns a single page.
 func (s *HybridSearcher) SearchHybrid(ctx context.Context, query *dquery.Hybrid, baseOpts *dquery.BaseOptions) (*storage.SearchResult, error) {
 	size := baseOpts.Size
 	lang := query.GetLanguage()
@@ -60,6 +48,12 @@ func (s *HybridSearcher) SearchHybrid(ctx context.Context, query *dquery.Hybrid,
 		return nil, fmt.Errorf("failed to embed hybrid query: %w", err)
 	}
 	vecEncoded := pgvector.NewVector(vec.Embedding)
+
+	// Each leg must contribute at least size candidates so large pages can fill.
+	legDepth := hybridCandidateDepth
+	if size > legDepth {
+		legDepth = size
+	}
 
 	cmd := fmt.Sprintf(`
 		WITH lexical AS (
@@ -87,7 +81,8 @@ func (s *HybridSearcher) SearchHybrid(ctx context.Context, query *dquery.Hybrid,
 			FULL OUTER JOIN vector v ON l.article_id = v.article_id
 		)
 		SELECT a.id, a.title, a.subtitle, a.content, a.author, a.description,
-			   a.url, a.language, a.created_at, a.metadata, f.rrf_score
+			   a.url, a.language, a.created_at, a.metadata, f.rrf_score,
+			   COUNT(*) OVER () AS total_matches
 		FROM fused f
 		INNER JOIN articles a ON a.id = f.article_id
 		ORDER BY f.rrf_score DESC, a.id DESC
@@ -101,8 +96,8 @@ func (s *HybridSearcher) SearchHybrid(ctx context.Context, query *dquery.Hybrid,
 		vecEncoded,
 		vec.Model,
 		k,
-		hybridCandidateDepth,
-		size+1,
+		legDepth,
+		size,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute hybrid search query: %w", err)
@@ -111,6 +106,7 @@ func (s *HybridSearcher) SearchHybrid(ctx context.Context, query *dquery.Hybrid,
 
 	var articles []dto.ArticleSearchResult
 	var rawScores []float64
+	var totalMatches int64
 
 	for rows.Next() {
 		var metadataJSON []byte
@@ -129,6 +125,7 @@ func (s *HybridSearcher) SearchHybrid(ctx context.Context, query *dquery.Hybrid,
 			&article.CreatedAt,
 			&metadataJSON,
 			&rawScore,
+			&totalMatches,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan article: %w", err)
 		}
@@ -152,35 +149,23 @@ func (s *HybridSearcher) SearchHybrid(ctx context.Context, query *dquery.Hybrid,
 		return &storage.SearchResult{}, nil
 	}
 
-	hasMore := len(articles) > size
-	if hasMore {
-		articles = articles[:size]
-		rawScores = rawScores[:size]
-	}
-
 	maxScore := rawScores[0]
 	for i := range articles {
 		articles[i].ScoreNormalized = utils.RoundFloat64(rawScores[i]/maxScore, dquery.ScoreDecimalPlaces)
 	}
 
-	var nextCursor *dquery.Cursor
-	if hasMore {
-		nextCursor = &dquery.Cursor{
-			Score: rawScores[len(rawScores)-1],
-			ID:    articles[len(articles)-1].Article.ID,
-		}
-	}
-
 	slog.Info("PG hybrid search results fetched",
 		"total_page_matches", len(articles),
+		"total_matches", totalMatches,
 		"max_score", maxScore)
 
 	return &storage.SearchResult{
 		Hits:         articles,
-		NextCursor:   nextCursor,
-		HasMore:      hasMore,
+		NextCursor:   nil,
+		HasMore:      false,
 		MaxScore:     utils.RoundFloat64(maxScore, dquery.ScoreDecimalPlaces),
 		PageMaxScore: utils.RoundFloat64(maxScore, dquery.ScoreDecimalPlaces),
+		TotalMatches: totalMatches,
 	}, nil
 }
 
