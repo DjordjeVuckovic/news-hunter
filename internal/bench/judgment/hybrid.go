@@ -85,5 +85,8 @@ func (s HybridStrategy) Grade(ctx context.Context, q GradingQuery, doc GradingDo
 	if err != nil {
 		return GradeUnjudged, err
 	}
+	if len(res) == 0 {
+		return GradeUnjudged, nil
+	}
 	return res[0].Grade, nil
 }
