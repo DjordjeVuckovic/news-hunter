@@ -33,6 +33,9 @@ const (
 	// ES: match_phrase query with slop parameter
 	// PG: phraseto_tsquery (slop=0) or to_tsquery with <N> operators (slop>0)
 	PhraseType Kind = "phrase"
+
+	// HybridType: lexical FTS fused with vector similarity via RRF.
+	HybridType Kind = "hybrid"
 )
 
 // Base is the top-level query container
@@ -44,6 +47,7 @@ type Base struct {
 	MultiMatch  *MultiMatch `json:"multi_match,omitempty"`
 	Boolean     *Boolean    `json:"boolean,omitempty"`
 	Phrase      *Phrase     `json:"phrase,omitempty"`
+	Hybrid      *Hybrid     `json:"hybrid,omitempty"`
 }
 
 // String represents a simple text-based search query
@@ -476,4 +480,60 @@ func NewSemantic(query string) *Semantic {
 	return &Semantic{
 		Query: query,
 	}
+}
+
+// DefaultRRFConstant is the standard RRF constant (k=60 per Cormack et al.).
+const DefaultRRFConstant = 60
+
+// Hybrid fuses lexical FTS with vector similarity via RRF.
+// score = 1/(k + lex_rank) + 1/(k + vec_rank)
+type Hybrid struct {
+	Query string `json:"query" validate:"required,min=1"`
+
+	Language Language `json:"language,omitempty"`
+
+	// K is the RRF constant; higher values flatten rank contribution differences.
+	K int `json:"k,omitempty"`
+}
+
+type HybridOption func(q *Hybrid)
+
+func NewHybrid(query string, opts ...HybridOption) *Hybrid {
+	q := &Hybrid{
+		Query:    query,
+		Language: DefaultLanguage,
+		K:        DefaultRRFConstant,
+	}
+
+	for _, opt := range opts {
+		opt(q)
+	}
+
+	return q
+}
+
+func WithHybridLanguage(lang Language) HybridOption {
+	return func(q *Hybrid) {
+		q.Language = lang
+	}
+}
+
+func WithHybridK(k int) HybridOption {
+	return func(q *Hybrid) {
+		q.K = k
+	}
+}
+
+func (q *Hybrid) GetLanguage() Language {
+	if q.Language == "" {
+		return DefaultLanguage
+	}
+	return q.Language
+}
+
+func (q *Hybrid) GetK() int {
+	if q.K <= 0 {
+		return DefaultRRFConstant
+	}
+	return q.K
 }

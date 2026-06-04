@@ -74,6 +74,14 @@ func main() {
 		}
 		routerOpts = append(routerOpts, router.WithSemanticSearcher(semanticSearcher))
 		slog.Info("Semantic search enabled")
+
+		hybridSearcher, err := factory.NewHybridSearcher(s.Context(), cfg.StorageConfig, embedClient)
+		if err != nil {
+			slog.Warn("Hybrid search disabled: failed to create hybrid searcher", "error", err)
+		} else {
+			routerOpts = append(routerOpts, router.WithHybridSearcher(hybridSearcher))
+			slog.Info("Hybrid search enabled")
+		}
 	} else {
 		slog.Info("Semantic search disabled")
 	}

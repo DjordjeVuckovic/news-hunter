@@ -18,6 +18,7 @@ type SearchRouter struct {
 	e                *echo.Echo
 	searcher         storage.FtsSearcher
 	semanticSearcher storage.SemanticSearcher
+	hybridSearcher   storage.HybridSearcher
 }
 
 type SearchRouterOption func(*SearchRouter)
@@ -38,6 +39,12 @@ func NewSearchRouter(e *echo.Echo, searcher storage.FtsSearcher, opts ...SearchR
 func WithSemanticSearcher(searcher storage.SemanticSearcher) SearchRouterOption {
 	return func(r *SearchRouter) {
 		r.semanticSearcher = searcher
+	}
+}
+
+func WithHybridSearcher(searcher storage.HybridSearcher) SearchRouterOption {
+	return func(r *SearchRouter) {
+		r.hybridSearcher = searcher
 	}
 }
 
@@ -237,9 +244,30 @@ func (r *SearchRouter) structuredSearchHandler(c echo.Context) error {
 		return r.handlePhraseQuery(c, req.Query.Phrase, opts)
 	case dquery.BooleanType:
 		return r.handleBooleanQuery(c, req.Query.Boolean, opts)
+	case dquery.HybridType:
+		return r.handleHybridQuery(c, req.Query.Hybrid, opts)
 	default:
-		return apperr.NewValidation("query must specify one of: match, multi_match, phrase, boolean")
+		return apperr.NewValidation("query must specify one of: match, multi_match, phrase, boolean, hybrid")
 	}
+}
+
+func (r *SearchRouter) handleHybridQuery(c echo.Context, params *dto.HybridParams, options *dquery.BaseOptions) error {
+	if r.hybridSearcher == nil {
+		return apperr.NewValidation("hybrid search is not enabled on this server")
+	}
+
+	domainQuery, err := params.ToDomain()
+	if err != nil {
+		return err
+	}
+
+	searchResult, err := r.hybridSearcher.SearchHybrid(c.Request().Context(), domainQuery, options)
+	if err != nil {
+		slog.Error("Failed to execute hybrid search", "error", err, "query", params.Query)
+		return err
+	}
+
+	return r.buildResponse(c, searchResult)
 }
 
 func (r *SearchRouter) handleMatchQuery(c echo.Context, params *dto.MatchParams, options *dquery.BaseOptions) error {

@@ -150,3 +150,34 @@ func NewSemanticSearcher(ctx context.Context, cfg StorageConfig, client embeddin
 		return nil, fmt.Errorf(string(storage.ErrUnsupportedStorer), cfg.Type)
 	}
 }
+
+func NewHybridSearcher(ctx context.Context, cfg StorageConfig, client embedding.Client) (storage.HybridSearcher, error) {
+	switch cfg.Type {
+	case storage.PG:
+		pgConfig := pg.PoolConfig{
+			ConnStr:          cfg.Pg.ConnStr,
+			RegisterVecTypes: true,
+		}
+
+		pool, err := pg.NewConnectionPool(ctx, pgConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create PostgreSQL connection pool: %w", err)
+		}
+
+		embedder := embedding.NewEmbedder(client, embedding.WithExecutorMaxLength(1024))
+
+		return pg.NewHybridSearcher(embedder, pool), nil
+
+	case storage.ES:
+		return nil, fmt.Errorf("elasticsearch hybrid searcher not yet implemented")
+
+	case storage.Solr:
+		return nil, fmt.Errorf("solr hybrid searcher not yet implemented")
+
+	case storage.InMem:
+		return nil, fmt.Errorf("inmem hybrid searcher not yet implemented")
+
+	default:
+		return nil, fmt.Errorf(string(storage.ErrUnsupportedStorer), cfg.Type)
+	}
+}

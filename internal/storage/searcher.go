@@ -53,3 +53,8 @@ type SemanticSearcher interface {
 	// SearchSemantic performs semantic search using vector embeddings
 	SearchSemantic(ctx context.Context, query *query.Semantic, baseOpts *query.BaseOptions) (*VectorSearchResult, error)
 }
+
+// HybridSearcher combines lexical FTS with vector similarity via RRF.
+type HybridSearcher interface {
+	SearchHybrid(ctx context.Context, query *query.Hybrid, baseOpts *query.BaseOptions) (*SearchResult, error)
+}
