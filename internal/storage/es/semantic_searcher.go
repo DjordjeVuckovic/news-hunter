@@ -15,11 +15,12 @@ import (
 	"github.com/google/uuid"
 )
 
-// minNumCandidates is the floor for the kNN num_candidates parameter.
 const minNumCandidates = 100
 
-// SemanticSearcher is the Elasticsearch implementation of storage.SemanticSearcher,
-// running approximate kNN over the dense_vector "embedding" field.
+// defaultThreshold is the distance ceiling applied when no threshold is set,
+// matching the PG semantic searcher.
+const defaultThreshold = 0.7
+
 type SemanticSearcher struct {
 	client    *elasticsearch.TypedClient
 	indexName string
@@ -47,24 +48,26 @@ func (s *SemanticSearcher) SearchSemantic(ctx context.Context, query *dquery.Sem
 	}
 
 	size := baseOpts.Size
-	k := size + 1
+	k := size
 	numCandidates := k * 10
 	if numCandidates < minNumCandidates {
 		numCandidates = minNumCandidates
 	}
 
+	threshold := query.Threshold
+	if threshold == 0 {
+		threshold = defaultThreshold
+	}
+
+	// ES kNN filters by minimum cosine similarity (1 - distance), so map the
+	// distance threshold to a similarity floor.
+	sim := float32(1 - threshold)
 	knn := types.KnnSearch{
 		Field:         "embedding",
 		QueryVector:   vec.Embedding,
 		K:             &k,
 		NumCandidates: &numCandidates,
-	}
-
-	// ES kNN filters by minimum cosine similarity (1 - distance), so map the
-	// distance threshold to a similarity floor.
-	if query.Threshold > 0 && query.Threshold <= 1 {
-		sim := float32(1 - query.Threshold)
-		knn.Similarity = &sim
+		Similarity:    &sim,
 	}
 
 	slog.Info("Executing es semantic kNN search",
@@ -82,7 +85,7 @@ func (s *SemanticSearcher) SearchSemantic(ctx context.Context, query *dquery.Sem
 			"author", "url", "language", "created_at",
 			"source_id", "source_name", "published_at", "category", "imported_at",
 		).
-		Size(size + 1).
+		Size(size).
 		Do(ctx)
 	if err != nil {
 		slog.Error("Elasticsearch kNN query failed", "error", err, "query", query.Query)
@@ -98,22 +101,11 @@ func (s *SemanticSearcher) SearchSemantic(ctx context.Context, query *dquery.Sem
 		"total_matches", res.Hits.Total.Value,
 		"returned_count", len(hits))
 
-	hasMore := len(hits) > size
-	if hasMore {
-		hits = hits[:size]
-	}
-
-	var nextCursor *dquery.Cursor
-	if hasMore && len(hits) > 0 {
-		nextCursor = &dquery.Cursor{
-			ID: hits[len(hits)-1].ID,
-		}
-	}
-
+	// kNN returns a single page (parity with PG): no cursor follow-up.
 	return &storage.VectorSearchResult{
 		Hits:       hits,
-		NextCursor: nextCursor,
-		HasMore:    hasMore,
+		NextCursor: nil,
+		HasMore:    false,
 	}, nil
 }
 
@@ -125,8 +117,13 @@ func (s *SemanticSearcher) mapToArticles(hits []types.Hit) ([]dto.Article, error
 			return nil, fmt.Errorf("failed to unmarshal document: %w", err)
 		}
 
+		id, err := uuid.Parse(doc.ID)
+		if err != nil {
+			return nil, fmt.Errorf("parse document id %q: %w", doc.ID, err)
+		}
+
 		articles = append(articles, dto.Article{
-			ID:          uuid.MustParse(doc.ID),
+			ID:          id,
 			Title:       doc.Title,
 			Subtitle:    doc.Subtitle,
 			Content:     doc.Content,
