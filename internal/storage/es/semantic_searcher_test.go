@@ -11,8 +11,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// staticEmbedder is an embedding.Client returning a fixed vector, decoupling the
-// kNN search test from a live embedding backend.
+// staticEmbedder is an embedding.Client returning a fixed vector.
 type staticEmbedder struct {
 	vec []float32
 }

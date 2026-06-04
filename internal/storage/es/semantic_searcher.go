@@ -15,14 +15,11 @@ import (
 	"github.com/google/uuid"
 )
 
-// minNumCandidates is the floor for the kNN num_candidates parameter; a larger
-// candidate pool improves recall at the cost of latency.
+// minNumCandidates is the floor for the kNN num_candidates parameter.
 const minNumCandidates = 100
 
-// SemanticSearcher is the Elasticsearch implementation of
-// storage.SemanticSearcher. It embeds the query with the same model the stored
-// document vectors were produced with and runs an approximate kNN search over
-// the dense_vector "embedding" field written by Embedder.
+// SemanticSearcher is the Elasticsearch implementation of storage.SemanticSearcher,
+// running approximate kNN over the dense_vector "embedding" field.
 type SemanticSearcher struct {
 	client    *elasticsearch.TypedClient
 	indexName string
@@ -63,9 +60,8 @@ func (s *SemanticSearcher) SearchSemantic(ctx context.Context, query *dquery.Sem
 		NumCandidates: &numCandidates,
 	}
 
-	// PG filters by cosine distance (< threshold); ES kNN filters by minimum
-	// cosine similarity. similarity = 1 - distance, so a distance threshold maps
-	// to a similarity floor. Only apply when it yields a valid [0,1] similarity.
+	// ES kNN filters by minimum cosine similarity (1 - distance), so map the
+	// distance threshold to a similarity floor.
 	if query.Threshold > 0 && query.Threshold <= 1 {
 		sim := float32(1 - query.Threshold)
 		knn.Similarity = &sim
@@ -151,5 +147,4 @@ func (s *SemanticSearcher) mapToArticles(hits []types.Hit) ([]dto.Article, error
 	return articles, nil
 }
 
-// Compile-time interface assertion
 var _ storage.SemanticSearcher = (*SemanticSearcher)(nil)
