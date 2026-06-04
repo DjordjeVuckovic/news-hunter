@@ -8,32 +8,20 @@ corpus:
   name: news_hunter_articles
   source: "postgres://localhost:54320/news_db (articles)"
 
-# NOTE: Vector queries use pre-computed embeddings. The {{embedding}} placeholder
-# must be replaced with the actual float array before execution.
-# Pre-compute with: scripts/embed_queries.py --model text-embedding-3-small
-# Each query has a corresponding embedding stored in trec/query_embeddings.json.
-#
-# Engine-specific details:
-#   pgvector-cosine: uses <=> (cosine distance) on the embedding column
-#   pgvector-l2:     uses <-> (L2 / Euclidean distance) on the embedding column
-#   elasticsearch:   uses knn with cosine similarity on the dense_vector field
-#
-# Prerequisites:
-#   CREATE EXTENSION IF NOT EXISTS vector;
-#   ALTER TABLE articles ADD COLUMN IF NOT EXISTS embedding vector(1536);
-#   CREATE INDEX articles_emb_hnsw_idx ON articles USING hnsw(embedding vector_cosine_ops);
+# Query embeddings ({{embedding}} placeholder) use Qwen3-Embedding-0.6B (1024-dim).
+# Document vectors live in article_embeddings (VECTOR(1024)); requires migrations (make migrate-up-all).
 
 templates:
   - id: pgvector_cosine
     query: |
-      SELECT id FROM articles
+      SELECT article_id AS id FROM article_embeddings
       WHERE embedding IS NOT NULL
       ORDER BY embedding <=> '{{embedding}}'::vector
       LIMIT {{limit}}
 
   - id: pgvector_l2
     query: |
-      SELECT id FROM articles
+      SELECT article_id AS id FROM article_embeddings
       WHERE embedding IS NOT NULL
       ORDER BY embedding <-> '{{embedding}}'::vector
       LIMIT {{limit}}
