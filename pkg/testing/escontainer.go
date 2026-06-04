@@ -20,6 +20,9 @@ type ESContainer struct {
 // NewESContainer starts an Elasticsearch test container
 func NewESContainer(ctx context.Context, tb testing.TB) *ESContainer {
 	tb.Helper()
+	if testing.Short() {
+		tb.Skip("skipping testcontainer-backed test in -short mode")
+	}
 
 	esContainer, err := elasticsearch.Run(ctx,
 		"docker.elastic.co/elasticsearch/elasticsearch:8.12.0",

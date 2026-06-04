@@ -39,8 +39,9 @@ jobs:
         run: go build ./...
       - name: Vet
         run: go vet ./...
-      # -short skips the testcontainers-backed integration tests (storage/pg) so the
-      # pipeline stays fast and Docker-independent. Run the full suite locally with
-      # `go test ./...`, or add a dedicated integration job that drops -short.
+      # -short skips the testcontainer-backed integration tests (storage/pg, storage/es)
+      # because the container helpers (pkg/testing) honor testing.Short() and t.Skip(),
+      # so no Docker daemon is required. Run the full suite locally with `go test ./...`,
+      # or add a dedicated integration job that drops -short.
       - name: Test
         run: go test -race -short ./...

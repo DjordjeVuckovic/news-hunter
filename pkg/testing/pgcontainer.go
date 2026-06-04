@@ -33,6 +33,9 @@ func NewPGContainer(ctx context.Context, cfg PGConfig) (*PGContainer, error) {
 
 func NewPGContainerWithCleanup(ctx context.Context, tb testing.TB) *PGContainer {
 	tb.Helper()
+	if testing.Short() {
+		tb.Skip("skipping testcontainer-backed test in -short mode")
+	}
 
 	container, err := createPGContainer(ctx, PGConfig{
 		Database: "news_test_db",
