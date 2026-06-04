@@ -8,22 +8,8 @@ corpus:
   name: news_hunter_articles
   source: "postgres://localhost:54320/news_db (articles)"
 
-# NOTE: Vector queries use pre-computed embeddings. The {{embedding}} placeholder
-# must be replaced with the actual float array before execution.
-# Embeddings are produced with the Qwen3-Embedding-0.6B model (1024-dim).
-# Each query has a corresponding embedding stored in trec/query_embeddings.json.
-#
-# Document vectors live in the article_embeddings table (VECTOR(1024)), keyed by
-# article_id — the same schema the news-hunter API uses for semantic search.
-#
-# Engine-specific details:
-#   pgvector-cosine: uses <=> (cosine distance) on article_embeddings.embedding
-#   pgvector-l2:     uses <-> (L2 / Euclidean distance) on article_embeddings.embedding
-#   elasticsearch:   uses knn with cosine similarity on the dense_vector field
-#
-# Prerequisites — apply migrations (make migrate-up-all):
-#   - article_embeddings (VECTOR(1024)) with an HNSW cosine index
-#     (db/migrations/004_create_embeddings_table.up.sql)
+# Query embeddings ({{embedding}} placeholder) use Qwen3-Embedding-0.6B (1024-dim).
+# Document vectors live in article_embeddings (VECTOR(1024)); requires migrations (make migrate-up-all).
 
 templates:
   - id: pgvector_cosine
