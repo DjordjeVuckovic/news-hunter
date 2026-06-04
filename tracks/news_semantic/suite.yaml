@@ -15,14 +15,12 @@ templates:
   - id: pgvector_cosine
     query: |
       SELECT article_id AS id FROM article_embeddings
-      WHERE embedding IS NOT NULL
       ORDER BY embedding <=> '{{embedding}}'::vector
       LIMIT {{limit}}
 
   - id: pgvector_l2
     query: |
       SELECT article_id AS id FROM article_embeddings
-      WHERE embedding IS NOT NULL
       ORDER BY embedding <-> '{{embedding}}'::vector
       LIMIT {{limit}}
 
