@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
+	apiserver "github.com/DjordjeVuckovic/news-hunter/internal/api/server"
+	"github.com/DjordjeVuckovic/news-hunter/internal/apperr"
 	"github.com/DjordjeVuckovic/news-hunter/internal/storage"
 	dquery "github.com/DjordjeVuckovic/news-hunter/internal/types/query"
 	"github.com/labstack/echo/v4"
@@ -16,6 +19,63 @@ type stubSemanticSearcher struct{}
 
 func (stubSemanticSearcher) SearchSemantic(context.Context, *dquery.Semantic, *dquery.BaseOptions) (*storage.VectorSearchResult, error) {
 	return &storage.VectorSearchResult{}, nil
+}
+
+type stubFtsSearcher struct{}
+
+func (stubFtsSearcher) SearchStringQuery(context.Context, *dquery.String, *dquery.BaseOptions) (*storage.SearchResult, error) {
+	return &storage.SearchResult{}, nil
+}
+func (stubFtsSearcher) SearchField(context.Context, *dquery.Match, *dquery.BaseOptions) (*storage.SearchResult, error) {
+	return &storage.SearchResult{}, nil
+}
+func (stubFtsSearcher) SearchFields(context.Context, *dquery.MultiMatch, *dquery.BaseOptions) (*storage.SearchResult, error) {
+	return &storage.SearchResult{}, nil
+}
+func (stubFtsSearcher) SearchPhrase(context.Context, *dquery.Phrase, *dquery.BaseOptions) (*storage.SearchResult, error) {
+	return &storage.SearchResult{}, nil
+}
+func (stubFtsSearcher) SearchBoolean(context.Context, *dquery.Boolean, *dquery.BaseOptions) (*storage.SearchResult, error) {
+	return &storage.SearchResult{}, nil
+}
+
+func TestStructuredSearchHandlerValidation(t *testing.T) {
+	tests := []struct {
+		name     string
+		body     string
+		wantCode int
+	}{
+		{
+			name:     "valid match request",
+			body:     `{"size":10,"query":{"match":{"field":"title","query":"climate change","operator":"and"}}}`,
+			wantCode: http.StatusOK,
+		},
+		{
+			name:     "invalid match request missing query",
+			body:     `{"query":{"match":{"field":"title","query":""}}}`,
+			wantCode: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := echo.New()
+			(&apiserver.Server{Echo: e}).SetupValidator()
+			e.HTTPErrorHandler = apperr.GlobalErrorHandler()
+
+			r := &SearchRouter{e: e, searcher: stubFtsSearcher{}}
+			r.Bind()
+
+			req := httptest.NewRequest(http.MethodPost, "/v1/articles/_search", strings.NewReader(tt.body))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			if rec.Code != tt.wantCode {
+				t.Fatalf("status = %d, want %d (body: %s)", rec.Code, tt.wantCode, rec.Body.String())
+			}
+		})
+	}
 }
 
 func TestCapabilitiesHandler(t *testing.T) {

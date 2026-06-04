@@ -473,7 +473,7 @@ func (q *MultiMatch) GetOperator() operator.Operator {
 type Semantic struct {
 	// Query: The text to semantically search for
 	Query     string  `json:"query" validate:"required,min=1"`
-	Threshold float64 `json:"threshold" validate:"required,min=1"`
+	Threshold float64 `json:"threshold" validate:"omitempty,gte=0,lte=2"`
 }
 
 func NewSemantic(query string) *Semantic {
