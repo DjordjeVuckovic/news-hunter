@@ -33,6 +33,10 @@ const (
 	// ES: match_phrase query with slop parameter
 	// PG: phraseto_tsquery (slop=0) or to_tsquery with <N> operators (slop>0)
 	PhraseType Kind = "phrase"
+
+	// HybridType: Hybrid search combining lexical FTS and vector similarity
+	// PG: Reciprocal Rank Fusion (RRF) over ts_rank and pgvector cosine distance
+	HybridType Kind = "hybrid"
 )
 
 // Base is the top-level query container
@@ -44,6 +48,7 @@ type Base struct {
 	MultiMatch  *MultiMatch `json:"multi_match,omitempty"`
 	Boolean     *Boolean    `json:"boolean,omitempty"`
 	Phrase      *Phrase     `json:"phrase,omitempty"`
+	Hybrid      *Hybrid     `json:"hybrid,omitempty"`
 }
 
 // String represents a simple text-based search query
@@ -476,4 +481,78 @@ func NewSemantic(query string) *Semantic {
 	return &Semantic{
 		Query: query,
 	}
+}
+
+// DefaultRRFConstant is the standard Reciprocal Rank Fusion constant.
+// k=60 is the value popularized by the original Cormack et al. RRF paper and
+// the de-facto default across search engines.
+const DefaultRRFConstant = 60
+
+// Hybrid is a hybrid search query combining lexical full-text search with
+// vector similarity, fused via Reciprocal Rank Fusion (RRF).
+//
+// PostgreSQL: ts_rank over search_vector (lexical) fused with pgvector cosine
+// distance over article_embeddings (vector) using
+// score = 1/(k + lex_rank) + 1/(k + vec_rank).
+//
+// Example:
+//
+//	{"query": "climate change", "language": "english", "k": 60}
+type Hybrid struct {
+	// Query: The text to search for, used for both lexical and vector retrieval
+	Query string `json:"query" validate:"required,min=1"`
+
+	// Language: Text analysis language configuration for the lexical leg
+	Language Language `json:"language,omitempty"`
+
+	// K: RRF constant controlling rank smoothing. Higher k flattens the
+	// contribution differences between ranks. Default: DefaultRRFConstant (60).
+	K int `json:"k,omitempty"`
+}
+
+type HybridOption func(q *Hybrid)
+
+// NewHybrid creates a new Hybrid query with sensible defaults
+func NewHybrid(query string, opts ...HybridOption) *Hybrid {
+	q := &Hybrid{
+		Query:    query,
+		Language: DefaultLanguage,
+		K:        DefaultRRFConstant,
+	}
+
+	for _, opt := range opts {
+		opt(q)
+	}
+
+	return q
+}
+
+// WithHybridLanguage sets the language for Hybrid query
+func WithHybridLanguage(lang Language) HybridOption {
+	return func(q *Hybrid) {
+		q.Language = lang
+	}
+}
+
+// WithHybridK sets the RRF constant for Hybrid query
+func WithHybridK(k int) HybridOption {
+	return func(q *Hybrid) {
+		q.K = k
+	}
+}
+
+// GetLanguage returns the language with default fallback
+func (q *Hybrid) GetLanguage() Language {
+	if q.Language == "" {
+		return DefaultLanguage
+	}
+	return q.Language
+}
+
+// GetK returns the RRF constant with default fallback
+func (q *Hybrid) GetK() int {
+	if q.K <= 0 {
+		return DefaultRRFConstant
+	}
+	return q.K
 }

@@ -70,6 +70,7 @@ type QueryWrapper struct {
 	MultiMatch *MultiMatchParams `json:"multi_match,omitempty"`
 	Phrase     *PhraseParams     `json:"phrase,omitempty"`
 	Boolean    *BooleanParams    `json:"boolean,omitempty"`
+	Hybrid     *HybridParams     `json:"hybrid,omitempty"`
 }
 
 // MatchParams represents match query parameters (maps directly to types)
@@ -104,6 +105,42 @@ type PhraseParams struct {
 	Fields   []string `json:"fields"`
 	Slop     int      `json:"slop,omitempty"`
 	Language string   `json:"language,omitempty"`
+}
+
+// HybridParams represents hybrid (lexical FTS + vector) query parameters.
+// Example:
+//
+//	{
+//	  "query": "climate change",
+//	  "language": "english",
+//	  "k": 60
+//	}
+type HybridParams struct {
+	Query    string `json:"query"`
+	Language string `json:"language,omitempty"`
+	K        int    `json:"k,omitempty"`
+}
+
+func (p *HybridParams) ToDomain() (*query.Hybrid, error) {
+	if p.Query == "" {
+		return nil, apperr.NewValidation("query is required")
+	}
+
+	var opts []query.HybridOption
+
+	if p.Language != "" {
+		lang := query.Language(p.Language)
+		if !query.SupportedLanguages[lang] {
+			return nil, apperr.NewValidation(fmt.Sprintf("unsupported language: %s", p.Language))
+		}
+		opts = append(opts, query.WithHybridLanguage(lang))
+	}
+
+	if p.K > 0 {
+		opts = append(opts, query.WithHybridK(p.K))
+	}
+
+	return query.NewHybrid(p.Query, opts...), nil
 }
 
 func (p *MatchParams) ToDomain() (*query.Match, error) {
@@ -231,6 +268,9 @@ func (q *QueryWrapper) GetQueryType() query.Kind {
 	if q.Boolean != nil {
 		return query.BooleanType
 	}
+	if q.Hybrid != nil {
+		return query.HybridType
+	}
 	return ""
 }
 
@@ -281,9 +321,12 @@ func (q *QueryWrapper) UnmarshalJSON(data []byte) error {
 	if q.Boolean != nil {
 		count++
 	}
+	if q.Hybrid != nil {
+		count++
+	}
 
 	if count == 0 {
-		return apperr.NewValidation("query must specify one of: match, multi_match, phrase, boolean")
+		return apperr.NewValidation("query must specify one of: match, multi_match, phrase, boolean, hybrid")
 	}
 	if count > 1 {
 		return apperr.NewValidation("query must specify only one query type")
