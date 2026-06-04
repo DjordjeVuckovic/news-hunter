@@ -15,7 +15,7 @@ import (
 //	query_id  0  doc_id  relevance_grade
 //
 // Unannotated entries (grade < 0) are skipped.
-func WriteQrels(jf *JudgmentFile, path string) error {
+func WriteQrels(jf *File, path string) error {
 	f, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("create qrels file: %w", err)
@@ -37,14 +37,14 @@ func WriteQrels(jf *JudgmentFile, path string) error {
 // ReadQrels imports a TREC qrels file into a JudgmentFile.
 // Format per line: query_id  0  doc_id  relevance_grade
 // Lines starting with '#' and blank lines are ignored.
-func ReadQrels(path string) (*JudgmentFile, error) {
+func ReadQrels(path string) (*File, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("open qrels file: %w", err)
 	}
 	defer f.Close()
 
-	byQuery := make(map[string]*JudgmentEntry)
+	byQuery := make(map[string]*Entry)
 	var order []string
 
 	scanner := bufio.NewScanner(f)
@@ -74,7 +74,7 @@ func ReadQrels(path string) (*JudgmentFile, error) {
 		}
 
 		if _, ok := byQuery[qid]; !ok {
-			byQuery[qid] = &JudgmentEntry{QueryID: qid}
+			byQuery[qid] = &Entry{QueryID: qid}
 			order = append(order, qid)
 		}
 		byQuery[qid].Docs = append(byQuery[qid].Docs, GradedDoc{DocID: docID, Grade: grade})
@@ -84,7 +84,7 @@ func ReadQrels(path string) (*JudgmentFile, error) {
 		return nil, fmt.Errorf("read qrels file: %w", err)
 	}
 
-	jf := &JudgmentFile{Strategy: "trec-qrels"}
+	jf := &File{Strategy: "trec-qrels"}
 	for _, qid := range order {
 		jf.Queries = append(jf.Queries, *byQuery[qid])
 	}

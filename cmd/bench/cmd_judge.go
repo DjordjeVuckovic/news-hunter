@@ -147,7 +147,7 @@ func judgeTrack(cmd *cobra.Command, f judgeFlags, tr *trackctx.Track) error {
 	}
 
 	writer := judgment.NewIncrementalWriter(outPath, strat.Name())
-	var prior *judgment.JudgmentFile
+	var prior *judgment.File
 	if f.resume {
 		prior, err = writer.LoadPrior()
 		if err != nil {
@@ -223,7 +223,7 @@ func judgeTrack(cmd *cobra.Command, f judgeFlags, tr *trackctx.Track) error {
 // checkResumeCompat verifies that a prior judgments file is safe to resume with
 // the given strategy. It rejects files produced by a different strategy, model,
 // or grading-prompt version — mixing those in one file corrupts the grade set.
-func checkResumeCompat(prior *judgment.JudgmentFile, strat judgment.Strategy) error {
+func checkResumeCompat(prior *judgment.File, strat judgment.Strategy) error {
 	if prior.Strategy != "" && prior.Strategy != strat.Name() {
 		return fmt.Errorf("--resume strategy mismatch: existing file is %q, --strategy is %q",
 			prior.Strategy, strat.Name())
@@ -293,22 +293,22 @@ func openArticleReader(cmd *cobra.Command, pgConn string) (storage.Reader, error
 	return reader, nil
 }
 
-func buildManualJudgments(pf *pool.PoolFile) *judgment.JudgmentFile {
-	jf := &judgment.JudgmentFile{
+func buildManualJudgments(pf *pool.PoolFile) *judgment.File {
+	jf := &judgment.File{
 		Strategy: string(judgment.StrategyManual),
-		Queries:  make([]judgment.JudgmentEntry, 0, len(pf.Queries)),
+		Queries:  make([]judgment.Entry, 0, len(pf.Queries)),
 	}
 	for _, entry := range pf.Queries {
 		docs := make([]judgment.GradedDoc, 0, len(entry.Docs))
 		for _, d := range entry.Docs {
 			docs = append(docs, judgment.GradedDoc{DocID: d.DocID, Grade: judgment.GradeUnjudged})
 		}
-		jf.Queries = append(jf.Queries, judgment.JudgmentEntry{QueryID: entry.QueryID, Docs: docs})
+		jf.Queries = append(jf.Queries, judgment.Entry{QueryID: entry.QueryID, Docs: docs})
 	}
 	return jf
 }
 
-func countGraded(jf *judgment.JudgmentFile) int {
+func countGraded(jf *judgment.File) int {
 	n := 0
 	for _, qe := range jf.Queries {
 		for _, d := range qe.Docs {

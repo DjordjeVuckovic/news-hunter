@@ -51,11 +51,11 @@ type RunnerConfig struct {
 	BatchSize int
 	// Existing is an optional prior judgment file. Entries already present
 	// will be skipped on this run (resume support).
-	Existing *JudgmentFile
+	Existing *File
 	// Sink, if non-nil, is invoked after every query so the caller can
 	// persist incrementally. Receives an immutable snapshot of the query's
 	// JudgmentEntry.
-	Sink func(QueryProgress, JudgmentEntry) error
+	Sink func(QueryProgress, Entry) error
 	// OnQueryStart, OnQueryDone, OnBatch are optional progress callbacks.
 	OnQueryStart func(queryID string, docCount int, alreadyGraded int)
 	OnQueryDone  func(QueryProgress)
@@ -83,16 +83,16 @@ func NewRunner(cfg RunnerConfig) *Runner {
 }
 
 // Run grades every pool entry and returns a complete JudgmentFile.
-func (r *Runner) Run(ctx context.Context, pf *pool.PoolFile) (*JudgmentFile, error) {
+func (r *Runner) Run(ctx context.Context, pf *pool.PoolFile) (*File, error) {
 	if r.cfg.Strategy == nil {
 		return nil, fmt.Errorf("runner: strategy is nil")
 	}
 
 	prior := indexExisting(r.cfg.Existing)
 
-	jf := &JudgmentFile{
+	jf := &File{
 		Strategy: r.cfg.Strategy.Name(),
-		Queries:  make([]JudgmentEntry, 0, len(pf.Queries)),
+		Queries:  make([]Entry, 0, len(pf.Queries)),
 	}
 
 	for _, entry := range pf.Queries {
@@ -114,8 +114,8 @@ func (r *Runner) Run(ctx context.Context, pf *pool.PoolFile) (*JudgmentFile, err
 	return jf, nil
 }
 
-func (r *Runner) gradeQuery(ctx context.Context, entry pool.PoolEntry, prior map[uuid.UUID]int) (JudgmentEntry, QueryProgress, error) {
-	ge := JudgmentEntry{QueryID: entry.QueryID, Docs: make([]GradedDoc, 0, len(entry.Docs))}
+func (r *Runner) gradeQuery(ctx context.Context, entry pool.PoolEntry, prior map[uuid.UUID]int) (Entry, QueryProgress, error) {
+	ge := Entry{QueryID: entry.QueryID, Docs: make([]GradedDoc, 0, len(entry.Docs))}
 	prog := QueryProgress{QueryID: entry.QueryID, Histogram: map[int]int{}}
 
 	if len(entry.Docs) == 0 {
@@ -333,7 +333,7 @@ func pickByID(docs []GradingDoc, ids []uuid.UUID) []GradingDoc {
 	return out
 }
 
-func indexExisting(jf *JudgmentFile) map[string]map[uuid.UUID]int {
+func indexExisting(jf *File) map[string]map[uuid.UUID]int {
 	if jf == nil {
 		return map[string]map[uuid.UUID]int{}
 	}

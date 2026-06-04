@@ -24,7 +24,7 @@ func (f fakeStrategy) ModelID() string { return f.modelID }
 
 func TestCheckResumeCompat_InterruptedFileResumes(t *testing.T) {
 	// An interrupted run leaves Strategy set but an empty meta block.
-	prior := &judgment.JudgmentFile{Strategy: "claude-cli"}
+	prior := &judgment.File{Strategy: "claude-cli"}
 	strat := fakeStrategy{name: "claude-cli", modelID: "claude"}
 
 	err := checkResumeCompat(prior, strat)
@@ -32,7 +32,7 @@ func TestCheckResumeCompat_InterruptedFileResumes(t *testing.T) {
 }
 
 func TestCheckResumeCompat_StrategyMismatch(t *testing.T) {
-	prior := &judgment.JudgmentFile{Strategy: "lexical"}
+	prior := &judgment.File{Strategy: "lexical"}
 	strat := fakeStrategy{name: "claude-cli", modelID: "claude"}
 
 	err := checkResumeCompat(prior, strat)
@@ -42,7 +42,7 @@ func TestCheckResumeCompat_StrategyMismatch(t *testing.T) {
 
 func TestCheckResumeCompat_ModelMismatch(t *testing.T) {
 	// A finalized file records its model — resuming with a different one is rejected.
-	prior := &judgment.JudgmentFile{Strategy: "claude-api"}
+	prior := &judgment.File{Strategy: "claude-api"}
 	prior.Meta.JudgeModel = "claude-haiku-4-5"
 	strat := fakeStrategy{name: "claude-api", modelID: "claude-opus-4"}
 
@@ -52,7 +52,7 @@ func TestCheckResumeCompat_ModelMismatch(t *testing.T) {
 }
 
 func TestCheckResumeCompat_PromptVersionMismatch(t *testing.T) {
-	prior := &judgment.JudgmentFile{Strategy: "claude-cli"}
+	prior := &judgment.File{Strategy: "claude-cli"}
 	prior.Meta.JudgeModel = "claude"
 	prior.Meta.JudgePromptVersion = "v0-old"
 	strat := fakeStrategy{name: "claude-cli", modelID: "claude"}
@@ -63,7 +63,7 @@ func TestCheckResumeCompat_PromptVersionMismatch(t *testing.T) {
 }
 
 func TestCheckResumeCompat_FinalizedFileMatches(t *testing.T) {
-	prior := &judgment.JudgmentFile{Strategy: "claude-cli"}
+	prior := &judgment.File{Strategy: "claude-cli"}
 	prior.Meta.JudgeModel = "claude"
 	prior.Meta.JudgePromptVersion = judgment.PromptVersion
 	strat := fakeStrategy{name: "claude-cli", modelID: "claude"}

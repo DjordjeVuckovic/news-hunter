@@ -167,9 +167,9 @@ func TestRunner_ResumeSkipsAlreadyGraded(t *testing.T) {
 	bs := &fakeBatchStrategy{name: "fake-batch", batchSize: 10}
 
 	// Pre-grade the first 3 docs
-	prior := &JudgmentFile{
+	prior := &File{
 		Strategy: "fake-batch",
-		Queries: []JudgmentEntry{
+		Queries: []Entry{
 			{
 				QueryID: "q1",
 				Docs: []GradedDoc{
@@ -240,7 +240,7 @@ func TestRunner_SinkCalledPerQuery(t *testing.T) {
 	r := NewRunner(RunnerConfig{
 		Strategy: bs,
 		Reader:   &stubStorageReader{articles: articles},
-		Sink: func(qp QueryProgress, _ JudgmentEntry) error {
+		Sink: func(qp QueryProgress, _ Entry) error {
 			assert.Equal(t, "q1", qp.QueryID)
 			calls++
 			return nil

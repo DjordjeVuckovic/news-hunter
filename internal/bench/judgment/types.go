@@ -18,14 +18,14 @@ type GradedDoc struct {
 	Grade int       `yaml:"grade"`
 }
 
-type JudgmentFile struct {
-	SchemaVersion int             `yaml:"schema_version"`
-	Meta          meta.Meta       `yaml:"meta"`
-	Strategy      string          `yaml:"strategy"`
-	Queries       []JudgmentEntry `yaml:"queries"`
+type File struct {
+	SchemaVersion int       `yaml:"schema_version"`
+	Meta          meta.Meta `yaml:"meta"`
+	Strategy      string    `yaml:"strategy"`
+	Queries       []Entry   `yaml:"queries"`
 }
 
-type JudgmentEntry struct {
+type Entry struct {
 	QueryID string      `yaml:"query_id"`
 	Docs    []GradedDoc `yaml:"docs"`
 }

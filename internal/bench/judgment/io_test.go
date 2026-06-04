@@ -12,7 +12,7 @@ import (
 
 func TestWriteAtomic_NoLeftoverTempOnSuccess(t *testing.T) {
 	dir := t.TempDir()
-	jf := &JudgmentFile{Strategy: "x", Queries: []JudgmentEntry{{QueryID: "q"}}}
+	jf := &File{Strategy: "x", Queries: []Entry{{QueryID: "q"}}}
 	path := filepath.Join(dir, "ann.yaml")
 
 	require.NoError(t, WriteFile(jf, path))
@@ -37,7 +37,7 @@ func TestIncrementalWriter_AppendFlushesEachQuery(t *testing.T) {
 	w := NewIncrementalWriter(path, "test-strat")
 
 	docID := uuid.New()
-	err := w.Append(QueryProgress{QueryID: "q1"}, JudgmentEntry{
+	err := w.Append(QueryProgress{QueryID: "q1"}, Entry{
 		QueryID: "q1",
 		Docs:    []GradedDoc{{DocID: docID, Grade: 2}},
 	})
@@ -50,7 +50,7 @@ func TestIncrementalWriter_AppendFlushesEachQuery(t *testing.T) {
 	assert.Equal(t, 2, jf.Queries[0].Docs[0].Grade)
 
 	// Append another query; existing one persists.
-	err = w.Append(QueryProgress{QueryID: "q2"}, JudgmentEntry{
+	err = w.Append(QueryProgress{QueryID: "q2"}, Entry{
 		QueryID: "q2",
 		Docs:    []GradedDoc{{DocID: uuid.New(), Grade: 3}},
 	})
@@ -66,11 +66,11 @@ func TestIncrementalWriter_AppendReplacesSameQuery(t *testing.T) {
 	w := NewIncrementalWriter(path, "test")
 
 	id := uuid.New()
-	require.NoError(t, w.Append(QueryProgress{QueryID: "q1"}, JudgmentEntry{
+	require.NoError(t, w.Append(QueryProgress{QueryID: "q1"}, Entry{
 		QueryID: "q1",
 		Docs:    []GradedDoc{{DocID: id, Grade: 0}},
 	}))
-	require.NoError(t, w.Append(QueryProgress{QueryID: "q1"}, JudgmentEntry{
+	require.NoError(t, w.Append(QueryProgress{QueryID: "q1"}, Entry{
 		QueryID: "q1",
 		Docs:    []GradedDoc{{DocID: id, Grade: 3}},
 	}))
@@ -85,9 +85,9 @@ func TestIncrementalWriter_LoadPriorRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "ann.yaml")
 
-	prior := &JudgmentFile{
+	prior := &File{
 		Strategy: "test",
-		Queries: []JudgmentEntry{
+		Queries: []Entry{
 			{QueryID: "q1", Docs: []GradedDoc{{DocID: uuid.New(), Grade: 2}}},
 		},
 	}

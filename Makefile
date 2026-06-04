@@ -5,7 +5,8 @@ BIN_DIR := ./bin
 PKG := github.com/DjordjeVuckovic/news-hunter
 MIGRATIONS_PATH := ./db/migrations
 DB_CONN := "postgresql://news_user:news_password@localhost:54320/news_db?sslmode=disable"
-# ParadeDB runs on 54321 (docker-compose: pg-news-parade) and needs the same schema.
+# ParadeDB runs on 54321 (docker-compose: pg-news-parade); BM25 via @@@ index.
+MIGRATIONS_PATH_PARADE := ./db/parade_migrations
 DB_CONN_PARADE := "postgresql://news_user:news_password@localhost:54321/news_db?sslmode=disable"
 # pg_textsearch (TimescaleDB-HA) runs on 54322 (docker-compose: pg-news-tiger); BM25 via generated column.
 MIGRATIONS_PATH_TIGER := ./db/tiger_migrations
@@ -21,27 +22,27 @@ ARGS ?=
 .PHONY: build build-all clean test fmt vet lint lint-fix install-lint schema-gen build-bench bench-validate bench-run bench-pool bench-judge-lexical bench-judge-cli bench-judge-api bench-qrels bench-show-spec bench-show-pool bench-show-judgments migrate-up migrate-down migrate-up-parade migrate-down-parade migrate-up-tiger migrate-down-tiger migrate-up-all
 
 migrate-up:
-	@echo "Running database migrations up (native pgvector :54320)..."
+	@echo "Running database migrations up (native pg)..."
 	@migrate -path $(MIGRATIONS_PATH) -database $(DB_CONN) up
 
 migrate-down:
-	@echo "Running database migrations down (native pgvector :54320)..."
+	@echo "Running database migrations down (native pg)..."
 	@migrate -path $(MIGRATIONS_PATH) -database $(DB_CONN) down
 
 migrate-up-parade:
-	@echo "Running database migrations up (ParadeDB :54321)..."
-	@migrate -path $(MIGRATIONS_PATH) -database $(DB_CONN_PARADE) up
+	@echo "Running database migrations up (ParadeDB)..."
+	@migrate -path $(MIGRATIONS_PATH_PARADE) -database $(DB_CONN_PARADE) up
 
 migrate-down-parade:
-	@echo "Running database migrations down (ParadeDB :54321)..."
-	@migrate -path $(MIGRATIONS_PATH) -database $(DB_CONN_PARADE) down
+	@echo "Running database migrations down (ParadeDB)..."
+	@migrate -path $(MIGRATIONS_PATH_PARADE) -database $(DB_CONN_PARADE) down
 
 migrate-up-tiger:
-	@echo "Running database migrations up (pg_textsearch :54322)..."
+	@echo "Running database migrations up (pg_textsearch)..."
 	@migrate -path $(MIGRATIONS_PATH_TIGER) -database $(DB_CONN_TIGER) up
 
 migrate-down-tiger:
-	@echo "Running database migrations down (pg_textsearch :54322)..."
+	@echo "Running database migrations down (pg_textsearch)..."
 	@migrate -path $(MIGRATIONS_PATH_TIGER) -database $(DB_CONN_TIGER) down
 
 # Apply migrations to all Postgres backends (native + ParadeDB + pg_textsearch).
