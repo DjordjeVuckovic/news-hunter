@@ -54,9 +54,7 @@ type SemanticSearcher interface {
 	SearchSemantic(ctx context.Context, query *query.Semantic, baseOpts *query.BaseOptions) (*VectorSearchResult, error)
 }
 
-// HybridSearcher is the hybrid search API interface combining lexical
-// full-text search with vector similarity via Reciprocal Rank Fusion (RRF)
+// HybridSearcher combines lexical FTS with vector similarity via RRF.
 type HybridSearcher interface {
-	// SearchHybrid performs hybrid search fusing lexical FTS and vector ranking
 	SearchHybrid(ctx context.Context, query *query.Hybrid, baseOpts *query.BaseOptions) (*SearchResult, error)
 }

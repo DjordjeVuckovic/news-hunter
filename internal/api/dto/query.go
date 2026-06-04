@@ -108,13 +108,6 @@ type PhraseParams struct {
 }
 
 // HybridParams represents hybrid (lexical FTS + vector) query parameters.
-// Example:
-//
-//	{
-//	  "query": "climate change",
-//	  "language": "english",
-//	  "k": 60
-//	}
 type HybridParams struct {
 	Query    string `json:"query"`
 	Language string `json:"language,omitempty"`

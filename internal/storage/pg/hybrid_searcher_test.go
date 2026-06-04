@@ -64,15 +64,12 @@ func TestRRFScore(t *testing.T) {
 
 func TestRRFScoreRankOrdering(t *testing.T) {
 	const k = 60
-	// A document ranked 1 in both legs must outscore one ranked lower in both.
 	high := rrfScore(k, 1, 1)
 	low := rrfScore(k, 10, 10)
 	if high <= low {
 		t.Fatalf("expected higher-ranked document to score higher: high=%v low=%v", high, low)
 	}
 
-	// A document present in both legs must outscore one present in only one leg
-	// at the same rank.
 	both := rrfScore(k, 2, 2)
 	single := rrfScore(k, 2, 0)
 	if both <= single {

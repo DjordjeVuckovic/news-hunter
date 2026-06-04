@@ -15,10 +15,7 @@ import (
 	"github.com/pgvector/pgvector-go"
 )
 
-// hybridCandidateDepth bounds how many candidates each leg (lexical and vector)
-// contributes to the fusion. RRF only needs the top ranks of each list; a fixed
-// depth keeps the CTEs cheap while still surfacing documents that rank highly in
-// only one of the two legs.
+// hybridCandidateDepth bounds how many candidates each leg contributes to the fusion.
 const hybridCandidateDepth = 200
 
 type HybridSearcher struct {
@@ -33,11 +30,8 @@ func NewHybridSearcher(embedder *embedding.Embedder, pool *ConnectionPool) *Hybr
 	}
 }
 
-// rrfScore computes the Reciprocal Rank Fusion contribution for a document that
-// appears at lexRank in the lexical list and vecRank in the vector list. A rank
-// of 0 means the document is absent from that list and contributes nothing.
-//
-//	score = 1/(k + lexRank) + 1/(k + vecRank)
+// rrfScore is the RRF contribution for a document at lexRank/vecRank; rank 0 means absent.
+// score = 1/(k + lexRank) + 1/(k + vecRank)
 func rrfScore(k, lexRank, vecRank int) float64 {
 	var score float64
 	if lexRank > 0 {
@@ -49,10 +43,7 @@ func rrfScore(k, lexRank, vecRank int) float64 {
 	return score
 }
 
-// SearchHybrid implements storage.HybridSearcher. It fuses a lexical FTS ranking
-// (search_vector @@ websearch_to_tsquery, ranked by ts_rank) with a vector
-// ranking (article_embeddings ordered by cosine distance) using Reciprocal Rank
-// Fusion entirely in SQL, then joins back to articles for the result fields.
+// SearchHybrid fuses a lexical FTS ranking with a vector ranking via RRF in SQL.
 func (s *HybridSearcher) SearchHybrid(ctx context.Context, query *dquery.Hybrid, baseOpts *dquery.BaseOptions) (*storage.SearchResult, error) {
 	size := baseOpts.Size
 	lang := query.GetLanguage()
@@ -70,8 +61,6 @@ func (s *HybridSearcher) SearchHybrid(ctx context.Context, query *dquery.Hybrid,
 	}
 	vecEncoded := pgvector.NewVector(vec.Embedding)
 
-	// $1 = query text, $2 = query vector, $3 = embedding model name,
-	// $4 = RRF constant k, $5 = candidate depth per leg, $6 = page size (+1).
 	cmd := fmt.Sprintf(`
 		WITH lexical AS (
 			SELECT a.id AS article_id,
