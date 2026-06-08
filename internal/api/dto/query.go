@@ -47,7 +47,7 @@ import (
 //	  }
 //	}
 type SearchRequest struct {
-	Size   int          `json:"size,omitempty"`
+	Size   int          `json:"size,omitempty" validate:"omitempty,min=1"`
 	Cursor string       `json:"cursor,omitempty"`
 	Query  QueryWrapper `json:"query"`
 }
@@ -75,8 +75,8 @@ type QueryWrapper struct {
 
 // MatchParams represents match query parameters (maps directly to types)
 type MatchParams struct {
-	Query     string `json:"query"`
-	Field     string `json:"field"`
+	Query     string `json:"query" validate:"required,min=1"`
+	Field     string `json:"field" validate:"required"`
 	Operator  string `json:"operator,omitempty"`
 	Fuzziness string `json:"fuzziness,omitempty"`
 	Language  string `json:"language,omitempty"`
@@ -84,8 +84,8 @@ type MatchParams struct {
 
 // MultiMatchParams represents multi_match query parameters (maps directly to types)
 type MultiMatchParams struct {
-	Query        string             `json:"query"`
-	Fields       []string           `json:"fields"`
+	Query        string             `json:"query" validate:"required,min=1"`
+	Fields       []string           `json:"fields" validate:"required,min=1"`
 	FieldWeights map[string]float64 `json:"field_weights,omitempty"`
 	Operator     string             `json:"operator,omitempty"`
 	Language     string             `json:"language,omitempty"`
@@ -101,17 +101,17 @@ type MultiMatchParams struct {
 //	  "language": "english"
 //	}
 type PhraseParams struct {
-	Query    string   `json:"query"`
-	Fields   []string `json:"fields"`
-	Slop     int      `json:"slop,omitempty"`
+	Query    string   `json:"query" validate:"required,min=1"`
+	Fields   []string `json:"fields" validate:"required,min=1"`
+	Slop     int      `json:"slop,omitempty" validate:"min=0,max=3"`
 	Language string   `json:"language,omitempty"`
 }
 
 // HybridParams represents hybrid (lexical FTS + vector) query parameters.
 type HybridParams struct {
-	Query    string `json:"query"`
+	Query    string `json:"query" validate:"required,min=1"`
 	Language string `json:"language,omitempty"`
-	K        int    `json:"k,omitempty"`
+	K        int    `json:"k,omitempty" validate:"omitempty,min=1"`
 }
 
 func (p *HybridParams) ToDomain() (*query.Hybrid, error) {
@@ -193,7 +193,7 @@ func (p *MultiMatchParams) ToDomain() (*query.MultiMatch, error) {
 }
 
 type BooleanParams struct {
-	Expression string `json:"expression"`
+	Expression string `json:"expression" validate:"required,min=1"`
 	Language   string `json:"language,omitempty"`
 }
 

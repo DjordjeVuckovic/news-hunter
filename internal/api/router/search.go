@@ -212,6 +212,10 @@ func (r *SearchRouter) structuredSearchHandler(c echo.Context) error {
 		return apperr.NewValidation("invalid request body")
 	}
 
+	if err := c.Validate(&req); err != nil {
+		return err
+	}
+
 	sizeInt := pagination.PageDefaultSize
 	if req.Size > 0 {
 		if req.Size > pagination.PageMaxSize {

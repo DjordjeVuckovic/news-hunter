@@ -70,7 +70,7 @@ const docTemplate = `{
                     "200": {
                         "description": "SearchStringQuery results with pagination metadata",
                         "schema": {
-                            "$ref": "#/definitions/dto.SearchResponse"
+                            "$ref": "#/definitions/github_com_DjordjeVuckovic_news-hunter_internal_api_dto.SearchResponse"
                         }
                     },
                     "400": {
@@ -134,7 +134,7 @@ const docTemplate = `{
                     "200": {
                         "description": "SearchStringQuery results with pagination metadata",
                         "schema": {
-                            "$ref": "#/definitions/dto.SemanticSearchResponse"
+                            "$ref": "#/definitions/github_com_DjordjeVuckovic_news-hunter_internal_api_dto.SemanticSearchResponse"
                         }
                     },
                     "400": {
@@ -178,7 +178,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/dto.SearchRequest"
+                            "$ref": "#/definitions/github_com_DjordjeVuckovic_news-hunter_internal_api_dto.SearchRequest"
                         }
                     }
                 ],
@@ -186,7 +186,7 @@ const docTemplate = `{
                     "200": {
                         "description": "SearchStringQuery results with pagination metadata",
                         "schema": {
-                            "$ref": "#/definitions/dto.SearchResponse"
+                            "$ref": "#/definitions/github_com_DjordjeVuckovic_news-hunter_internal_api_dto.SearchResponse"
                         }
                     },
                     "400": {
@@ -218,10 +218,30 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/v1/capabilities": {
+            "get": {
+                "description": "Returns the search paradigms exposed by the running backend. Useful for clients to discover available capabilities (e.g. whether semantic search is enabled).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "capabilities"
+                ],
+                "summary": "Report supported search paradigms",
+                "responses": {
+                    "200": {
+                        "description": "Supported search paradigms",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_DjordjeVuckovic_news-hunter_internal_types_query.Capabilities"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
-        "dto.Article": {
+        "github_com_DjordjeVuckovic_news-hunter_internal_api_dto.Article": {
             "type": "object",
             "properties": {
                 "author": {
@@ -243,7 +263,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "metadata": {
-                    "$ref": "#/definitions/dto.ArticleMetadata"
+                    "$ref": "#/definitions/github_com_DjordjeVuckovic_news-hunter_internal_api_dto.ArticleMetadata"
                 },
                 "subtitle": {
                     "type": "string"
@@ -257,7 +277,7 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.ArticleMetadata": {
+        "github_com_DjordjeVuckovic_news-hunter_internal_api_dto.ArticleMetadata": {
             "type": "object",
             "properties": {
                 "category": {
@@ -280,14 +300,14 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.ArticleSearchResult": {
+        "github_com_DjordjeVuckovic_news-hunter_internal_api_dto.ArticleSearchResult": {
             "type": "object",
             "properties": {
                 "article": {
                     "description": "Embedded Article struct for search results",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/dto.Article"
+                            "$ref": "#/definitions/github_com_DjordjeVuckovic_news-hunter_internal_api_dto.Article"
                         }
                     ]
                 },
@@ -301,19 +321,46 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.BooleanParams": {
+        "github_com_DjordjeVuckovic_news-hunter_internal_api_dto.BooleanParams": {
             "type": "object",
+            "required": [
+                "expression"
+            ],
             "properties": {
                 "expression": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1
                 },
                 "language": {
                     "type": "string"
                 }
             }
         },
-        "dto.MatchParams": {
+        "github_com_DjordjeVuckovic_news-hunter_internal_api_dto.HybridParams": {
             "type": "object",
+            "required": [
+                "query"
+            ],
+            "properties": {
+                "k": {
+                    "type": "integer",
+                    "minimum": 1
+                },
+                "language": {
+                    "type": "string"
+                },
+                "query": {
+                    "type": "string",
+                    "minLength": 1
+                }
+            }
+        },
+        "github_com_DjordjeVuckovic_news-hunter_internal_api_dto.MatchParams": {
+            "type": "object",
+            "required": [
+                "field",
+                "query"
+            ],
             "properties": {
                 "field": {
                     "type": "string"
@@ -328,12 +375,17 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "query": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1
                 }
             }
         },
-        "dto.MultiMatchParams": {
+        "github_com_DjordjeVuckovic_news-hunter_internal_api_dto.MultiMatchParams": {
             "type": "object",
+            "required": [
+                "fields",
+                "query"
+            ],
             "properties": {
                 "field_weights": {
                     "type": "object",
@@ -344,6 +396,7 @@ const docTemplate = `{
                 },
                 "fields": {
                     "type": "array",
+                    "minItems": 1,
                     "items": {
                         "type": "string"
                     }
@@ -355,15 +408,21 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "query": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1
                 }
             }
         },
-        "dto.PhraseParams": {
+        "github_com_DjordjeVuckovic_news-hunter_internal_api_dto.PhraseParams": {
             "type": "object",
+            "required": [
+                "fields",
+                "query"
+            ],
             "properties": {
                 "fields": {
                     "type": "array",
+                    "minItems": 1,
                     "items": {
                         "type": "string"
                     }
@@ -372,45 +431,52 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "query": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1
                 },
                 "slop": {
-                    "type": "integer"
+                    "type": "integer",
+                    "maximum": 3,
+                    "minimum": 0
                 }
             }
         },
-        "dto.QueryWrapper": {
+        "github_com_DjordjeVuckovic_news-hunter_internal_api_dto.QueryWrapper": {
             "type": "object",
             "properties": {
                 "boolean": {
-                    "$ref": "#/definitions/dto.BooleanParams"
+                    "$ref": "#/definitions/github_com_DjordjeVuckovic_news-hunter_internal_api_dto.BooleanParams"
+                },
+                "hybrid": {
+                    "$ref": "#/definitions/github_com_DjordjeVuckovic_news-hunter_internal_api_dto.HybridParams"
                 },
                 "match": {
-                    "$ref": "#/definitions/dto.MatchParams"
+                    "$ref": "#/definitions/github_com_DjordjeVuckovic_news-hunter_internal_api_dto.MatchParams"
                 },
                 "multi_match": {
-                    "$ref": "#/definitions/dto.MultiMatchParams"
+                    "$ref": "#/definitions/github_com_DjordjeVuckovic_news-hunter_internal_api_dto.MultiMatchParams"
                 },
                 "phrase": {
-                    "$ref": "#/definitions/dto.PhraseParams"
+                    "$ref": "#/definitions/github_com_DjordjeVuckovic_news-hunter_internal_api_dto.PhraseParams"
                 }
             }
         },
-        "dto.SearchRequest": {
+        "github_com_DjordjeVuckovic_news-hunter_internal_api_dto.SearchRequest": {
             "type": "object",
             "properties": {
                 "cursor": {
                     "type": "string"
                 },
                 "query": {
-                    "$ref": "#/definitions/dto.QueryWrapper"
+                    "$ref": "#/definitions/github_com_DjordjeVuckovic_news-hunter_internal_api_dto.QueryWrapper"
                 },
                 "size": {
-                    "type": "integer"
+                    "type": "integer",
+                    "minimum": 1
                 }
             }
         },
-        "dto.SearchResponse": {
+        "github_com_DjordjeVuckovic_news-hunter_internal_api_dto.SearchResponse": {
             "type": "object",
             "properties": {
                 "has_more": {
@@ -419,7 +485,7 @@ const docTemplate = `{
                 "hits": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/dto.ArticleSearchResult"
+                        "$ref": "#/definitions/github_com_DjordjeVuckovic_news-hunter_internal_api_dto.ArticleSearchResult"
                     }
                 },
                 "max_score": {
@@ -436,7 +502,7 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.SemanticSearchResponse": {
+        "github_com_DjordjeVuckovic_news-hunter_internal_api_dto.SemanticSearchResponse": {
             "type": "object",
             "properties": {
                 "has_more": {
@@ -445,11 +511,34 @@ const docTemplate = `{
                 "hits": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/dto.Article"
+                        "$ref": "#/definitions/github_com_DjordjeVuckovic_news-hunter_internal_api_dto.Article"
                     }
                 },
                 "next_cursor": {
                     "type": "string"
+                }
+            }
+        },
+        "github_com_DjordjeVuckovic_news-hunter_internal_types_query.Capabilities": {
+            "type": "object",
+            "properties": {
+                "boolean": {
+                    "type": "boolean"
+                },
+                "match": {
+                    "type": "boolean"
+                },
+                "multi_match": {
+                    "type": "boolean"
+                },
+                "phrase": {
+                    "type": "boolean"
+                },
+                "semantic": {
+                    "type": "boolean"
+                },
+                "string_query": {
+                    "type": "boolean"
                 }
             }
         }
