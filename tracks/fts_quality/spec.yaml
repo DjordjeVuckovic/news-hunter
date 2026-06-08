@@ -1,6 +1,6 @@
 schema_version: 1
 id: fts_quality
-description: "FTS quality across PG sequential, PG GIN, ParadeDB, and Elasticsearch"
+description: "FTS quality across PG sequential, PG GIN, ParadeDB, TigerData pg_textsearch, and Elasticsearch"
 
 defaults:
   pool_depth: 50
@@ -16,6 +16,9 @@ engines:
   paradedb:
     type: postgres
     connection: "postgresql://news_user:news_password@localhost:54321/news_db"
+  tiger:
+    type: postgres
+    connection: "postgresql://news_user:news_password@localhost:54322/news_db"
   elasticsearch:
     type: elasticsearch
     connection: "http://localhost:9200"
@@ -38,6 +41,10 @@ jobs:
     suite: suite.yaml
     engines: [pg-gin, paradedb, elasticsearch]
 
+  - name: "bm25-engines"
+    suite: suite.yaml
+    engines: [paradedb, tiger, elasticsearch]
+
   - name: "all-engines"
     suite: suite.yaml
-    engines: [pg-seq, pg-gin, paradedb, elasticsearch]
+    engines: [pg-seq, pg-gin, paradedb, tiger, elasticsearch]
