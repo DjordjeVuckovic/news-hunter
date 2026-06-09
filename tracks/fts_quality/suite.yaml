@@ -107,6 +107,19 @@ templates:
       ORDER BY pdb.score(id) DESC
       LIMIT {{limit}}
 
+  # --- TigerData pg_textsearch BM25 templates (<@> operator) ---
+  # pg_textsearch v1.0 is OR-only (no phrase, boolean, or NOT operators) and
+  # indexes a single text column, so every query maps to one BM25 ranking over
+  # the generated `search_text` column (title+subtitle+description+content).
+  # `<@>` returns a negative BM25 score (lower = better), so ORDER BY ascending
+  # yields the top-k matches. Phrase/boolean queries degrade to bag-of-words OR
+  # — an intentional, measured limitation of the engine, not a bench shortcut.
+  - id: tiger_bm25
+    query: |
+      SELECT id FROM articles
+      ORDER BY search_text <@> '{{terms}}'
+      LIMIT {{limit}}
+
   # --- Pre-computed search_vector (GIN-indexed) templates ---
   - id: pg_idx_multi_field
     query: |
@@ -141,6 +154,9 @@ queries:
   - id: qs-climate
     description: "Simple keyword search for climate change articles"
     engines:
+      tiger:
+        template: tiger_bm25
+        params: { terms: "climate change", limit: 100 }
       pg-seq:
         template: pg_fts_multi_field
         params: { terms: "climate change", limit: 100 }
@@ -173,6 +189,9 @@ queries:
   - id: qs-election
     description: "Simple keyword search for election coverage"
     engines:
+      tiger:
+        template: tiger_bm25
+        params: { terms: "presidential election results", limit: 100 }
       pg-seq:
         template: pg_fts_multi_field
         params: { terms: "presidential election results", limit: 100 }
@@ -197,6 +216,9 @@ queries:
   - id: match-title-economy
     description: "Title-only search for economy articles"
     engines:
+      tiger:
+        template: tiger_bm25
+        params: { terms: "economy recession", limit: 100 }
       pg-seq:
         template: pg_fts_single_field
         params: { field: "title", tsquery_fn: "plainto_tsquery", terms: "economy recession", limit: 100 }
@@ -228,6 +250,9 @@ queries:
   - id: match-content-ai
     description: "Phrase search for 'artificial intelligence' across all fields"
     engines:
+      tiger:
+        template: tiger_bm25
+        params: { terms: "artificial intelligence", limit: 100 }
       pg-seq:
         template: pg_fts_phrase
         params: { fields: "title || ' ' || coalesce(description,'') || ' ' || coalesce(content,'')", terms: "artificial intelligence", limit: 100 }
@@ -253,6 +278,9 @@ queries:
   - id: phrase-global-warming
     description: "Exact phrase search for 'global warming'"
     engines:
+      tiger:
+        template: tiger_bm25
+        params: { terms: "global warming", limit: 100 }
       pg-seq:
         template: pg_fts_phrase
         params: { fields: "title || ' ' || coalesce(content,'')", terms: "global warming", limit: 100 }
@@ -277,6 +305,9 @@ queries:
   - id: phrase-trade-war-slop
     description: "Phrase search with slop for 'trade war'"
     engines:
+      tiger:
+        template: tiger_bm25
+        params: { terms: "trade war", limit: 100 }
       pg-seq:
         template: pg_fts_phrase
         params: { fields: "title || ' ' || coalesce(description,'')", terms: "trade war", limit: 100 }
@@ -303,6 +334,11 @@ queries:
   - id: bool-climate-not-politics
     description: "Boolean: climate articles excluding politics"
     engines:
+      # pg_textsearch is OR-only: NOT/exclusion is unsupported, so the
+      # exclusion term (politics) is dropped — positive terms only.
+      tiger:
+        template: tiger_bm25
+        params: { terms: "climate", limit: 100 }
       pg-seq:
         template: pg_fts_boolean
         params: { fields: "title || ' ' || coalesce(description,'') || ' ' || coalesce(content,'')", tsquery_expr: "climate & !politics", limit: 100 }
@@ -347,6 +383,9 @@ queries:
   - id: bool-complex
     description: "Boolean: (technology OR science) AND innovation"
     engines:
+      tiger:
+        template: tiger_bm25
+        params: { terms: "technology science innovation", limit: 100 }
       pg-seq:
         template: pg_fts_boolean
         params: { fields: "title || ' ' || coalesce(description,'') || ' ' || coalesce(content,'')", tsquery_expr: "(technology | science) & innovation", limit: 100 }
@@ -399,6 +438,9 @@ queries:
   - id: mm-renewable-energy
     description: "Multi-field search for renewable energy with title boost"
     engines:
+      tiger:
+        template: tiger_bm25
+        params: { terms: "renewable energy solar", limit: 100 }
       pg-seq:
         template: pg_fts_weighted
         params: { terms: "renewable energy solar", limit: 100 }
@@ -422,6 +464,9 @@ queries:
   - id: mm-tech-innovation
     description: "Multi-field search for technology innovation"
     engines:
+      tiger:
+        template: tiger_bm25
+        params: { terms: "technology innovation startup", limit: 100 }
       pg-seq:
         template: pg_fts_weighted
         params: { terms: "technology innovation startup", limit: 100 }
@@ -447,6 +492,9 @@ queries:
   - id: qs-vaccine
     description: "Simple keyword search for vaccine news"
     engines:
+      tiger:
+        template: tiger_bm25
+        params: { terms: "vaccine covid booster", limit: 100 }
       pg-seq:
         template: pg_fts_multi_field
         params: { terms: "vaccine covid booster", limit: 100 }
@@ -470,6 +518,9 @@ queries:
   - id: qs-ukraine-war
     description: "Simple keyword search for Ukraine conflict coverage"
     engines:
+      tiger:
+        template: tiger_bm25
+        params: { terms: "ukraine russia war", limit: 100 }
       pg-seq:
         template: pg_fts_multi_field
         params: { terms: "ukraine russia war", limit: 100 }
@@ -493,6 +544,9 @@ queries:
   - id: qs-interest-rates
     description: "Simple keyword search for central bank rate decisions"
     engines:
+      tiger:
+        template: tiger_bm25
+        params: { terms: "interest rates federal reserve", limit: 100 }
       pg-seq:
         template: pg_fts_multi_field
         params: { terms: "interest rates federal reserve", limit: 100 }
@@ -516,6 +570,9 @@ queries:
   - id: qs-social-media
     description: "Simple keyword search for social media news"
     engines:
+      tiger:
+        template: tiger_bm25
+        params: { terms: "social media twitter facebook", limit: 100 }
       pg-seq:
         template: pg_fts_multi_field
         params: { terms: "social media twitter facebook", limit: 100 }
@@ -539,6 +596,9 @@ queries:
   - id: qs-housing-prices
     description: "Simple keyword search for housing market"
     engines:
+      tiger:
+        template: tiger_bm25
+        params: { terms: "housing prices real estate", limit: 100 }
       pg-seq:
         template: pg_fts_multi_field
         params: { terms: "housing prices real estate", limit: 100 }
@@ -562,6 +622,9 @@ queries:
   - id: qs-space-exploration
     description: "Simple keyword search for space exploration"
     engines:
+      tiger:
+        template: tiger_bm25
+        params: { terms: "space nasa mission launch", limit: 100 }
       pg-seq:
         template: pg_fts_multi_field
         params: { terms: "space nasa mission launch", limit: 100 }
@@ -585,6 +648,9 @@ queries:
   - id: qs-immigration
     description: "Simple keyword search for immigration policy"
     engines:
+      tiger:
+        template: tiger_bm25
+        params: { terms: "immigration policy border migrants", limit: 100 }
       pg-seq:
         template: pg_fts_multi_field
         params: { terms: "immigration policy border migrants", limit: 100 }
@@ -608,6 +674,9 @@ queries:
   - id: qs-cryptocurrency
     description: "Simple keyword search for cryptocurrency news"
     engines:
+      tiger:
+        template: tiger_bm25
+        params: { terms: "bitcoin cryptocurrency blockchain", limit: 100 }
       pg-seq:
         template: pg_fts_multi_field
         params: { terms: "bitcoin cryptocurrency blockchain", limit: 100 }
@@ -633,6 +702,9 @@ queries:
   - id: phrase-stock-market-crash
     description: "Exact phrase search for 'stock market crash'"
     engines:
+      tiger:
+        template: tiger_bm25
+        params: { terms: "stock market crash", limit: 100 }
       pg-seq:
         template: pg_fts_phrase
         params: { fields: "title || ' ' || coalesce(description,'')", terms: "stock market crash", limit: 100 }
@@ -657,6 +729,9 @@ queries:
   - id: phrase-interest-rate-hike
     description: "Exact phrase search for 'interest rate hike'"
     engines:
+      tiger:
+        template: tiger_bm25
+        params: { terms: "interest rate hike", limit: 100 }
       pg-seq:
         template: pg_fts_phrase
         params: { fields: "title || ' ' || coalesce(description,'')", terms: "interest rate hike", limit: 100 }
@@ -681,6 +756,9 @@ queries:
   - id: phrase-human-rights-violations
     description: "Exact phrase search for 'human rights violations'"
     engines:
+      tiger:
+        template: tiger_bm25
+        params: { terms: "human rights violations", limit: 100 }
       pg-seq:
         template: pg_fts_phrase
         params: { fields: "title || ' ' || coalesce(description,'') || ' ' || coalesce(content,'')", terms: "human rights violations", limit: 100 }
@@ -707,6 +785,10 @@ queries:
   - id: bool-tech-not-crypto
     description: "Boolean: technology articles excluding cryptocurrency"
     engines:
+      # OR-only engine: exclusion terms (cryptocurrency, bitcoin) are dropped.
+      tiger:
+        template: tiger_bm25
+        params: { terms: "technology", limit: 100 }
       pg-seq:
         template: pg_fts_boolean
         params: { fields: "title || ' ' || coalesce(description,'') || ' ' || coalesce(content,'')", tsquery_expr: "technology & !cryptocurrency & !bitcoin", limit: 100 }
@@ -749,6 +831,9 @@ queries:
   - id: bool-health-science
     description: "Boolean: health AND (science OR medicine OR research)"
     engines:
+      tiger:
+        template: tiger_bm25
+        params: { terms: "health science medicine research", limit: 100 }
       pg-seq:
         template: pg_fts_boolean
         params: { fields: "title || ' ' || coalesce(description,'') || ' ' || coalesce(content,'')", tsquery_expr: "health & (science | medicine | research)", limit: 100 }
@@ -800,6 +885,10 @@ queries:
   - id: bool-economy-recession-not-covid
     description: "Boolean: (economy OR recession) AND NOT covid"
     engines:
+      # OR-only engine: exclusion terms (covid, pandemic) are dropped.
+      tiger:
+        template: tiger_bm25
+        params: { terms: "economy recession", limit: 100 }
       pg-seq:
         template: pg_fts_boolean
         params: { fields: "title || ' ' || coalesce(description,'') || ' ' || coalesce(content,'')", tsquery_expr: "(economy | recession) & !covid & !pandemic", limit: 100 }
@@ -848,6 +937,9 @@ queries:
   - id: mm-inflation-economy
     description: "Multi-field search for inflation and economic impacts"
     engines:
+      tiger:
+        template: tiger_bm25
+        params: { terms: "inflation economy prices", limit: 100 }
       pg-seq:
         template: pg_fts_weighted
         params: { terms: "inflation economy prices", limit: 100 }
@@ -871,6 +963,9 @@ queries:
   - id: mm-cybersecurity-data-breach
     description: "Multi-field search for cybersecurity incidents"
     engines:
+      tiger:
+        template: tiger_bm25
+        params: { terms: "cybersecurity data breach hack", limit: 100 }
       pg-seq:
         template: pg_fts_weighted
         params: { terms: "cybersecurity data breach hack", limit: 100 }
@@ -894,6 +989,9 @@ queries:
   - id: mm-supreme-court-ruling
     description: "Multi-field search for US Supreme Court decisions"
     engines:
+      tiger:
+        template: tiger_bm25
+        params: { terms: "supreme court ruling decision", limit: 100 }
       pg-seq:
         template: pg_fts_weighted
         params: { terms: "supreme court ruling decision", limit: 100 }
@@ -917,6 +1015,9 @@ queries:
   - id: mm-olympics-sports
     description: "Multi-field search for Olympics and major sports"
     engines:
+      tiger:
+        template: tiger_bm25
+        params: { terms: "olympics sports championship medal", limit: 100 }
       pg-seq:
         template: pg_fts_weighted
         params: { terms: "olympics sports championship medal", limit: 100 }
@@ -942,6 +1043,9 @@ queries:
   - id: match-title-pandemic
     description: "Title-only search for pandemic coverage"
     engines:
+      tiger:
+        template: tiger_bm25
+        params: { terms: "pandemic lockdown", limit: 100 }
       pg-seq:
         template: pg_fts_single_field
         params: { field: "title", tsquery_fn: "plainto_tsquery", terms: "pandemic lockdown", limit: 100 }
@@ -967,6 +1071,9 @@ queries:
   - id: match-title-semiconductor
     description: "Title-only search for semiconductor chip shortage"
     engines:
+      tiger:
+        template: tiger_bm25
+        params: { terms: "semiconductor chip shortage", limit: 100 }
       pg-seq:
         template: pg_fts_single_field
         params: { field: "title", tsquery_fn: "plainto_tsquery", terms: "semiconductor chip shortage", limit: 100 }

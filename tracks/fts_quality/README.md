@@ -2,6 +2,17 @@
 
 A self-contained search benchmark workspace.
 
+## Engines
+
+`pg-seq` and `pg-gin` (native tsvector/`ts_rank`, sequential vs GIN-indexed),
+`paradedb` (ParadeDB `pg_search` BM25), `tiger` (TigerData `pg_textsearch`
+BM25, port 54322), and `elasticsearch`.
+
+`tiger` ranks with `pg_textsearch`'s `<@>` operator over a single generated
+`search_text` column. v1.0 is OR-only — no phrase, boolean, or NOT operators —
+so phrase/boolean queries degrade to a bag-of-words BM25 ranking and exclusion
+terms are dropped. This is a measured engine limitation, not a bench shortcut.
+
 ## Layout
 
 ```
