@@ -40,6 +40,22 @@ templates:
       ) DESC
       LIMIT {{limit}}
 
+  # ParadeDB: per-token Levenshtein fuzziness via paradedb.match(distance => n),
+  # the direct analog to Elasticsearch fuzziness. distance is capped at 2.
+  # Multi-field boolean(should) mirrors the ES multi_match title^3/description^2.
+  # Requires: CREATE EXTENSION pg_search; BM25 index over (id, title, description).
+  - id: pdb_fuzzy_multi
+    query: |
+      SELECT id FROM articles
+      WHERE id @@@ paradedb.boolean(
+        should => ARRAY[
+          paradedb.boost(3.0, paradedb.match('title', '{{terms}}', distance => {{distance}})),
+          paradedb.boost(2.0, paradedb.match('description', '{{terms}}', distance => {{distance}}))
+        ]
+      )
+      ORDER BY pdb.score(id) DESC
+      LIMIT {{limit}}
+
 queries:
   # Queries intentionally contain misspellings to test fuzzy tolerance.
 
@@ -52,6 +68,9 @@ queries:
       pg-levenshtein:
         template: pg_levenshtein_title
         params: { terms: "climate change", term: "climat", max_dist: 2, limit: 50 }
+      paradedb:
+        template: pdb_fuzzy_multi
+        params: { terms: "climat chanje", distance: 2, limit: 50 }
       elasticsearch: |
         {
           "query": {
@@ -73,6 +92,9 @@ queries:
       pg-levenshtein:
         template: pg_levenshtein_title
         params: { terms: "election results", term: "electon", max_dist: 2, limit: 50 }
+      paradedb:
+        template: pdb_fuzzy_multi
+        params: { terms: "electon results", distance: 2, limit: 50 }
       elasticsearch: |
         {
           "query": {
@@ -94,6 +116,9 @@ queries:
       pg-levenshtein:
         template: pg_levenshtein_title
         params: { terms: "coronavirus pandemic", term: "coronavrus", max_dist: 2, limit: 50 }
+      paradedb:
+        template: pdb_fuzzy_multi
+        params: { terms: "coronavrus pandmic", distance: 2, limit: 50 }
       elasticsearch: |
         {
           "query": {
@@ -115,6 +140,9 @@ queries:
       pg-levenshtein:
         template: pg_levenshtein_title
         params: { terms: "artificial intelligence", term: "artifical", max_dist: 2, limit: 50 }
+      paradedb:
+        template: pdb_fuzzy_multi
+        params: { terms: "artifical inteligence", distance: 2, limit: 50 }
       elasticsearch: |
         {
           "query": {
@@ -136,6 +164,9 @@ queries:
       pg-levenshtein:
         template: pg_levenshtein_title
         params: { terms: "renewable energy", term: "renewble", max_dist: 2, limit: 50 }
+      paradedb:
+        template: pdb_fuzzy_multi
+        params: { terms: "renewble enrgy", distance: 2, limit: 50 }
       elasticsearch: |
         {
           "query": {
@@ -157,6 +188,9 @@ queries:
       pg-levenshtein:
         template: pg_levenshtein_title
         params: { terms: "government shutdown", term: "goverment", max_dist: 2, limit: 50 }
+      paradedb:
+        template: pdb_fuzzy_multi
+        params: { terms: "goverment shudown", distance: 2, limit: 50 }
       elasticsearch: |
         {
           "query": {
@@ -178,6 +212,9 @@ queries:
       pg-levenshtein:
         template: pg_levenshtein_title
         params: { terms: "ukraine conflict", term: "ukrain", max_dist: 2, limit: 50 }
+      paradedb:
+        template: pdb_fuzzy_multi
+        params: { terms: "ukrain conflct", distance: 2, limit: 50 }
       elasticsearch: |
         {
           "query": {
@@ -199,6 +236,9 @@ queries:
       pg-levenshtein:
         template: pg_levenshtein_title
         params: { terms: "stock market crash", term: "cras", max_dist: 2, limit: 50 }
+      paradedb:
+        template: pdb_fuzzy_multi
+        params: { terms: "stockmarket cras", distance: 2, limit: 50 }
       elasticsearch: |
         {
           "query": {
@@ -220,6 +260,9 @@ queries:
       pg-levenshtein:
         template: pg_levenshtein_title
         params: { terms: "vaccine effectiveness", term: "vacine", max_dist: 2, limit: 50 }
+      paradedb:
+        template: pdb_fuzzy_multi
+        params: { terms: "vacine effectivness", distance: 2, limit: 50 }
       elasticsearch: |
         {
           "query": {
@@ -241,6 +284,9 @@ queries:
       pg-levenshtein:
         template: pg_levenshtein_title
         params: { terms: "immigration policy", term: "imigration", max_dist: 2, limit: 50 }
+      paradedb:
+        template: pdb_fuzzy_multi
+        params: { terms: "imigration polcy", distance: 2, limit: 50 }
       elasticsearch: |
         {
           "query": {

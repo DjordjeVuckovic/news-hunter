@@ -1,6 +1,6 @@
 schema_version: 1
 id: news_fuzzy
-description: "Fuzzy / approximate search: pg_trgm similarity vs Elasticsearch fuzziness"
+description: "Fuzzy / approximate search: pg_trgm similarity & pg_levenshtein vs ParadeDB and Elasticsearch token-level fuzziness"
 
 defaults:
   pool_depth: 50
@@ -16,6 +16,9 @@ engines:
   pg-levenshtein:
     type: postgres
     connection: "postgresql://news_user:news_password@localhost:54320/news_db"
+  paradedb:
+    type: postgres
+    connection: "postgresql://news_user:news_password@localhost:54321/news_db"
   elasticsearch:
     type: elasticsearch
     connection: "http://localhost:9200"
@@ -33,4 +36,4 @@ runs:
 jobs:
   - name: "fuzzy-pg-vs-es"
     suite: suite.yaml
-    engines: [pg-trgm, pg-levenshtein, elasticsearch]
+    engines: [pg-trgm, pg-levenshtein, paradedb, elasticsearch]
